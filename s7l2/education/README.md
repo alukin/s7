@@ -3,9 +3,76 @@
 **Status: curriculum and verification plan, not a shipped course bundle.**
 Planning baseline: 2026-11-18. The [course map](COURSE_MAP.md) contains
 **48 proposed lab exercises**, not 48 implemented or qualified diagrams.
-Some reuse the existing S7 example library; some need new diagrams,
-references or capabilities. Never advertise an exercise as complete simply
+Each delivered lab needs a new educational diagram; existing examples
+provide engineering references. Some topics also need new capabilities. Never advertise an exercise as complete simply
 because its prerequisite S7 example runs.
+
+**Maintainer decision, 2026-11-19:** create new diagrams specifically for
+the education collection, under `examples/education/`. Existing examples
+and tests are implementation references, not the diagrams delivered as labs.
+Each educational diagram remains canonical for its lab and may be linked
+from several course routes. See the [core implementation manifest](CORE_MANIFEST.md).
+
+New students can now start with [FN01 — one sample of memory](labs/FN01-unit-delay/README.md),
+then [FN02 — natural and forced response](labs/FN02-natural-forced/README.md)
+and [FN03 — initial conditions](labs/FN03-initial-conditions/README.md).
+These new diagrams save a short 20-sample run and link directly to their
+student guides and MIT readings. See the [learning route](../examples/education/README.md).
+
+Continue with [FN04 — impulse and transfer](labs/FN04-impulse-transfer/README.md),
+[FN05 — integration rules](labs/FN05-integration-rules/README.md),
+[FN06 — pole maps](labs/FN06-pole-maps/README.md), then
+[CT01 — first-order charging](labs/CT01-first-order/README.md),
+[CT02 — damped motion](labs/CT02-damped-modes/README.md) and
+[CT03 — sample interval](labs/CT03-sample-time/README.md). These six new lessons
+include independent formulas, deliberate failure cases and Studio workflows.
+
+New signal-processing lessons now include
+[SP01 — Fourier synthesis](labs/SP01-fourier-synthesis/README.md) and
+[SP03 — sampling and aliasing](labs/SP03-aliasing/README.md). They include
+explicit spectrum settings and checks of the displayed samples, axes,
+selected intervals and amplitude/power/PSD against independent references.
+
+Continue with [SP05 — shifted impulse responses](labs/SP05-convolution/README.md)
+and [SP07 — filter transfer functions](labs/SP07-filter-transfer/README.md).
+They check convolution startup, superposition, measured complex transfer,
+Bode magnitude/phase and the distinction between discrete and continuous models.
+
+[SP08 — DFT leakage](labs/SP08-dft-leakage/README.md) and
+[SP09 — periodic window normalization](labs/SP09-window-normalization/README.md)
+add independently checked interval selection, complex DFTs, coherent gain,
+ENBW and amplitude/power/PSD displays, including dB and mean-removal behavior.
+
+[SP10 — circular versus linear convolution](labs/SP10-circular-convolution/README.md)
+shows tail wrap-around and sufficient zero-padding using explicit scalar
+networks. Its recorded input also verifies the production FIR/FFT frame
+processors against independent sums, including streaming boundaries and tails.
+
+[SP11 — short-time Fourier analysis](labs/SP11-short-time-fourier/README.md)
+uses a new burst/chirp graph to verify complex STFT coefficients, window and
+hop coordinates, power normalization and the actual map/slice displays.
+
+[CT04/CT05](labs/CT04-controller-comparison/README.md) add original controller
+and windup comparisons with independent discrete-state checks, separate
+applied/unlimited/state plots and an instance-local nested edit.
+
+[CT06/CT07](labs/CT06-closed-loop-poles/README.md) connect closed-loop
+unit-circle stability with independent rational frequency responses and
+actual Bode/Nyquist displays.
+
+[CT08](labs/CT08-lead-lag/README.md) adds an original reusable lead/lag
+comparison with matched DC gain, explicit control effort and cancellation.
+
+[SP14](labs/SP14-coherent-am/README.md) completes the named 24-lab core
+implementation set with independently checked AM sidebands, coherent phase
+error and finite-filter spectra. Release/package and final viewer qualification
+remain separate from these development checks.
+
+The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
+predict a filter's response, run and inspect it, then remove one tap and explain
+the changed result. The diagram's description links to the offline S7 guide
+and MIT online teaching materials. [Development evidence](EVIDENCE.md) records
+exact checks and remaining qualification.
 
 S7 is an independent open-source educational/research project, **not an
 official MIT course resource or MIT-endorsed product**. This collection
@@ -20,6 +87,14 @@ explicit causal networks, comparing measured behavior with independent
 equations, and discovering when a method or model fails. The visible graph,
 initial state, delay placement, signal rate and observation path are part of
 the experiment—not implementation details to hide.
+
+The labs also serve as **executable specifications for S7**. An independent
+reference fixes the equations, units, initial state, sample convention and
+numerical method; the saved graph must reproduce the declared behavior and
+its limits. A matching plot alone is insufficient. This establishes bounded
+conformance for the tested model, not a proof of every runtime path. Claims
+of reproducing a book example additionally require its exact edition,
+page and equations to be recorded and cross-checked.
 
 A standard lab has an estimated learning time, prerequisites, a defined
 mathematical problem, a diagram (or construction steps), a headless
@@ -47,7 +122,7 @@ change; the curriculum is a dated snapshot, not a claim of MIT affiliation.
    SP01 (Fourier synthesis), SP03 (sampling/aliasing), CT01 (RC/thermal step).
 2. **After mastering discrete-time models:** FN05/FN06 (integrators and
    pole mappings), SP06 (FIR/convolution), SP08 (DFT leakage), CT04/CT05
-   (PID and sampling).
+   (PID, load rejection and windup).
 3. **Advanced work:** SP11 (STFT), CT10 (state space), CT12 (observer),
    IN01–IN08 (noise, estimation, inference). Advanced items have
    prerequisites and may not belong to the 0.2.0 supported subset.
@@ -56,9 +131,9 @@ This order is pedagogical, not a mandate to implement lab IDs in sequence.
 
 ## One model, several curricula
 
-The canonical runnable files remain under
-[`../examples/`](../examples/README.md). The curriculum references them
-rather than copying diagrams into multiple courses. An RC response can
+The new canonical runnable files live under
+[`../examples/education/`](../examples/education/README.md). The curriculum
+references them rather than copying diagrams into multiple courses. An RC response can
 support a circuit lesson, a discrete approximation lesson and an intro
 control lesson using distinct lab questions and verification conditions.
 **Count an instructional exercise once by its lab ID**, not once per

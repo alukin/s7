@@ -1,0 +1,1764 @@
+{
+  "id": "sp10_circular_convolution",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "description": "Original SP10 lab: linear/circular convolution, explicit padding and warm-up.",
+  "dt": 0.125,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 660,
+    "height_mm": 520
+  },
+  "schema": {
+    "name": "SP10 \u2014 Where does the tail go?",
+    "dt": 0.125,
+    "elements": [
+      {
+        "id": "last_tap",
+        "type": "Constant",
+        "params": {
+          "value": -0.25
+        }
+      },
+      {
+        "id": "linear_pulse",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.125,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "linear_x1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "linear_x2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "linear_x3",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "linear_input",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            2,
+            -1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "linear_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "linear_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "linear_weighted",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "linear",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            1
+          ]
+        }
+      },
+      {
+        "id": "cyclic4_pulse",
+        "type": "PulseGenerator",
+        "params": {
+          "low": 0,
+          "high": 1,
+          "frequency_hz": 2.0,
+          "duty": 0.25,
+          "phase": 0
+        }
+      },
+      {
+        "id": "cyclic4_x1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "cyclic4_x2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "cyclic4_x3",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "cyclic4_input",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            2,
+            -1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "cyclic4_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "cyclic4_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "cyclic4_weighted",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "cyclic4",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            1
+          ]
+        }
+      },
+      {
+        "id": "padded8_pulse",
+        "type": "PulseGenerator",
+        "params": {
+          "low": 0,
+          "high": 1,
+          "frequency_hz": 1.0,
+          "duty": 0.125,
+          "phase": 0
+        }
+      },
+      {
+        "id": "padded8_x1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "padded8_x2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "padded8_x3",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "padded8_input",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            2,
+            -1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "padded8_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "padded8_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "padded8_weighted",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "padded8",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            1
+          ]
+        }
+      },
+      {
+        "id": "difference",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "linear_pulse",
+        "from_port": 0,
+        "to_element": "linear_x1",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_x1",
+        "from_port": 0,
+        "to_element": "linear_x2",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_x2",
+        "from_port": 0,
+        "to_element": "linear_x3",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_pulse",
+        "from_port": 0,
+        "to_element": "linear_input",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_x1",
+        "from_port": 0,
+        "to_element": "linear_input",
+        "to_port": 1
+      },
+      {
+        "from_element": "linear_x2",
+        "from_port": 0,
+        "to_element": "linear_input",
+        "to_port": 2
+      },
+      {
+        "from_element": "linear_x3",
+        "from_port": 0,
+        "to_element": "linear_input",
+        "to_port": 3
+      },
+      {
+        "from_element": "linear_input",
+        "from_port": 0,
+        "to_element": "linear_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_d1",
+        "from_port": 0,
+        "to_element": "linear_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_d2",
+        "from_port": 0,
+        "to_element": "linear_weighted",
+        "to_port": 0
+      },
+      {
+        "from_element": "last_tap",
+        "from_port": 0,
+        "to_element": "linear_weighted",
+        "to_port": 1
+      },
+      {
+        "from_element": "linear_input",
+        "from_port": 0,
+        "to_element": "linear",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear_d1",
+        "from_port": 0,
+        "to_element": "linear",
+        "to_port": 1
+      },
+      {
+        "from_element": "linear_weighted",
+        "from_port": 0,
+        "to_element": "linear",
+        "to_port": 2
+      },
+      {
+        "from_element": "cyclic4_pulse",
+        "from_port": 0,
+        "to_element": "cyclic4_x1",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_x1",
+        "from_port": 0,
+        "to_element": "cyclic4_x2",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_x2",
+        "from_port": 0,
+        "to_element": "cyclic4_x3",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_pulse",
+        "from_port": 0,
+        "to_element": "cyclic4_input",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_x1",
+        "from_port": 0,
+        "to_element": "cyclic4_input",
+        "to_port": 1
+      },
+      {
+        "from_element": "cyclic4_x2",
+        "from_port": 0,
+        "to_element": "cyclic4_input",
+        "to_port": 2
+      },
+      {
+        "from_element": "cyclic4_x3",
+        "from_port": 0,
+        "to_element": "cyclic4_input",
+        "to_port": 3
+      },
+      {
+        "from_element": "cyclic4_input",
+        "from_port": 0,
+        "to_element": "cyclic4_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_d1",
+        "from_port": 0,
+        "to_element": "cyclic4_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_d2",
+        "from_port": 0,
+        "to_element": "cyclic4_weighted",
+        "to_port": 0
+      },
+      {
+        "from_element": "last_tap",
+        "from_port": 0,
+        "to_element": "cyclic4_weighted",
+        "to_port": 1
+      },
+      {
+        "from_element": "cyclic4_input",
+        "from_port": 0,
+        "to_element": "cyclic4",
+        "to_port": 0
+      },
+      {
+        "from_element": "cyclic4_d1",
+        "from_port": 0,
+        "to_element": "cyclic4",
+        "to_port": 1
+      },
+      {
+        "from_element": "cyclic4_weighted",
+        "from_port": 0,
+        "to_element": "cyclic4",
+        "to_port": 2
+      },
+      {
+        "from_element": "padded8_pulse",
+        "from_port": 0,
+        "to_element": "padded8_x1",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_x1",
+        "from_port": 0,
+        "to_element": "padded8_x2",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_x2",
+        "from_port": 0,
+        "to_element": "padded8_x3",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_pulse",
+        "from_port": 0,
+        "to_element": "padded8_input",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_x1",
+        "from_port": 0,
+        "to_element": "padded8_input",
+        "to_port": 1
+      },
+      {
+        "from_element": "padded8_x2",
+        "from_port": 0,
+        "to_element": "padded8_input",
+        "to_port": 2
+      },
+      {
+        "from_element": "padded8_x3",
+        "from_port": 0,
+        "to_element": "padded8_input",
+        "to_port": 3
+      },
+      {
+        "from_element": "padded8_input",
+        "from_port": 0,
+        "to_element": "padded8_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_d1",
+        "from_port": 0,
+        "to_element": "padded8_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_d2",
+        "from_port": 0,
+        "to_element": "padded8_weighted",
+        "to_port": 0
+      },
+      {
+        "from_element": "last_tap",
+        "from_port": 0,
+        "to_element": "padded8_weighted",
+        "to_port": 1
+      },
+      {
+        "from_element": "padded8_input",
+        "from_port": 0,
+        "to_element": "padded8",
+        "to_port": 0
+      },
+      {
+        "from_element": "padded8_d1",
+        "from_port": 0,
+        "to_element": "padded8",
+        "to_port": 1
+      },
+      {
+        "from_element": "padded8_weighted",
+        "from_port": 0,
+        "to_element": "padded8",
+        "to_port": 2
+      },
+      {
+        "from_element": "padded8",
+        "from_port": 0,
+        "to_element": "difference",
+        "to_port": 0
+      },
+      {
+        "from_element": "linear",
+        "from_port": 0,
+        "to_element": "difference",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "last_tap",
+        "position": [
+          69,
+          28
+        ],
+        "title": "Shared h[2]: edit value \u22120.25 \u2192 0.5"
+      },
+      {
+        "id": "linear_pulse",
+        "position": [
+          3,
+          32
+        ],
+        "title": "One unit sample at n=8"
+      },
+      {
+        "id": "linear_x1",
+        "position": [
+          15,
+          41
+        ],
+        "title": "Word builder: delay 1"
+      },
+      {
+        "id": "linear_x2",
+        "position": [
+          27,
+          41
+        ],
+        "title": "Word builder: delay 2"
+      },
+      {
+        "id": "linear_x3",
+        "position": [
+          39,
+          41
+        ],
+        "title": "Word builder: delay 3"
+      },
+      {
+        "id": "linear_input",
+        "position": [
+          43,
+          32
+        ],
+        "title": "Input word: 1, 2, \u22121, 1"
+      },
+      {
+        "id": "linear_d1",
+        "position": [
+          57,
+          41
+        ],
+        "title": "FIR history: 1 sample"
+      },
+      {
+        "id": "linear_d2",
+        "position": [
+          69,
+          41
+        ],
+        "title": "FIR history: 2 samples"
+      },
+      {
+        "id": "linear_weighted",
+        "position": [
+          83,
+          41
+        ],
+        "title": "Oldest input \u00d7 shared h[2]"
+      },
+      {
+        "id": "linear",
+        "position": [
+          97,
+          32
+        ],
+        "title": "LINEAR: isolated word"
+      },
+      {
+        "id": "cyclic4_pulse",
+        "position": [
+          3,
+          56
+        ],
+        "title": "Unit samples every 4 ticks"
+      },
+      {
+        "id": "cyclic4_x1",
+        "position": [
+          15,
+          65
+        ],
+        "title": "Word builder: delay 1"
+      },
+      {
+        "id": "cyclic4_x2",
+        "position": [
+          27,
+          65
+        ],
+        "title": "Word builder: delay 2"
+      },
+      {
+        "id": "cyclic4_x3",
+        "position": [
+          39,
+          65
+        ],
+        "title": "Word builder: delay 3"
+      },
+      {
+        "id": "cyclic4_input",
+        "position": [
+          43,
+          56
+        ],
+        "title": "Input word: 1, 2, \u22121, 1"
+      },
+      {
+        "id": "cyclic4_d1",
+        "position": [
+          57,
+          65
+        ],
+        "title": "FIR history: 1 sample"
+      },
+      {
+        "id": "cyclic4_d2",
+        "position": [
+          69,
+          65
+        ],
+        "title": "FIR history: 2 samples"
+      },
+      {
+        "id": "cyclic4_weighted",
+        "position": [
+          83,
+          65
+        ],
+        "title": "Oldest input \u00d7 shared h[2]"
+      },
+      {
+        "id": "cyclic4",
+        "position": [
+          97,
+          56
+        ],
+        "title": "CIRCULAR: period 4"
+      },
+      {
+        "id": "padded8_pulse",
+        "position": [
+          3,
+          80
+        ],
+        "title": "Unit samples every 8 ticks"
+      },
+      {
+        "id": "padded8_x1",
+        "position": [
+          15,
+          89
+        ],
+        "title": "Word builder: delay 1"
+      },
+      {
+        "id": "padded8_x2",
+        "position": [
+          27,
+          89
+        ],
+        "title": "Word builder: delay 2"
+      },
+      {
+        "id": "padded8_x3",
+        "position": [
+          39,
+          89
+        ],
+        "title": "Word builder: delay 3"
+      },
+      {
+        "id": "padded8_input",
+        "position": [
+          43,
+          80
+        ],
+        "title": "Input word: 1, 2, \u22121, 1"
+      },
+      {
+        "id": "padded8_d1",
+        "position": [
+          57,
+          89
+        ],
+        "title": "FIR history: 1 sample"
+      },
+      {
+        "id": "padded8_d2",
+        "position": [
+          69,
+          89
+        ],
+        "title": "FIR history: 2 samples"
+      },
+      {
+        "id": "padded8_weighted",
+        "position": [
+          83,
+          89
+        ],
+        "title": "Oldest input \u00d7 shared h[2]"
+      },
+      {
+        "id": "padded8",
+        "position": [
+          97,
+          80
+        ],
+        "title": "PADDED: period 8"
+      },
+      {
+        "id": "difference",
+        "position": [
+          111,
+          80
+        ],
+        "title": "Padded minus linear: read n=8\u202615"
+      },
+      {
+        "id": "inputs",
+        "position": [
+          111,
+          32
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Inputs: compare the repetition",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "isolated input",
+            "period 4 input",
+            "period 8 input"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "scope",
+        "position": [
+          111,
+          56
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Outputs: read the second block",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "linear",
+            "circular 4",
+            "padded 8",
+            "padded minus linear"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "linear_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_x1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "linear_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_x2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "linear_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_x3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "linear_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_input",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "linear_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_input",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "linear_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_input",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "linear_x3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_input",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "linear_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "linear_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "linear_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_weighted",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "last_tap",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear_weighted",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "linear_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "linear_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "linear_weighted",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "linear",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "cyclic4_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_x1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "cyclic4_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_x2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "cyclic4_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_x3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "cyclic4_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_input",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "cyclic4_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_input",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "cyclic4_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_input",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "cyclic4_x3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_input",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "cyclic4_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "cyclic4_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "cyclic4_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_weighted",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "last_tap",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4_weighted",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "cyclic4_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "cyclic4_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "cyclic4_weighted",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cyclic4",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "padded8_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_x1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "padded8_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_x2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "padded8_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_x3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w31",
+        "from": {
+          "port": [
+            "padded8_pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_input",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w32",
+        "from": {
+          "port": [
+            "padded8_x1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_input",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w33",
+        "from": {
+          "port": [
+            "padded8_x2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_input",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w34",
+        "from": {
+          "port": [
+            "padded8_x3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_input",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w35",
+        "from": {
+          "port": [
+            "padded8_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w36",
+        "from": {
+          "port": [
+            "padded8_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w37",
+        "from": {
+          "port": [
+            "padded8_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_weighted",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w38",
+        "from": {
+          "port": [
+            "last_tap",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8_weighted",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w39",
+        "from": {
+          "port": [
+            "padded8_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w40",
+        "from": {
+          "port": [
+            "padded8_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w41",
+        "from": {
+          "port": [
+            "padded8_weighted",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "padded8",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w42",
+        "from": {
+          "port": [
+            "padded8",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w43",
+        "from": {
+          "port": [
+            "linear",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w44",
+        "from": {
+          "port": [
+            "linear_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inputs",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w45",
+        "from": {
+          "port": [
+            "cyclic4_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inputs",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w46",
+        "from": {
+          "port": [
+            "padded8_input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inputs",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w47",
+        "from": {
+          "port": [
+            "linear",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w48",
+        "from": {
+          "port": [
+            "cyclic4",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w49",
+        "from": {
+          "port": [
+            "padded8",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w50",
+        "from": {
+          "port": [
+            "difference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP10 \u2014 Where does the tail go?**  \n**Predict \u2192 Run \u2192 Compare \u2192 Change one tap. Run 2 s at 8 Hz.** All Delay states start at zero.  \nWord x=[1, 2, \u22121, 1] V; h=[1, 0.5, \u22120.25]. First 8 ticks warm up the periodic paths. Read n=8\u202615 at Scope times **1.125\u20262 s**.  \nLinear: [1, 2.5, \u22120.25, 0, 0.75, \u22120.25, 0, 0]. Circular 4 wraps the tail: [1.75, 2.25, \u22120.25, 0], twice. Padded 8 matches linear in this block.  \nSelect last_tap, F4: value \u22120.25 \u2192 0.5. Predict all three outputs before rerunning. The input word builders are on the left; the same three-tap FIR is on each right-hand row.  \n[Open SP10 student lab](qrc:/s7studio/help/education/labs/SP10-circular-convolution/README.md) \u00b7 [MIT circular convolution](https://ocw.mit.edu/courses/res-6-008-digital-signal-processing-spring-2011/resources/lecture-10-circular-convolution/) \u00b7 [S7 convolution implementation](qrc:/s7studio/help/docs/CONVOLUTION.md)",
+          "text_format": "markdown",
+          "width": 2350,
+          "height": 520,
+          "font_size": 24
+        }
+      }
+    ]
+  }
+}

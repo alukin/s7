@@ -80,6 +80,32 @@ authorize exact lecture/problem mappings** to historical 6.011 content.
 
 ## Per-lab citation ledger
 
+### SP06 supporting materials — checked 2026-11-19
+
+The new S7 FIR lab links directly to the public
+[6.3000 Fall 2026 convolution handout](https://sigproc.mit.edu/_static/fall26/lectures/Unit-Sample_Response_and_Convolution-handout.pdf)
+and [frequency-response/filtering handout](https://sigproc.mit.edu/_static/fall26/lectures/Frequency_Response_and_Filtering-handout.pdf),
+plus the [6.003 Chapter 3 reading/download page](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/).
+The handout covers unit-sample response, superposition and discrete convolution;
+the OCW resource is the block-diagram/operator reading. These are supporting
+teaching links, not a claim to reproduce a named problem or its solution.
+They remain on MIT's sites; only S7-original models and explanations ship here.
+
+### FN01–FN03 supporting materials — checked 2026-11-19
+
+The public MIT 6.003 Fall 2011 readings page lists Mahajan and Freeman's
+supplementary chapters on [difference equations](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap1/),
+[modularity](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap2/)
+and [block diagrams/operators](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/).
+These original reading/download pages were rechecked and are linked from the
+new guides and diagram frames. FN01–FN03 are independently authored
+first-order recurrence experiments illustrating those topics; no particular
+MIT exercise, textbook page or answer key is claimed as reproduced. The
+formulas and prediction tables in S7 were derived independently. No MIT
+chapter is included in the source or help resources.
+
+### Required ledger fields
+
 Every lab that reaches reference-qualified status must record:
 
 1. MIT course code, term (when applicable) and **stable official URL**;
@@ -101,3 +127,150 @@ Do not use MIT names, logos, branding or statements of endorsement.
 Prefer language such as **"S7 original lab illustrating topics taught
 in MIT 6.3000"** over **"MIT lab"**. For exact adaptations,
 verify legal reuse permission and source fidelity first.
+
+### FN04–FN06 and CT01–CT03 — checked 2026-11-19
+
+The public MIT 6.003 Fall 2011 lecture-note index and its resource/download
+pages were checked for direct student links:
+
+- FN04: [lecture 9, Frequency response](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec09/).
+- FN05/FN06/CT03: [lecture 7, Discrete approximation of continuous-time systems](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/).
+- CT01/CT02: [lecture 4, Continuous-time systems](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec04/).
+
+These links establish topic alignment and access to original teaching
+materials. No exact slide/problem equivalence is asserted. The six graphs,
+experiments and formulas are independently authored for S7. In particular,
+FN05/FN06 explicitly derive scalar linear recurrences; they do not claim
+that S7 solves arbitrary implicit differential equations. CT02's physical
+and discrete references use analytic modes, independently of the runtime.
+No MIT PDFs or solutions are redistributed.
+
+### SP01/SP03 — checked 2026-11-19
+
+- SP01: [MIT 6.003 lecture 15, Fourier series](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec15/).
+  The public 2011 notes were inspected for harmonic analysis/synthesis and
+  orthogonal decomposition (printed slides 3–7). This supports the topic
+  mapping. The square-wave sums, finite Parseval check and Gibbs discussion
+  here are independently authored; no exact slide/problem reproduction or
+  claim that this lecture supplies all those derivations is made.
+- SP03: [MIT 6.003 lecture 21, Sampling](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec21/).
+  The public notes were inspected for spectral folding, harmonic aliases and
+  filtering before sampling (printed slides 35–54 and summary slide 60).
+  S7's frequencies, phases and residual experiment are original choices,
+  not copied questions or solution data.
+
+Both guides and diagram descriptions link directly to the MIT resource
+pages. No external handout, figure or solution key is bundled. Runtime
+source samples and the actual viewer path are checked independently; source
+alignment alone is not numerical or interface verification.
+
+### SP05/SP07 — checked 2026-11-19
+
+- SP05: [MIT 6.003 lecture 8, Convolution](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec08/).
+  The public notes' superposition, time invariance and convolution discussion
+  (printed slides 15–22) supports the topic mapping. The signed three-tap
+  kernel, two pulses, initial-history contrast and graph are original S7 work.
+- SP07: [lecture 9, Frequency response](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec09/)
+  and [lecture 11, Continuous-time frequency response and Bode plots](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec11/).
+  The public resource pages identify the relevant teaching topics; lecture 11
+  notes provide context for continuous frequency response and Bode plots.
+  S7's exact forward-Euler state equations, discrete rational transfers,
+  rate/damping choices and numerical envelopes are independently derived.
+
+These are topic illustrations, not reproduced MIT questions or solution keys.
+No exact textbook-problem equivalence is claimed. Both guides link original
+MIT material; no external PDF or figure is bundled. Runtime, observation and
+viewer checks remain separate evidence from source attribution.
+
+### SP08/SP09 — checked 2026-11-19
+
+- SP08: [MIT 6.003 lecture 18, Discrete-time Fourier representations](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec18/).
+  The public 2011 notes discuss finite DT Fourier representations and FFT
+  computation (including printed slides 31–32). S7's exact cosine frequencies,
+  interval boundaries and geometric-sum/DFT comparisons are independent work.
+- SP09: [MIT 2.161 lecture 12, FFT, leakage and windowing](https://ocw.mit.edu/courses/2-161-signal-processing-continuous-and-discrete-fall-2008/resources/lecture_12/),
+  Derek Rowell, Fall 2008. The public notes' leakage and windowing discussion
+  (printed 0–6 through 0–9) was inspected, including periodic Hann/Hamming
+  expressions and the main-lobe/sidelobe tradeoff. S7 explicitly freezes its
+  own finite normalization formulas, units and independently chosen tones.
+
+These are original topic illustrations, not reproductions of named MIT
+problems. No external PDF, figure or solution key is bundled. Student links
+open original MIT resource pages. The direct DFT and window references share
+no production FFT/window implementation; numerical and viewer evidence remain
+separate from source attribution.
+
+### SP10 — checked 2026-11-19
+
+[MIT RES.6-008, Digital Signal Processing, lecture 10: Circular Convolution](https://ocw.mit.edu/courses/res-6-008-digital-signal-processing-spring-2011/resources/lecture-10-circular-convolution/),
+Alan V. Oppenheim, OCW edition Spring 2011. The inspected official resource
+page explicitly identifies finite-sequence circular convolution, aliasing
+of the linear result, and implementing linear convolution through circular
+convolution. This establishes topic alignment; no exact timestamp, textbook
+page or assigned-problem equivalence is asserted. The prerequisite link is
+[MIT 6.003 lecture 8, Convolution, Fall 2011](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec08/).
+
+The signed input word, taps, periodic warm-up, primary edit and graph are
+original S7 choices. The direct product-deposit and short DFT references
+were independently authored to verify the graph and the separate production
+frame convolution APIs. No MIT figure, PDF, assignment or solution is bundled.
+
+### SP11 — checked 2026-11-19
+
+[MIT 6.300 Fall 2025, Week 9 Lecture A: Short-Time Fourier Transform](https://sigproc.mit.edu/_static/fall25/lectures/Short-Time_Fourier_Transform.pdf),
+PDF pages 3–7, was inspected for windowed-DFT analysis, hop/step size and
+time/frequency map orientation. The public
+[Spring 2025 Computing Spectrograms page](https://sigproc.mit.edu/spring25/labs/Computing_Spectrograms)
+provides additional topic context. No assignment, implementation, tune,
+figure or solution is reproduced. S7's gated 32 Hz tone, discrete chirp,
+parameters, graph and independent direct-DFT references are original work.
+The guide explicitly distinguishes raw-transform teaching conventions from
+S7's one-sided peak-amplitude, power and PSD normalization.
+
+## CT04/CT05 — original controller and windup experiments, 2026-11-19
+
+- [MIT 16.06, Fall 2012, Lecture 10: PID Control](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_10/):
+  resource/PDF inspected; PDF pages 1–3 introduce P, D and I and discuss
+  derivative feedback on measurement. CT04 uses a different original
+  first-order plant and an explicitly forward-Euler filtered derivative,
+  not its worked problem or ideal derivative realization.
+- [MIT 2.017J, Fall 2009, Feedback Control](https://ocw.mit.edu/courses/2-017j-design-of-electromechanical-robotic-systems-fall-2009/MIT2_017JF09_feedback.pdf):
+  PDF pages 13–14 (integral/derivative context) and 20 (integrator windup)
+  inspected. CT05 illustrates the topic using original bounded PI loops
+  and explicit back-calculation; it does not reproduce the lecture's
+  illustration or imply that its brief remedy prescribes this recurrence.
+
+Synthetic schedules, new diagrams and long-double scalar reference equations
+are original S7 work. No PDF, figure, assignment or solution is bundled.
+The current 6.3100 calendar timed out during this batch; no new claim about
+its current lecture numbering is made. Topic links above use dated OCW material.
+
+## CT06/CT07 — original sampled loop, 2026-11-19
+
+[MIT 16.06, Fall 2012, Lecture 11](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_11/),
+PDF pages 1–3, was inspected for gain-dependent characteristic-root reasoning.
+[Lecture 23](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_23/),
+PDF pages 1–2, was inspected for gain/phase margin definitions and Bode/Nyquist
+interpretation. These continuous-time examples are topic sources, not copied
+models: S7's new loop explicitly uses the discrete unit-circle criterion,
+exact sampled transfer and original schedules. No handout/figure/assignment
+or solution is bundled; formulas and datasets were derived independently.
+
+## CT08 — original discrete lead/lag network, 2026-11-19
+
+[MIT 16.06, Fall 2012, Lecture 25: Lead Compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_25/),
+PDF pages 1–2, and [Lecture 14: Lag Compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_14/),
+PDF pages 2–3, were inspected for topic alignment. The notes describe
+continuous-time pole/zero shaping; CT08 explicitly defines a different
+original sampled recurrence, a matched-DC comparison and its control effort.
+No worked problem, figure, assignment or solution is copied or bundled.
+
+## SP14 — synthetic AM and finite coherent detector, 2026-11-19
+
+[MIT 6.003, Fall 2011, Lecture 23](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/08c6a7bc7e56eda548248c354886dc37_MIT6_003F11_lec23.pdf),
+PDF pages 13–18 and 25–28, and [MIT RES.6-007, Spring 2011, Lecture 13](https://ocw.mit.edu/courses/res-6-007-signals-and-systems-spring-2011/a774c49855ba6bfe7266943eb8b5bc41_MITRES_6_007S11_lec13.pdf),
+PDF pages 1–2, 7–8 and 10, were inspected for modulation, synchronous mixing
+and carrier-phase alignment. SP14 uses original synthetic frequencies,
+schedules, numerical references and a declared two-state forward-Euler filter,
+not the notes' ideal continuous low-pass or a copied assignment/solution.
+No handout, figure, audio or external dataset is bundled.

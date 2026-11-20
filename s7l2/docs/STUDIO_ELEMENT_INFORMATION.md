@@ -76,7 +76,7 @@ keys must be supplied even when metadata provides a suggested value.
 | Resampler | order, stopband_attenuation_db | Joins two rates; pass-through at equal rates; orders 0/1/2, anti-aliasing when lowering the rate |
 
 Schema library entries PhaseDifference, FirstOrderLag, RMSDetector, PIController
-and PIDController have **no wrapper parameter keys**. The source is
+PIDController and LeadLagController have **no wrapper parameter keys**. The source is
 `s7core/resources/schema_elements.s7library` and `schema_library.cpp`.
 Descriptions identify exposed signals, units, initial states and timing;
 information also lists internal element settings and schema dt. Controller gains

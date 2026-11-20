@@ -1,0 +1,464 @@
+{
+  "id": "sp11_short_time_fourier",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.0078125,
+  "studio_run": {
+    "runtime_seconds": 4,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 470,
+    "height_mm": 390
+  },
+  "schema": {
+    "name": "SP11 \u2014 When did that frequency happen?",
+    "dt": 0.0078125,
+    "elements": [
+      {
+        "id": "tone",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 32,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "start",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "stop",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "start_time": 2
+        }
+      },
+      {
+        "id": "gate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "burst",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "chirp",
+        "type": "ChirpGenerator",
+        "params": {
+          "start_hz": 8,
+          "end_hz": 40,
+          "sweep_time": 4,
+          "amplitude": 0.5,
+          "offset": 0,
+          "phase": 1.5707963267948966,
+          "sweep": "linear",
+          "end_behavior": "hold"
+        }
+      },
+      {
+        "id": "mixture",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "start",
+        "from_port": 0,
+        "to_element": "gate",
+        "to_port": 0
+      },
+      {
+        "from_element": "stop",
+        "from_port": 0,
+        "to_element": "gate",
+        "to_port": 1
+      },
+      {
+        "from_element": "tone",
+        "from_port": 0,
+        "to_element": "burst",
+        "to_port": 0
+      },
+      {
+        "from_element": "gate",
+        "from_port": 0,
+        "to_element": "burst",
+        "to_port": 1
+      },
+      {
+        "from_element": "burst",
+        "from_port": 0,
+        "to_element": "mixture",
+        "to_port": 0
+      },
+      {
+        "from_element": "chirp",
+        "from_port": 0,
+        "to_element": "mixture",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "tone",
+        "position": [
+          4,
+          28
+        ],
+        "title": "Burst carrier: 1 V peak, 32 Hz"
+      },
+      {
+        "id": "start",
+        "position": [
+          4,
+          43
+        ],
+        "title": "Open gate at source time 1 s"
+      },
+      {
+        "id": "stop",
+        "position": [
+          4,
+          58
+        ],
+        "title": "Close gate: edit start_time 2 \u2192 1.5 s"
+      },
+      {
+        "id": "gate",
+        "position": [
+          21,
+          43
+        ],
+        "title": "Gate = start minus stop"
+      },
+      {
+        "id": "burst",
+        "position": [
+          38,
+          28
+        ],
+        "title": "Carrier while gate is open"
+      },
+      {
+        "id": "chirp",
+        "position": [
+          38,
+          58
+        ],
+        "title": "Chirp: 0.5 V peak, 8 \u2192 40 Hz"
+      },
+      {
+        "id": "mixture",
+        "position": [
+          55,
+          43
+        ],
+        "title": "Burst plus chirp"
+      },
+      {
+        "id": "scope",
+        "position": [
+          72,
+          28
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Time samples: compare burst, chirp and mixture",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "burst",
+            "chirp",
+            "mixture"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "burst_map",
+        "position": [
+          55,
+          28
+        ],
+        "observer": true,
+        "type": "TimeFrequency",
+        "title": "Burst STFT: inspect the window edges",
+        "params": {
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "map",
+        "position": [
+          72,
+          56
+        ],
+        "observer": true,
+        "type": "TimeFrequency",
+        "title": "Mixture STFT: horizontal burst plus rising chirp",
+        "params": {
+          "channel_units": [
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "start",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "gate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "stop",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "gate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "tone",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "burst",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "gate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "burst",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "burst",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixture",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "chirp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixture",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "burst",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "chirp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "mixture",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "burst",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "burst_map",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "mixture",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "map",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP11 \u2014 When did that frequency happen?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change duration. Run 4 s at 128 Hz.** The 32 Hz burst occupies n=128\u2026255; a quieter chirp rises from 8 toward 40 Hz.  \nOpen a map. Select STFT, FFT size 64, Hop 32 samples, Magnitude. Expect 15 columns, \u0394f=2 Hz and 0.25 s between centers; the first center is 0.25390625 s.  \nCompare N=128 / Hop 64, then N=64 / Hop 16. Smaller hop adds columns, not sharper frequency resolution. Only full windows are analyzed; edge overlap spreads the apparent burst.  \nSelect stop, F4: start_time 2 \u2192 1.5 s. Predict the shorter burst before rerunning. Scope observes source sample n at model time (n+1)/128 s.  \n[Open SP11 student lab](qrc:/s7studio/help/education/labs/SP11-short-time-fourier/README.md) \u00b7 [MIT STFT lecture](https://sigproc.mit.edu/_static/fall25/lectures/Short-Time_Fourier_Transform.pdf) \u00b7 [S7 time\u2013frequency guide](qrc:/s7studio/help/examples/time_frequency/README.md)",
+          "text_format": "markdown",
+          "width": 1670,
+          "height": 500,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

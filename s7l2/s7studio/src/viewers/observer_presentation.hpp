@@ -29,6 +29,7 @@ struct PreviewData {
     QStringList axes, details;
     QString status, summary;
     QString timeAxis = "Model time (s; recent interval)";
+    QString valueAxis = "Value (supplied units)";
     std::optional<std::pair<double, double>> timeRange;
     std::uint64_t revision = 0, run = 0;
     std::size_t rawPositions = 0, vertices = 0;

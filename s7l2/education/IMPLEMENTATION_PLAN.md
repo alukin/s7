@@ -10,6 +10,35 @@ Related: [curriculum map](COURSE_MAP.md),
 [source and attribution record](SOURCES.md) and
 [0.2.0 work-plan acceptance matrix](../docs/RELEASE_0.2.0_WORKPLAN.md).
 
+**2026-11-19 maintainer revision:** all education deliverables use new,
+purpose-built diagrams in `examples/education/`. Earlier instructions below
+to reuse or adapt existing runnable diagrams are superseded: inspect those
+examples and their tests as engineering references, then design the teaching
+graph afresh. Continue using existing primitives, loaders and test tools.
+The [core manifest](CORE_MANIFEST.md) records per-lab gaps and delivery order.
+
+## Closing reminder — viewer audit
+
+**Maintainer request, 2026-11-19:** before declaring the education work
+finished, remind the maintainer to audit **all delivered educational examples
+for viewer correctness**. Keep this reminder open until that review occurs.
+Check displayed samples against recorded data, channel names and units,
+model-time axes, selected analysis intervals, frequency axes, amplitude/power
+normalization, overlays and save/reopen/rerun behavior. Per-lab automated
+checks support this collection-wide review; they do not replace it.
+
+- [x] Remind the maintainer at the final education review (2026-11-19).
+- [x] Perform the requested collection-wide Linux viewer audit and resolve its findings (2026-11-20).
+
+The maintainer delegated the audit on 2026-11-20. It covered all 24 education
+labs and the other 98 bundled diagrams, including optional analysis plugins,
+with recording/data checks and rendered-view review under Xvfb/Mesa. Three
+viewer defects were reproduced and fixed. The local report and per-example
+evidence are under `/var/tmp/s7-viewer-audit-2026-11-20/`, outside Git per the
+GUI-testing policy. This closes the requested Linux collection audit; native
+Windows, physical GPU/display and final release-candidate acceptance remain
+separate gates.
+
 ## Objective and scope decision
 
 Build an **open, original, MIT-aligned learning laboratory** for signals,
@@ -85,6 +114,29 @@ one mega-PR with 24 examples and no reviewable provenance.
 **Exit:** inspectable mapping and prioritized PR list, no silent
 overwriting of earlier established research conclusions.
 
+## Development progress — 2026-11-19
+
+Twenty-four core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT08, SP01, SP03, SP05–SP11 and SP14. The [manifest](CORE_MANIFEST.md) and
+[executed evidence](EVIDENCE.md) distinguish development checks from final
+release qualification. The named core implementation set is complete.
+
+The latest batches verify controller/plant states, windup and saved nested
+edits (CT04/CT05), sampled poles and measured Bode/Nyquist curves (CT06/CT07),
+a reusable lead/lag network with matched DC gain and control effort (CT08),
+and coherent AM phase, finite-filter states and selected spectra (SP14).
+Earlier signal-processing lessons independently check runtime sequences and
+production convolution/spectral processors without changing causal semantics.
+
+Integration now opens diagram links from Help as working copies and packages
+the offline guides beside the examples. Source and relocated Linux navigation
+checks cover all 24 core rows. The requested collection-wide Linux viewer audit
+is complete (2026-11-20); see the closing checklist above. Next: the named
+release-candidate checks, native Windows qualification and final maintainer
+acceptance. Those platform/release decisions are not inferred from Linux
+development tests. The additional 24 non-core curriculum items remain
+outside the accepted 0.2.0 implementation set.
+
 ## Phase 1 — Classical foundations and discrete modeling (FN)
 
 Use the existing Siebert/Mahajan–Freeman reading record and local
@@ -124,6 +176,22 @@ Build in short thematic PRs:
 | F | SP10 | Linear/circular convolution and explicit zero-padding |
 | G | SP11 | STFT window/hop/chirp verification, edge labeling |
 | H | SP14 | Coherent AM sidebands and demodulation with reference and transient interpretation |
+
+**SP10 workflow decision, 2026-11-19:** retain the scalar graph-port contract.
+Three explicit pulse/Delay word builders feed three FIR networks; repeating
+the word every 4 or 8 ticks demonstrates circular folding and padding after
+warm-up. The isolated word begins at n=8 so all three share the comparison
+block n=8…15. Headless checks pass the actual recorded word to the production
+FIR/FFT frame APIs and independently verify full linear output, folded output,
+streaming partitions and complete tails. This uses existing primitives and
+does not introduce frame-valued ports, observation-side computation in the
+runtime, or new causal semantics. SP11 now adds an original gated-tone/chirp
+graph, independent complex STFT checks and actual map/slice rendering checks.
+CT04/CT05 now add independently checked controller/windup comparisons.
+CT06/CT07 now add sampled poles and independently checked stability margins.
+CT08 now adds a reusable schema compensator with independent state/response checks.
+SP14 completes the named core implementation set. Next: integration/package
+checks and the final collection-wide viewer review.
 
 **SP06 reference contract, proposed first engineering flagship:**
 

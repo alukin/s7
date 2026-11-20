@@ -1,0 +1,2466 @@
+{
+  "id": "ct08_lead_lag",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.1,
+  "studio_run": {
+    "runtime_seconds": 64,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 470,
+    "height_mm": 485
+  },
+  "schema": {
+    "name": "CT08 \u2014 Lead/lag compensation and control effort",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "reference",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 0.5,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "pulse",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.1,
+          "start_time": 0.8
+        }
+      },
+      {
+        "id": "base_gain",
+        "type": "Constant",
+        "params": {
+          "value": 4
+        }
+      },
+      {
+        "id": "scale",
+        "type": "Constant",
+        "params": {
+          "value": 16
+        }
+      },
+      {
+        "id": "zero",
+        "type": "Constant",
+        "params": {
+          "value": 0.8
+        }
+      },
+      {
+        "id": "pole",
+        "type": "Constant",
+        "params": {
+          "value": 0.2
+        }
+      },
+      {
+        "id": "tau",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "base_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "base",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "base_x",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      },
+      {
+        "id": "base_y",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      },
+      {
+        "id": "lead_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "lead",
+        "type": "LeadLagController",
+        "params": {},
+        "schema": {
+          "name": "LeadLagController",
+          "dt": 0.1,
+          "elements": [
+            {
+              "id": "error",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "error_memory",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0
+              }
+            },
+            {
+              "id": "control_memory",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0
+              }
+            },
+            {
+              "id": "zero_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "scaled",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "pole_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "error_memory",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 0
+            },
+            {
+              "from_element": "error_memory",
+              "from_port": 0,
+              "to_element": "zero_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "zero_product",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "control_memory",
+              "from_port": 0,
+              "to_element": "pole_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "scaled",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "pole_product",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "control_memory",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "error",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "scale",
+              "type": "F64",
+              "element": "scaled",
+              "port": 1
+            },
+            {
+              "name": "zero",
+              "type": "F64",
+              "element": "zero_product",
+              "port": 1
+            },
+            {
+              "name": "pole",
+              "type": "F64",
+              "element": "pole_product",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            },
+            {
+              "name": "previous_error",
+              "type": "F64",
+              "element": "error_memory",
+              "port": 0
+            },
+            {
+              "name": "previous_control",
+              "type": "F64",
+              "element": "control_memory",
+              "port": 0
+            }
+          ],
+          "diagram_version": 2,
+          "sheet": {
+            "orientation": "landscape",
+            "width_mm": 480,
+            "height_mm": 340
+          },
+          "diagram": {
+            "grid": {
+              "step": 20,
+              "mm_per_step": 5.291666666666667
+            },
+            "nodes": [
+              {
+                "id": "error",
+                "position": [
+                  3,
+                  18
+                ],
+                "title": "error"
+              },
+              {
+                "id": "error_memory",
+                "position": [
+                  3,
+                  34
+                ],
+                "title": "error_memory"
+              },
+              {
+                "id": "control_memory",
+                "position": [
+                  71,
+                  50
+                ],
+                "title": "control_memory"
+              },
+              {
+                "id": "zero_product",
+                "position": [
+                  20,
+                  34
+                ],
+                "title": "zero_product"
+              },
+              {
+                "id": "difference",
+                "position": [
+                  37,
+                  18
+                ],
+                "title": "difference"
+              },
+              {
+                "id": "scaled",
+                "position": [
+                  54,
+                  18
+                ],
+                "title": "scaled"
+              },
+              {
+                "id": "pole_product",
+                "position": [
+                  54,
+                  50
+                ],
+                "title": "pole_product"
+              },
+              {
+                "id": "sum",
+                "position": [
+                  71,
+                  18
+                ],
+                "title": "sum"
+              }
+            ],
+            "wires": [
+              {
+                "id": "w0",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "error_memory",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w1",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "difference",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w2",
+                "from": {
+                  "port": [
+                    "error_memory",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "zero_product",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w3",
+                "from": {
+                  "port": [
+                    "zero_product",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "difference",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w4",
+                "from": {
+                  "port": [
+                    "difference",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "scaled",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w5",
+                "from": {
+                  "port": [
+                    "control_memory",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "pole_product",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w6",
+                "from": {
+                  "port": [
+                    "scaled",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w7",
+                "from": {
+                  "port": [
+                    "pole_product",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w8",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "control_memory",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              }
+            ],
+            "text_frames": [
+              {
+                "id": "lead_notes",
+                "position": [
+                  2,
+                  1
+                ],
+                "params": {
+                  "text": "u[n] = b u[n\u22121] + K (e[n] \u2212 a e[n\u22121]).\nTwo explicit memories, no actuator limiter. Gains a,b,K enter as signals.\nThis instance is drawn here; its reusable definition is in schema_elements.s7library.",
+                  "width": 1640,
+                  "height": 240,
+                  "font_size": 18
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "lead_x",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      },
+      {
+        "id": "lead_y",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      },
+      {
+        "id": "open",
+        "type": "LeadLagController",
+        "params": {},
+        "schema": {
+          "name": "LeadLagController",
+          "dt": 0.1,
+          "elements": [
+            {
+              "id": "error",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "error_memory",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0
+              }
+            },
+            {
+              "id": "control_memory",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0
+              }
+            },
+            {
+              "id": "zero_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "scaled",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "pole_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "error_memory",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 0
+            },
+            {
+              "from_element": "error_memory",
+              "from_port": 0,
+              "to_element": "zero_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "zero_product",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "control_memory",
+              "from_port": 0,
+              "to_element": "pole_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "scaled",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "pole_product",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "control_memory",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "error",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "scale",
+              "type": "F64",
+              "element": "scaled",
+              "port": 1
+            },
+            {
+              "name": "zero",
+              "type": "F64",
+              "element": "zero_product",
+              "port": 1
+            },
+            {
+              "name": "pole",
+              "type": "F64",
+              "element": "pole_product",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            },
+            {
+              "name": "previous_error",
+              "type": "F64",
+              "element": "error_memory",
+              "port": 0
+            },
+            {
+              "name": "previous_control",
+              "type": "F64",
+              "element": "control_memory",
+              "port": 0
+            }
+          ],
+          "diagram_version": 2,
+          "sheet": {
+            "orientation": "landscape",
+            "width_mm": 480,
+            "height_mm": 340
+          },
+          "diagram": {
+            "grid": {
+              "step": 20,
+              "mm_per_step": 5.291666666666667
+            },
+            "nodes": [
+              {
+                "id": "error",
+                "position": [
+                  3,
+                  18
+                ],
+                "title": "error"
+              },
+              {
+                "id": "error_memory",
+                "position": [
+                  3,
+                  34
+                ],
+                "title": "error_memory"
+              },
+              {
+                "id": "control_memory",
+                "position": [
+                  71,
+                  50
+                ],
+                "title": "control_memory"
+              },
+              {
+                "id": "zero_product",
+                "position": [
+                  20,
+                  34
+                ],
+                "title": "zero_product"
+              },
+              {
+                "id": "difference",
+                "position": [
+                  37,
+                  18
+                ],
+                "title": "difference"
+              },
+              {
+                "id": "scaled",
+                "position": [
+                  54,
+                  18
+                ],
+                "title": "scaled"
+              },
+              {
+                "id": "pole_product",
+                "position": [
+                  54,
+                  50
+                ],
+                "title": "pole_product"
+              },
+              {
+                "id": "sum",
+                "position": [
+                  71,
+                  18
+                ],
+                "title": "sum"
+              }
+            ],
+            "wires": [
+              {
+                "id": "w0",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "error_memory",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w1",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "difference",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w2",
+                "from": {
+                  "port": [
+                    "error_memory",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "zero_product",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w3",
+                "from": {
+                  "port": [
+                    "zero_product",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "difference",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w4",
+                "from": {
+                  "port": [
+                    "difference",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "scaled",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w5",
+                "from": {
+                  "port": [
+                    "control_memory",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "pole_product",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w6",
+                "from": {
+                  "port": [
+                    "scaled",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w7",
+                "from": {
+                  "port": [
+                    "pole_product",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w8",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "control_memory",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              }
+            ],
+            "text_frames": [
+              {
+                "id": "lead_notes",
+                "position": [
+                  2,
+                  1
+                ],
+                "params": {
+                  "text": "u[n] = b u[n\u22121] + K (e[n] \u2212 a e[n\u22121]).\nTwo explicit memories, no actuator limiter. Gains a,b,K enter as signals.\nThis instance is drawn here; its reusable definition is in schema_elements.s7library.",
+                  "width": 1640,
+                  "height": 240,
+                  "font_size": 18
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "open_x",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      },
+      {
+        "id": "open_y",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.1
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.1
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "base_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_y",
+        "from_port": 0,
+        "to_element": "base_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_error",
+        "from_port": 0,
+        "to_element": "base",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_gain",
+        "from_port": 0,
+        "to_element": "base",
+        "to_port": 1
+      },
+      {
+        "from_element": "base",
+        "from_port": 0,
+        "to_element": "base_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "base_x",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "base_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "base_y",
+        "to_port": 1
+      },
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "lead_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "lead_y",
+        "from_port": 0,
+        "to_element": "lead_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "lead_error",
+        "from_port": 0,
+        "to_element": "lead",
+        "to_port": 0
+      },
+      {
+        "from_element": "scale",
+        "from_port": 0,
+        "to_element": "lead",
+        "to_port": 1
+      },
+      {
+        "from_element": "zero",
+        "from_port": 0,
+        "to_element": "lead",
+        "to_port": 2
+      },
+      {
+        "from_element": "pole",
+        "from_port": 0,
+        "to_element": "lead",
+        "to_port": 3
+      },
+      {
+        "from_element": "lead",
+        "from_port": 0,
+        "to_element": "lead_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "lead_x",
+        "to_port": 1
+      },
+      {
+        "from_element": "lead_x",
+        "from_port": 0,
+        "to_element": "lead_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "lead_y",
+        "to_port": 1
+      },
+      {
+        "from_element": "pulse",
+        "from_port": 0,
+        "to_element": "open",
+        "to_port": 0
+      },
+      {
+        "from_element": "scale",
+        "from_port": 0,
+        "to_element": "open",
+        "to_port": 1
+      },
+      {
+        "from_element": "zero",
+        "from_port": 0,
+        "to_element": "open",
+        "to_port": 2
+      },
+      {
+        "from_element": "pole",
+        "from_port": 0,
+        "to_element": "open",
+        "to_port": 3
+      },
+      {
+        "from_element": "open",
+        "from_port": 0,
+        "to_element": "open_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "open_x",
+        "to_port": 1
+      },
+      {
+        "from_element": "open_x",
+        "from_port": 0,
+        "to_element": "open_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "open_y",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "reference",
+        "position": [
+          2.6,
+          24.5
+        ],
+        "title": "Reference 0 \u2192 0.5 at source time 1 s"
+      },
+      {
+        "id": "pulse",
+        "position": [
+          2.6,
+          63.5
+        ],
+        "title": "One unit-height pulse at n=8"
+      },
+      {
+        "id": "base_gain",
+        "position": [
+          2.6,
+          77.15
+        ],
+        "title": "Baseline P gain = 4"
+      },
+      {
+        "id": "scale",
+        "position": [
+          13.0,
+          77.15
+        ],
+        "title": "Controller scale K = 16"
+      },
+      {
+        "id": "zero",
+        "position": [
+          23.400000000000002,
+          77.15
+        ],
+        "title": "Zero a: edit 0.8 \u2192 0.2"
+      },
+      {
+        "id": "pole",
+        "position": [
+          33.800000000000004,
+          77.15
+        ],
+        "title": "Pole b = 0.2"
+      },
+      {
+        "id": "tau",
+        "position": [
+          44.2,
+          77.15
+        ],
+        "title": "Both plant time constants = 1 s"
+      },
+      {
+        "id": "base_error",
+        "position": [
+          14.3,
+          24.5
+        ],
+        "title": "Reference minus this output"
+      },
+      {
+        "id": "base",
+        "position": [
+          26.0,
+          24.5
+        ],
+        "title": "Ideal P command: 4 \u00d7 error"
+      },
+      {
+        "id": "base_x",
+        "position": [
+          39.0,
+          24.5
+        ],
+        "title": "First lag: old state x"
+      },
+      {
+        "id": "base_y",
+        "position": [
+          52.0,
+          24.5
+        ],
+        "title": "Second lag: output y"
+      },
+      {
+        "id": "lead_error",
+        "position": [
+          14.3,
+          44.0
+        ],
+        "title": "Reference minus this output"
+      },
+      {
+        "id": "lead",
+        "position": [
+          26.0,
+          44.0
+        ],
+        "title": "Lead/lag controller: inspect inside"
+      },
+      {
+        "id": "lead_x",
+        "position": [
+          39.0,
+          44.0
+        ],
+        "title": "First lag: old state x"
+      },
+      {
+        "id": "lead_y",
+        "position": [
+          52.0,
+          44.0
+        ],
+        "title": "Second lag: output y"
+      },
+      {
+        "id": "open",
+        "position": [
+          26.0,
+          63.5
+        ],
+        "title": "Lead/lag controller: inspect inside"
+      },
+      {
+        "id": "open_x",
+        "position": [
+          39.0,
+          63.5
+        ],
+        "title": "First lag: old state x"
+      },
+      {
+        "id": "open_y",
+        "position": [
+          52.0,
+          63.5
+        ],
+        "title": "Second lag: output y"
+      },
+      {
+        "id": "scope",
+        "position": [
+          65.0,
+          24.5
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Same DC loop gain, different transients",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "reference",
+            "P_output",
+            "lead_output"
+          ],
+          "channel_units": [
+            "1",
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "command_scope",
+        "position": [
+          65.0,
+          44.0
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Control effort: lead has a larger initial command",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "P_command",
+            "lead_command"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "pulse_scope",
+        "position": [
+          65.0,
+          77.15
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Open-loop pulse and tail",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "pulse",
+            "open_output"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "response",
+        "position": [
+          65.0,
+          63.5
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Lead open-loop Bode / Nyquist",
+        "params": {
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            61.1,
+            34.25
+          ],
+          [
+            12.35,
+            34.25
+          ],
+          [
+            12.35,
+            27.1
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "base_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "base_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "base",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_x",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_y",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "lead_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            61.1,
+            53.75
+          ],
+          [
+            12.35,
+            53.75
+          ],
+          [
+            12.35,
+            46.6
+          ]
+        ]
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "lead_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "scale",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "zero",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "lead",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_x",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "lead_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lead_y",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "scale",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "zero",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "open",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_x",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "open_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_y",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "lead_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "base",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "lead",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w31",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pulse_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w32",
+        "from": {
+          "port": [
+            "open_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pulse_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w33",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w34",
+        "from": {
+          "port": [
+            "open_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT08 \u2014 Can a lead network improve settling without changing DC gain?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change the zero. Run 64 s at 10 Hz.** P gain 4 and lead C(z)=16(z\u22120.8)/(z\u22120.2) both have DC gain 4.  \nCompare output settling and initial command: lead demands 8, P demands 2 for a 0.5 step. No actuator limiter is present. The separate pulse path measures the lead open loop; Bode gain reference must be 1.  \nSelect zero, F4: value 0.8 \u2192 0.2; save/reopen/rerun. Exact cancellation makes this controller P gain 16, not P gain 4. Plotted signals use normalized unit 1; sample n is observed at Scope time (n+1)/10 s.  \n[Open CT08 student lab](qrc:/s7studio/help/education/labs/CT08-lead-lag/README.md) \u00b7 [MIT lead compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_25/) \u00b7 [MIT lag compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_14/)",
+          "text_format": "markdown",
+          "width": 1640,
+          "height": 390,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

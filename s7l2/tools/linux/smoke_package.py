@@ -12,12 +12,17 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from teaching_assets import check as check_teaching_assets
 
 
 def check(package, artifacts):
     package = package.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
+    teaching = check_teaching_assets(package / 'usr/share/s7')
     env = os.environ.copy()
     for name in ('LD_LIBRARY_PATH', 'QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', 'QML_IMPORT_PATH', 'S7_PLUGIN_PATH'):
         env.pop(name, None)
@@ -30,6 +35,8 @@ def check(package, artifacts):
     results = []
     with tempfile.TemporaryDirectory(prefix='s7-installed-') as directory:
         cwd = Path(directory)
+        (cwd / 'home').mkdir()
+        env['HOME'] = str(cwd / 'home')
 
         def run(name, *args):
             result = subprocess.run([str(a) for a in args], cwd=cwd, env=env,
@@ -44,9 +51,14 @@ def check(package, artifacts):
             output = run('ldd-' + program, 'ldd', package / program)
             if 'not found' in output:
                 raise RuntimeError(f'Unresolved shared libraries for {program}')
+        for plugin in sorted((package / 'usr/lib/s7/plugins').glob('libs7*.so')):
+            output = run('ldd-' + plugin.stem, 'ldd', plugin)
+            if 'not found' in output:
+                raise RuntimeError(f'Unresolved shared libraries for plugin {plugin.name}')
         run('ctl-help', package / 's7ctl', '--help')
         default = run('runtime-default', package / 's7runtime', '--state-dir', cwd / 'default-state', '--serve-seconds', '1')
-        if str(package) not in default or 'runtime.plugin_count=1' not in default:
+        expected_plugins = len(list((package / 'usr/lib/s7/plugins').glob('libs7*.so')))
+        if not expected_plugins or str(package) not in default or f'runtime.plugin_count={expected_plugins}\n' not in default:
             raise RuntimeError('Runtime did not use packaged default schema and plugin')
         noise = cwd / 'noise.json'
         noise.write_text(json.dumps({'name': 'installed-noise', 'elements': [
@@ -62,13 +74,20 @@ def check(package, artifacts):
         run('reopen-check', package / 's7studio', '--normalize', saved, reopened)
         if json.loads(saved.read_text()) != json.loads(reopened.read_text()):
             raise RuntimeError('Saved/reopened diagram changed')
+        for model in sorted((package / 'usr/share/s7/examples/education').glob('*.s7diagram')):
+            saved = cwd / (model.stem + '-saved.s7diagram')
+            reopened = cwd / (model.stem + '-reopened.s7diagram')
+            run(model.stem + '-save', package / 's7studio', '--normalize', model, saved)
+            run(model.stem + '-reopen', package / 's7studio', '--normalize', saved, reopened)
+            if json.loads(saved.read_text()) != json.loads(reopened.read_text()):
+                raise RuntimeError(f'Saved/reopened education diagram changed: {model.name}')
         env['S7_SPECTRUM_PNG'] = str(artifacts / 'live-spectrum.png')
         for name, mode in (('scope-run', 'scope-run'), ('phase-portrait', 'phase-portrait'),
                            ('phase-trajectory-3d', 'phase-trajectory-3d'),
                            ('live-oscilloscope-spectrum', 'live-spectrum')):
             run(name, package / 's7studio', '--' + mode + '-check')
         (artifacts / 'summary.json').write_text(json.dumps({'checks': results, 'package': str(package),
-            'checks_passed': True}, indent=2) + '\n')
+            'checks_passed': True, 'teaching_assets': teaching}, indent=2) + '\n')
     print(f'{len(results)} installed-package checks passed')
 
 

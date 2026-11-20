@@ -1,0 +1,347 @@
+{
+  "id": "ct02_damped_modes",
+  "dt": 0.01,
+  "description": "Original S7 lesson CT02; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 8,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 390,
+    "height_mm": 360
+  },
+  "schema": {
+    "name": "CT02 \u2014 How damping changes a spring",
+    "dt": 0.01,
+    "elements": [
+      {
+        "id": "position",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "velocity",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "spring",
+        "type": "Gain",
+        "params": {
+          "factor": 4
+        }
+      },
+      {
+        "id": "damping",
+        "type": "Gain",
+        "params": {
+          "factor": 1
+        }
+      },
+      {
+        "id": "acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            -1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "position",
+        "to_port": 0
+      },
+      {
+        "from_element": "position",
+        "from_port": 0,
+        "to_element": "spring",
+        "to_port": 0
+      },
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "damping",
+        "to_port": 0
+      },
+      {
+        "from_element": "spring",
+        "from_port": 0,
+        "to_element": "acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "damping",
+        "from_port": 0,
+        "to_element": "acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "acceleration",
+        "from_port": 0,
+        "to_element": "velocity",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "position",
+        "position": [
+          7,
+          22
+        ],
+        "title": "Displacement x: starts at 1 m"
+      },
+      {
+        "id": "velocity",
+        "position": [
+          53,
+          22
+        ],
+        "title": "Velocity v: starts at 0 m/s"
+      },
+      {
+        "id": "spring",
+        "position": [
+          7,
+          36
+        ],
+        "title": "Stiffness / mass: 4 per s\u00b2"
+      },
+      {
+        "id": "damping",
+        "position": [
+          53,
+          36
+        ],
+        "title": "Damping / mass: 1 per s"
+      },
+      {
+        "id": "acceleration",
+        "position": [
+          30,
+          36
+        ],
+        "title": "Acceleration = \u22124x \u2212 v"
+      },
+      {
+        "id": "scope",
+        "position": [
+          7,
+          52
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Displacement (m)",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "position"
+          ],
+          "channel_units": [
+            "m"
+          ]
+        }
+      },
+      {
+        "id": "velocity_scope",
+        "position": [
+          53,
+          52
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Velocity (m/s)",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "velocity"
+          ],
+          "channel_units": [
+            "m/s"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "position",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "position",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "spring",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "damping",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "spring",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "damping",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "velocity",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "position",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "velocity_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT02 \u2014 How damping changes a spring**  \n**How does damping change an oscillation?** Run **8 s at 100 Hz**, then open Scope.  \nm=1 kg, k=4 N/m, b=1 N\u00b7s/m. Initial x=1 m, v=0. Compare each signal in its own units.  \nChange damping factor 1 \u2192 3; rerun. Expect less overshoot. The gain is b/m, not the damping ratio.  \n[Open CT02 student lab](qrc:/s7studio/help/education/labs/CT02-damped-modes/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec04/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1374,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

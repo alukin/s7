@@ -1,4 +1,4 @@
-# S7 — Signals and systems for research and engineering
+# S7 — Signals and systems for learning, research and engineering
 
 > “… everything simple is true and everything complicated is untrue.”
 >
@@ -10,8 +10,8 @@ S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
 understanding a system through its signals, interconnected blocks, state and
 feedback. S7 turns that way of thinking into an open-source tool for
-**researchers, scientists and engineers** to build models, run experiments and
-inspect their results.
+**students, researchers, scientists and engineers** to build models, run
+experiments and inspect their results.
 
 The project grows out of long practical experience with signal processing,
 software-defined radio, distributed sensing and dynamic-system modeling.
@@ -29,10 +29,18 @@ Studio provides a visual workbench for drawing these networks and observing
 their behavior. The runtime also works headlessly for scripted experiments,
 automated checks and execution on other machines.
 
-[![The Lorenz system in S7 Studio: its causal block diagram, a three-dimensional butterfly attractor and a Scope showing the x, y and z state signals.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
+For students, the current source includes [24 original educational examples
+with guided labs](s7l2/examples/education/README.md), covering signals and
+systems, convolution, Fourier analysis, numerical modeling and feedback control.
+Each lab pairs a purpose-built diagram with an offline student guide, MIT
+online readings and independent numerical checks. Predict the result, run the
+model, inspect the named signals, then change a parameter and explain what
+happens. Start with [FN01: one sample of memory](s7l2/education/labs/FN01-unit-delay/README.md).
 
-*Exploring the Lorenz system in S7: an explicit causal model, its
-three-dimensional attractor and recorded state signals.*
+[![The Lorenz system in S7 Studio: causal block diagrams, recorded signal previews on the right and a floating 3D butterfly attractor viewer.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
+
+*Exploring the Lorenz system in S7: explicit causal models, recorded signal
+previews on the right and a floating three-dimensional attractor viewer.*
 
 See [the screenshot tour](screenshots/README.md) for actual runs of a Lorenz
 attractor, a controlled buck converter and an AM detector, with their diagrams,
@@ -54,14 +62,57 @@ recorded Scope results and Live Oscilloscope views.
   implemented single-rate scope and its limits.
 
 The bundled [examples and experiment guides](s7l2/examples/README.md) are a
-starting point for changing a model and checking what follows. The
-[MIT-aligned teaching curriculum](s7l2/education/README.md)
-proposes original S7 laboratories aligned with topics in contemporary
-signals, systems and control education. This collection is still in
-development and is **not an official or endorsed MIT resource**.
-Numerical guides
+starting point for changing a model and checking what follows. Numerical guides
 state the equations and initialization conventions; tests use independent
 recurrences, analytic solutions or reference solvers where appropriate.
+
+## Learn with S7
+
+The current development tree includes **twenty-four original teaching labs**, with
+new diagrams designed for students. Each guide starts with a question and
+predictions, explains the units and initial state, and gives a small experiment
+to change and explain. Description-frame links open offline student guides
+and original MIT online teaching materials; web links open in the external browser.
+
+| Labs | What you investigate |
+| --- | --- |
+| [FN01–FN03](s7l2/education/labs/FN01-unit-delay/README.md) | Unit delay, natural and forced response, and initial conditions |
+| [FN04–FN06](s7l2/education/labs/FN04-impulse-transfer/README.md) | Impulse response and transfer functions, integration rules, and stability versus accuracy |
+| [CT01–CT03](s7l2/education/labs/CT01-first-order/README.md) | First-order charging, damped motion, and numerical instability caused by a coarse sample interval |
+| [CT04/CT05](s7l2/education/labs/CT04-controller-comparison/README.md) | P/PI/PID load rejection, actuator saturation, integral windup and instance-local anti-windup edits |
+| [CT06/CT07](s7l2/education/labs/CT06-closed-loop-poles/README.md) | Closed-loop pole motion, sampled Bode/Nyquist response and independently calculated stability margins |
+| [CT08](s7l2/education/labs/CT08-lead-lag/README.md) | Reusable lead/lag networks, pole/zero cancellation, matched DC gain and transient control effort |
+| [SP01](s7l2/education/labs/SP01-fourier-synthesis/README.md) | Fourier synthesis, harmonic amplitudes, ringing and Parseval’s relation |
+| [SP03](s7l2/education/labs/SP03-aliasing/README.md) | Distinct tones with identical sampled values, and how sample rate exposes aliasing |
+| [SP05](s7l2/education/labs/SP05-convolution/README.md) | Convolution as a sum of shifted impulse responses, overlap and initial history |
+| [SP07](s7l2/education/labs/SP07-filter-transfer/README.md) | Low-pass and resonant filters, measured Bode response and the continuous limit |
+| [SP08](s7l2/education/labs/SP08-dft-leakage/README.md) | Finite-record DFT leakage, coherent sampling and interval selection |
+| [SP09](s7l2/education/labs/SP09-window-normalization/README.md) | Periodic windows, coherent gain, bandwidth and calibrated spectrum units |
+| [SP10](s7l2/education/labs/SP10-circular-convolution/README.md) | Circular wrap-around, zero-padding and independent verification of FIR/FFT convolution |
+| [SP11](s7l2/education/labs/SP11-short-time-fourier/README.md) | Bursts and chirps, independently checked STFT coefficients, window/hop settings and time–frequency displays |
+| [SP14](s7l2/education/labs/SP14-coherent-am/README.md) | AM sidebands, coherent phase error, finite-filter settling and calibrated recovered spectra |
+| [SP06](s7l2/education/labs/SP06-three-tap-fir/README.md) | A three-tap FIR filter built from explicit delays, gains and a summer |
+
+Start with the [student learning route](s7l2/examples/education/README.md).
+In a current source build of Studio, choose **File → Example Diagrams… →
+education → fn01_unit_delay.s7diagram**. Predict the first samples using its
+guide, click **Run** and keep the saved settings, then double-click
+**Compare the named signals** to open Scope. Follow the guide's parameter
+experiment and explain the changed result.
+Studio Help also opens diagram links as working copies. Installed packages
+include the offline lab guides beside the examples under `share/s7/`.
+
+These labs also serve as **executable specifications for S7**. Independent
+formulas check the saved graphs' samples, initial conditions, timing and
+expected failure cases; Studio checks cover opening, editing, saving and
+rerunning them. Agreement provides evidence for each declared model and
+tested numerical envelope. The [verification record](s7l2/education/EVIDENCE.md)
+states the checks, tolerances and remaining qualification.
+
+The [MIT-aligned curriculum](s7l2/education/README.md) plans a broader collection;
+these twenty-four labs have passing development checks, while release/package and
+platform qualification remain open. They are original S7 exercises with
+links to supporting readings, **not an official or endorsed MIT resource**.
 
 ## How S7 works
 

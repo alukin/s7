@@ -1,0 +1,1856 @@
+{
+  "id": "ct05_actuator_windup",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.01,
+  "studio_run": {
+    "runtime_seconds": 12,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 530,
+    "height_mm": 500
+  },
+  "schema": {
+    "name": "CT05 \u2014 Why does a clipped actuator keep pushing after release?",
+    "dt": 0.01,
+    "elements": [
+      {
+        "id": "reference_step",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1.5,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "release",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": -1.1,
+          "start_time": 4
+        }
+      },
+      {
+        "id": "reference",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "kp",
+        "type": "Constant",
+        "params": {
+          "value": 1.5
+        }
+      },
+      {
+        "id": "ki",
+        "type": "Constant",
+        "params": {
+          "value": 2
+        }
+      },
+      {
+        "id": "aw_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "aw",
+        "type": "PIController",
+        "params": {},
+        "schema": {
+          "name": "PIController",
+          "elements": [
+            {
+              "id": "error",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "p",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_gain",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_rate",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  6
+                ]
+              }
+            },
+            {
+              "id": "i_state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.01
+              }
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1
+                ]
+              }
+            },
+            {
+              "id": "limit",
+              "type": "Saturation",
+              "params": {
+                "lower_limit": -1,
+                "upper_limit": 1
+              }
+            },
+            {
+              "id": "tracking",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "p",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "i_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_gain",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "tracking",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 1
+            },
+            {
+              "from_element": "i_rate",
+              "from_port": 0,
+              "to_element": "i_state",
+              "to_port": 0
+            },
+            {
+              "from_element": "p",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_state",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "limit",
+              "to_port": 0
+            },
+            {
+              "from_element": "limit",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 0
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 1
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "error",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "kp",
+              "type": "F64",
+              "element": "p",
+              "port": 1
+            },
+            {
+              "name": "ki",
+              "type": "F64",
+              "element": "i_gain",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "limit",
+              "port": 0
+            },
+            {
+              "name": "unlimited",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            },
+            {
+              "name": "integral",
+              "type": "F64",
+              "element": "i_state",
+              "port": 0
+            }
+          ],
+          "dt": 0.01,
+          "diagram_version": 2,
+          "sheet": {
+            "orientation": "landscape",
+            "width_mm": 390,
+            "height_mm": 340
+          },
+          "diagram": {
+            "grid": {
+              "step": 20,
+              "mm_per_step": 5.291666666666667
+            },
+            "nodes": [
+              {
+                "id": "error",
+                "position": [
+                  3,
+                  18
+                ],
+                "title": "error"
+              },
+              {
+                "id": "p",
+                "position": [
+                  20,
+                  18
+                ],
+                "title": "p"
+              },
+              {
+                "id": "i_gain",
+                "position": [
+                  20,
+                  34
+                ],
+                "title": "i_gain"
+              },
+              {
+                "id": "i_rate",
+                "position": [
+                  37,
+                  34
+                ],
+                "title": "i_rate: weights [1, Kt]"
+              },
+              {
+                "id": "i_state",
+                "position": [
+                  37,
+                  50
+                ],
+                "title": "i_state"
+              },
+              {
+                "id": "sum",
+                "position": [
+                  37,
+                  18
+                ],
+                "title": "sum"
+              },
+              {
+                "id": "limit",
+                "position": [
+                  54,
+                  18
+                ],
+                "title": "limit"
+              },
+              {
+                "id": "tracking",
+                "position": [
+                  54,
+                  34
+                ],
+                "title": "tracking"
+              }
+            ],
+            "wires": [
+              {
+                "id": "w0",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "p",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w1",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_gain",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w2",
+                "from": {
+                  "port": [
+                    "i_gain",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_rate",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w3",
+                "from": {
+                  "port": [
+                    "tracking",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_rate",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w4",
+                "from": {
+                  "port": [
+                    "i_rate",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_state",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w5",
+                "from": {
+                  "port": [
+                    "p",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w6",
+                "from": {
+                  "port": [
+                    "i_state",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w7",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "limit",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w8",
+                "from": {
+                  "port": [
+                    "limit",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "tracking",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w9",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "tracking",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              }
+            ],
+            "text_frames": [
+              {
+                "id": "pi_notes",
+                "position": [
+                  2,
+                  1
+                ],
+                "params": {
+                  "text": "PI instance: current error \u2192 proportional + integral \u2192 actuator.\nIntegral rate = Ki \u00d7 error + Kt \u00d7 (actual \u2212 unlimited); current Kt=6/s.\nTo disable back-calculation, set the second i_rate weight to 0; return to the root tab before Run.",
+                  "width": 1360,
+                  "height": 230,
+                  "font_size": 18
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "aw_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.25,
+            -1.25
+          ]
+        }
+      },
+      {
+        "id": "aw_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "free_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "free",
+        "type": "PIController",
+        "params": {},
+        "schema": {
+          "name": "PIController",
+          "elements": [
+            {
+              "id": "error",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "p",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_gain",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_rate",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  0
+                ]
+              }
+            },
+            {
+              "id": "i_state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.01
+              }
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1
+                ]
+              }
+            },
+            {
+              "id": "limit",
+              "type": "Saturation",
+              "params": {
+                "lower_limit": -1,
+                "upper_limit": 1
+              }
+            },
+            {
+              "id": "tracking",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "p",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "i_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_gain",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "tracking",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 1
+            },
+            {
+              "from_element": "i_rate",
+              "from_port": 0,
+              "to_element": "i_state",
+              "to_port": 0
+            },
+            {
+              "from_element": "p",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_state",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "limit",
+              "to_port": 0
+            },
+            {
+              "from_element": "limit",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 0
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 1
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "error",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "kp",
+              "type": "F64",
+              "element": "p",
+              "port": 1
+            },
+            {
+              "name": "ki",
+              "type": "F64",
+              "element": "i_gain",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "limit",
+              "port": 0
+            },
+            {
+              "name": "unlimited",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            },
+            {
+              "name": "integral",
+              "type": "F64",
+              "element": "i_state",
+              "port": 0
+            }
+          ],
+          "dt": 0.01,
+          "diagram_version": 2,
+          "sheet": {
+            "orientation": "landscape",
+            "width_mm": 390,
+            "height_mm": 340
+          },
+          "diagram": {
+            "grid": {
+              "step": 20,
+              "mm_per_step": 5.291666666666667
+            },
+            "nodes": [
+              {
+                "id": "error",
+                "position": [
+                  3,
+                  18
+                ],
+                "title": "error"
+              },
+              {
+                "id": "p",
+                "position": [
+                  20,
+                  18
+                ],
+                "title": "p"
+              },
+              {
+                "id": "i_gain",
+                "position": [
+                  20,
+                  34
+                ],
+                "title": "i_gain"
+              },
+              {
+                "id": "i_rate",
+                "position": [
+                  37,
+                  34
+                ],
+                "title": "i_rate: weights [1, Kt]"
+              },
+              {
+                "id": "i_state",
+                "position": [
+                  37,
+                  50
+                ],
+                "title": "i_state"
+              },
+              {
+                "id": "sum",
+                "position": [
+                  37,
+                  18
+                ],
+                "title": "sum"
+              },
+              {
+                "id": "limit",
+                "position": [
+                  54,
+                  18
+                ],
+                "title": "limit"
+              },
+              {
+                "id": "tracking",
+                "position": [
+                  54,
+                  34
+                ],
+                "title": "tracking"
+              }
+            ],
+            "wires": [
+              {
+                "id": "w0",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "p",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w1",
+                "from": {
+                  "port": [
+                    "error",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_gain",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w2",
+                "from": {
+                  "port": [
+                    "i_gain",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_rate",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w3",
+                "from": {
+                  "port": [
+                    "tracking",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_rate",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w4",
+                "from": {
+                  "port": [
+                    "i_rate",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "i_state",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w5",
+                "from": {
+                  "port": [
+                    "p",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w6",
+                "from": {
+                  "port": [
+                    "i_state",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "sum",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w7",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "limit",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w8",
+                "from": {
+                  "port": [
+                    "limit",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "tracking",
+                    "in",
+                    0
+                  ]
+                },
+                "bends": []
+              },
+              {
+                "id": "w9",
+                "from": {
+                  "port": [
+                    "sum",
+                    "out",
+                    0
+                  ]
+                },
+                "to": {
+                  "port": [
+                    "tracking",
+                    "in",
+                    1
+                  ]
+                },
+                "bends": []
+              }
+            ],
+            "text_frames": [
+              {
+                "id": "pi_notes",
+                "position": [
+                  2,
+                  1
+                ],
+                "params": {
+                  "text": "PI instance: current error \u2192 proportional + integral \u2192 actuator.\nIntegral rate = Ki \u00d7 error + Kt \u00d7 (actual \u2212 unlimited); current Kt=0/s.\nTo disable back-calculation, set the second i_rate weight to 0; return to the root tab before Run.",
+                  "width": 1360,
+                  "height": 230,
+                  "font_size": 18
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "free_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.25,
+            -1.25
+          ]
+        }
+      },
+      {
+        "id": "free_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference_step",
+        "from_port": 0,
+        "to_element": "reference",
+        "to_port": 0
+      },
+      {
+        "from_element": "release",
+        "from_port": 0,
+        "to_element": "reference",
+        "to_port": 1
+      },
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "aw_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "aw_error",
+        "from_port": 0,
+        "to_element": "aw",
+        "to_port": 0
+      },
+      {
+        "from_element": "kp",
+        "from_port": 0,
+        "to_element": "aw",
+        "to_port": 1
+      },
+      {
+        "from_element": "ki",
+        "from_port": 0,
+        "to_element": "aw",
+        "to_port": 2
+      },
+      {
+        "from_element": "aw",
+        "from_port": 0,
+        "to_element": "aw_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "aw_y",
+        "from_port": 0,
+        "to_element": "aw_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "aw_rate",
+        "from_port": 0,
+        "to_element": "aw_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "aw_y",
+        "from_port": 0,
+        "to_element": "aw_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "free_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "free_error",
+        "from_port": 0,
+        "to_element": "free",
+        "to_port": 0
+      },
+      {
+        "from_element": "kp",
+        "from_port": 0,
+        "to_element": "free",
+        "to_port": 1
+      },
+      {
+        "from_element": "ki",
+        "from_port": 0,
+        "to_element": "free",
+        "to_port": 2
+      },
+      {
+        "from_element": "free",
+        "from_port": 0,
+        "to_element": "free_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "free_y",
+        "from_port": 0,
+        "to_element": "free_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "free_rate",
+        "from_port": 0,
+        "to_element": "free_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "free_y",
+        "from_port": 0,
+        "to_element": "free_error",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "reference_step",
+        "position": [
+          3.0,
+          23.75
+        ],
+        "title": "Reference starts at source time 1 s"
+      },
+      {
+        "id": "release",
+        "position": [
+          3.0,
+          34.25
+        ],
+        "title": "Release unreachable command at 4 s"
+      },
+      {
+        "id": "reference",
+        "position": [
+          16.5,
+          23.75
+        ],
+        "title": "Reference: 0 \u2192 1.5 \u2192 0.4"
+      },
+      {
+        "id": "kp",
+        "position": [
+          3.0,
+          44.75
+        ],
+        "title": "Kp (control/error)"
+      },
+      {
+        "id": "ki",
+        "position": [
+          3.0,
+          55.25
+        ],
+        "title": "Ki (control/error/s)"
+      },
+      {
+        "id": "aw_error",
+        "position": [
+          16.5,
+          44.75
+        ],
+        "title": "Error = reference \u2212 output"
+      },
+      {
+        "id": "aw",
+        "position": [
+          30.0,
+          44.75
+        ],
+        "title": "aw: PIController; double-click to inspect"
+      },
+      {
+        "id": "aw_rate",
+        "position": [
+          51.75,
+          44.75
+        ],
+        "title": "Plant derivative (1/s)"
+      },
+      {
+        "id": "aw_y",
+        "position": [
+          63.0,
+          44.75
+        ],
+        "title": "Plant state: initial output 0"
+      },
+      {
+        "id": "free_error",
+        "position": [
+          16.5,
+          65.75
+        ],
+        "title": "Error = reference \u2212 output"
+      },
+      {
+        "id": "free",
+        "position": [
+          30.0,
+          65.75
+        ],
+        "title": "free: PIController; double-click to inspect"
+      },
+      {
+        "id": "free_rate",
+        "position": [
+          51.75,
+          65.75
+        ],
+        "title": "Plant derivative (1/s)"
+      },
+      {
+        "id": "free_y",
+        "position": [
+          63.0,
+          65.75
+        ],
+        "title": "Plant state: initial output 0"
+      },
+      {
+        "id": "scope",
+        "position": [
+          78.0,
+          23.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Tracking: reference and plant outputs",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "reference",
+            "aw_output",
+            "free_output"
+          ],
+          "channel_units": [
+            "1",
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "actuator_scope",
+        "position": [
+          78.0,
+          44.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Applied actuator commands: all bounded \u00b11",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "aw_control",
+            "free_control"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "raw_scope",
+        "position": [
+          78.0,
+          65.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Unlimited demand: not bounded by the actuator",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "aw_unlimited",
+            "free_unlimited"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "state_scope",
+        "position": [
+          51.75,
+          82.25
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Integral states: windup and recovery",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "aw_integral",
+            "free_integral"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "reference_step",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "release",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "aw_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "kp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "ki",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "aw",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "aw_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "aw_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "aw_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "aw_error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            72.0,
+            52.25
+          ],
+          [
+            14.25,
+            52.25
+          ],
+          [
+            14.25,
+            47.75
+          ]
+        ]
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "free_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "kp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "ki",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "free",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "free_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "free_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "free_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "free_error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            72.0,
+            73.25
+          ],
+          [
+            14.25,
+            73.25
+          ],
+          [
+            14.25,
+            68.75
+          ]
+        ]
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "aw_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "free_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "aw",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "actuator_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "free",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "actuator_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "aw",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "raw_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "free",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "raw_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "aw",
+            "out",
+            2
+          ]
+        },
+        "to": {
+          "port": [
+            "state_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "free",
+            "out",
+            2
+          ]
+        },
+        "to": {
+          "port": [
+            "state_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT05 \u2014 Why does a clipped actuator keep pushing after release?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change one thing.** Run 12 s at 100 Hz. Reference 0 \u2192 1.5 at 1 s \u2192 0.4 at 4 s; actuator limited to \u00b11.  \nThe 1.5 command is unreachable. Compare actual control, unlimited demand and integral state; free has no anti-windup, aw uses 6/s back-calculation.  \nDouble-click aw; select i_rate, F4: weights [1,6] \u2192 [1,0]. Return to the root tab, save/reopen/rerun. Both paths should now match.  \nSource/state index n is observed at Scope time (n+1)/100 s. States update afterward; no extra feedback delay is needed.  \n[Open CT05 student lab](qrc:/s7studio/help/education/labs/CT05-actuator-windup/README.md) \u00b7 [MIT PID lecture](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_10/) \u00b7 [MIT windup notes](https://ocw.mit.edu/courses/2-017j-design-of-electromechanical-robotic-systems-fall-2009/MIT2_017JF09_feedback.pdf)",
+          "text_format": "markdown",
+          "width": 1800,
+          "height": 400,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

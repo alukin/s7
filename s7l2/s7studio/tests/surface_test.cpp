@@ -151,6 +151,29 @@ void heatmapHover(bool complex) {
     hover();
     require(picks == 1, "Reset heatmap must not pick a cell");
 }
+void nonuniformHeatmapCoordinates() {
+    // A matrix-index stretch would color these positions blue. Numeric
+    // nearest-coordinate cells select the middle (white) value instead.
+    viewers::SurfacePlotView plot(false);plot.setPresentation(2);
+    auto* heat=plot.findChild<QWidget*>("surface.heatmap");require(heat,"Heatmap widget");heat->resize(400,300);
+    int pickedRow=-1,pickedColumn=-1;
+    QObject::connect(&plot,&viewers::SurfacePlotView::cellPicked,&plot,[&](int row,int column) {pickedRow=row;pickedColumn=column;});
+    const double centers[]{0,1,10};
+    for(int axis=0;axis<2;++axis) {
+        auto grid=std::make_shared<analysis::SurfaceGrid>();
+        for(int row=0;row<3;++row) for(int column=0;column<3;++column)
+            grid->append({centers[column],centers[row],double(row*3+column),3,3,1,.5*(axis==0 ? column : row),0});
+        plot.setGrid(grid);waitForDisplay(plot);
+        const auto displayed=plot.displayedGrid();require(displayed && displayed->x==grid->x && displayed->y==grid->y,"Applied numeric grid");
+        const auto image=heat->grab().toImage();
+        const auto area=QRectF(heat->rect()).adjusted(62,16,-18,-52);
+        const QPointF point(area.left()+area.width()*(axis==0 ? .075 : .7),area.bottom()-area.height()*(axis==0 ? .7 : .075));
+        const auto color=image.pixelColor((point*image.devicePixelRatio()).toPoint());
+        require(color.red()>240 && color.green()>240 && color.blue()>240,"Nonuniform heatmap color follows physical coordinates on both axes");
+        QMouseEvent event(QEvent::MouseMove,point,point,Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(heat,&event);
+        require(pickedColumn==(axis==0 ? 1:2) && pickedRow==(axis==0 ? 2:1),"Heatmap cursor and colored cell agree");
+    }
+}
 void asynchronousSurface() {
     auto &pool = analysis::analysisPool();
     require(pool.waitForDone(5000), "Previous display jobs retire");
@@ -312,6 +335,7 @@ int main(int argc, char **argv) {
         invalidGrids();
         heatmapHover(false);
         heatmapHover(true);
+        nonuniformHeatmapCoordinates();
         asynchronousSurface();
         examples(qEnvironmentVariableIsSet("S7_SURFACE_RENDER"));
     } catch (const std::exception &e) {

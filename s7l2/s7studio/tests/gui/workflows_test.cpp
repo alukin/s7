@@ -2,6 +2,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "main_window.hpp"
+#include "help_dialogs.hpp"
+#include "education_linear_reference.hpp"
+#include "education_signals_reference.hpp"
+#include "education_lti_reference.hpp"
+#include "education_spectral_reference.hpp"
+#include "education_convolution_reference.hpp"
+#include "education_stft_reference.hpp"
+#include "education_control_reference.hpp"
+#include "education_loop_reference.hpp"
+#include "education_compensator_reference.hpp"
+#include "education_am_reference.hpp"
+#include <tuple>
 #include "diagram_editor.hpp"
 #include "diagram/diagram_scene.hpp"
 #include "diagram/element_ports.hpp"
@@ -19,6 +31,7 @@
 #include "viewers/pair_analysis_view.hpp"
 #include "viewers/window_inspection_panel.hpp"
 #include "analysis/worker_pool.hpp"
+#include "analysis/result_file.hpp"
 #include <QElapsedTimer>
 #include <QImage>
 #include <QSemaphore>
@@ -34,10 +47,12 @@
 #include "viewers/surface_window.hpp"
 #include "viewers/response_window.hpp"
 #include "viewers/time_frequency_window.hpp"
+#include "viewers/surface_plot.hpp"
 #include <s7/builtin_element_registry.hpp>
 #include <QtTest>
 #include <QAction>
 #include <QDialogButtonBox>
+#include <QDesktopServices>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QGraphicsView>
@@ -98,6 +113,14 @@
 #include <cmath>
 #include <complex>
 #include <limits>
+
+class BrowserUrlCapture : public QObject {
+    Q_OBJECT
+public:
+    QList<QUrl> urls;
+public slots:
+    void open(const QUrl& url) { urls.push_back(url); }
+};
 
 class TestWindow : public s7studio::MainWindow {
 public:
@@ -240,6 +263,98 @@ class Workflows : public QObject {
         QTRY_VERIFY(menu->isVisible());
         menu->setActiveAction(command);
         QTest::keyClick(menu, Qt::Key_Return);
+    }
+    using TeachingBindings=QMap<QString,std::tuple<std::string,std::size_t,QString>>;
+    using TeachingScopes=QMap<QString,QPointer<s7studio::ui::ScopeViewWindow>>;
+    void openTeachingGuide(const QString& lab,const QString& slug) {
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front();QSet<QString> links;QPoint point(-1,-1);
+        for(int y=8;y<frame->height()-8;y+=3) for(int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if(!url.isEmpty()) links.insert(url.toString());
+            if(url.path().contains("/labs/") && point.x()<0) point=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));QVERIFY(view->viewport()->rect().contains(point));QTest::mouseClick(view->viewport(),Qt::LeftButton,{},point);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");QVERIFY(browser && browser->source().path().contains(slug));
+        QVERIFY(browser->toPlainText().contains("Predict",Qt::CaseInsensitive));capture(help,lab+"-student-guide",true);help->close();capture(window_.get(),lab+"-diagram",true);
+    }
+    void openTeachingScopes(const QStringList& ids,TeachingScopes& scopes) {
+        scopes.clear();auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+        for(const auto& id:ids) {
+            auto* scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope",id));QVERIFY(scope);scopes[id]=scope;
+        }
+    }
+    void runTeachingProfile(double seconds,double rate) {
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);QSignalSpy complete(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(dialogAction("action.run",[&](QDialog* dialog) {
+            auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");auto* frequency=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!duration || !frequency || !buttons || duration->value()!=seconds || frequency->value()!=rate) return false;
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
+        QTRY_VERIFY_WITH_TIMEOUT(!complete.empty(),10000);QVERIFY2(complete.last()[0].toBool(),qPrintable(complete.last()[1].toString()));
+        QCOMPARE(runner->completedTicks(),long(seconds*rate));
+    }
+    void checkTeachingCapture(const TeachingBindings& bindings,const std::function<double(const std::string&,std::size_t,int)>& expected,
+                              int count,double rate,const TeachingScopes& scopes,const QString& stem,double displayEnd=0) {
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+        const auto source=runner->recordedSource();QVERIFY(source && source->status().finished && !source->status().incomplete());
+        const auto config=runner->activeConfiguration();QVERIFY(config);QCOMPARE(config->probes.size(),std::size_t(bindings.size()));
+        for(const auto& probe:config->probes) {
+            const auto name=QString::fromStdString(probe.name);QVERIFY(bindings.contains(name));
+            const auto& [element,port,unit]=bindings[name];QCOMPARE(probe.element,element);QCOMPARE(probe.port,port);QCOMPARE(QString::fromStdString(probe.unit),unit);
+        }
+        const auto channels=source->channels();QCOMPARE(channels.size(),bindings.size());
+        QMap<s7studio::observation::ChannelId,int> counts;std::uint64_t cursor=0;
+        while(true) {
+            const auto page=source->read(cursor,4096);QVERIFY(page.error.isEmpty());if(page.samples.isEmpty()) break;
+            for(const auto& sample:page.samples) {
+                QString name;for(const auto& c:channels) if(c.id==sample.channel) name=c.name;QVERIFY(bindings.contains(name));
+                const auto& [id,port,unit]=bindings[name];(void)unit;QCOMPARE(sample.step,qint64(++counts[sample.channel]));
+                QVERIFY(std::abs(sample.timeSeconds-sample.step/rate)<1e-12);
+                const auto value=expected(id,port,int(sample.step)-1);QVERIFY(std::abs(sample.value-value)<1e-10*std::max(1.,std::abs(value)));
+            }
+            QVERIFY(page.next>cursor);cursor=page.next;
+        }
+        QCOMPARE(counts.size(),channels.size());for(auto n:counts) QCOMPARE(n,count);
+        for(auto it=scopes.cbegin();it!=scopes.cend();++it) {
+            auto* scope=it.value().data();QVERIFY(scope);scope->show();scope->resize(1100,750);
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);while(scope->refreshSource()) {}
+            int size=0;QStringList units;
+            for(auto b=bindings.cbegin();b!=bindings.cend();++b) if(b.key().startsWith(it.key()+"/")) {++size;if(!units.contains(std::get<2>(b.value()))) units.append(std::get<2>(b.value()));}
+            QCOMPARE(units.size(),qsizetype(1));QTRY_COMPARE(scope->recording().series().size(),qsizetype(size));
+            for(auto s=scope->recording().series().cbegin();s!=scope->recording().series().cend();++s) {
+                QVERIFY(!s->isComparison());QCOMPARE(s->receivedSamples,std::uint64_t(count));
+                const auto key=it.key()+"/"+s->channelName;QVERIFY(bindings.contains(key));const auto& [id,port,unit]=bindings[key];
+                QCOMPARE(s->channelUnit,unit);QCOMPARE(s->time.size(),qsizetype(count));QCOMPARE(s->value.size(),qsizetype(count));
+                for(int n=0;n<count;++n) {
+                    QVERIFY(std::abs(s->time[n]-(n+1)/rate)<1e-12);const auto value=expected(id,port,n);
+                    QVERIFY(std::abs(s->value[n]-value)<1e-10*std::max(1.,std::abs(value)));
+                }
+                auto* line=scope->plottedSeries(s.key());QVERIFY(line);QTRY_VERIFY(!line->points().empty());QTRY_COMPARE(line->points().back().x(),count/rate);
+                QCOMPARE(line->name(),s->displayName());QVERIFY(line->isVisible());const auto points=line->points();
+                QCOMPARE(points.front().x(),1/rate);QVERIFY(points.size()<=count);double previous=0,lo=points.front().y(),hi=lo;
+                for(const auto& point:points) {
+                    const int n=int(std::llround(point.x()*rate))-1;QVERIFY(n>=0 && n<count);QVERIFY(point.x()>previous);previous=point.x();
+                    QCOMPARE(point.x(),s->time[n]);QCOMPARE(point.y(),s->value[n]);lo=std::min(lo,point.y());hi=std::max(hi,point.y());
+                }
+                QCOMPARE(lo,*std::min_element(s->value.cbegin(),s->value.cend()));QCOMPARE(hi,*std::max_element(s->value.cbegin(),s->value.cend()));
+            }
+            QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),"value ("+units.front()+")");
+            QCOMPARE(scope->plotView()->xMin(),1/rate);QCOMPARE(scope->plotView()->xMax(),count/rate);
+            if(displayEnd>0) {
+                QCheckBox* full=nullptr;for(auto* box:scope->findChildren<QCheckBox*>()) if(box->text()=="Fit full run") full=box;
+                QVERIFY(full);full->setChecked(false);scope->plotView()->setXRange(0,displayEnd);
+            }
+            capture(scope,stem+"-"+it.key(),true);scope->hide();
+        }
+    }
+    void editTeachingNumber(const std::string& id,const QString& parameter,double value) {
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);auto node=scene()->elementNode(id);QVERIFY(node);editor()->showItem(node.get());view->setFocus();
+        QVERIFY(modalWorkflow([&] {QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>("parameter."+parameter);auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            if(!field || !buttons) return false;field->setText(QString::number(value,'g',17));QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
     }
 private slots:
     void initTestCase() {
@@ -389,6 +504,8 @@ private slots:
         QVERIFY(credits && build);
         QVERIFY(credits->toPlainText().contains("Oleksiy Lukin"));
         QVERIFY(credits->toPlainText().contains("teren-ukr"));
+        for (const auto* name : {"ChatGPT", "Codex", "Claude Code", "GitHub Copilot"})
+            QVERIFY(credits->toPlainText().contains(QString::fromUtf8(name)));
         QVERIFY(build->toPlainText().contains("S7 Studio 0.1.2"));
         for (auto* text : about->findChildren<QTextBrowser*>()) QVERIFY(text->toPlainText().size() > 100);
         auto* tabs = about->findChild<QTabWidget*>(); QVERIFY(tabs);
@@ -1499,7 +1616,8 @@ private slots:
         QTRY_VERIFY(spectrum->plotView()->xMin() < 50 && spectrum->plotView()->xMax() > 100 && spectrum->plotView()->xMax() != 150);
         QTest::mouseMove(tabs->tabBar(), tabs->tabBar()->tabRect(1).center());
         auto* size = spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size"); QVERIFY(size); size->setCurrentIndex(size->findData(65536));
-        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Filling);
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Unavailable);
+        QVERIFY(spectrum->result()->message.contains("Run finished"));
         QVERIFY(spectrum->plotView()->series().first()->points().isEmpty());
         size->setCurrentIndex(size->findData(1024));
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
@@ -1866,7 +1984,8 @@ private slots:
         QCOMPARE(runner->liveSources()["iq_scope"]->capacity(), std::size_t(128));
         tabs->setCurrentIndex(1);
         auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
-        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size")->setCurrentIndex(0);
+        auto* spectrumSize=spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size");QVERIFY(spectrumSize);
+        spectrumSize->setCurrentIndex(spectrumSize->findData(64));
         spectrum->controlPanel()->findChild<QComboBox*>("spectrum.scale")->setCurrentIndex(1);
         spectrum->controlPanel()->findChild<QDoubleSpinBox*>("spectrum.frequencyOffset")->setValue(1000);
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
@@ -2096,6 +2215,1882 @@ private slots:
         const auto readout = viewer->inspect(viewer->displayedFrame().times.back()); QVERIFY(readout.contains(unit));
         capture(viewer, filename + "-live");
     }
+    void helpExternalBrowserLinks() {
+        BrowserUrlCapture captureUrl;
+        QDesktopServices::setUrlHandler("https", &captureUrl, "open");
+        QDesktopServices::setUrlHandler("http", &captureUrl, "open");
+        const auto restore = qScopeGuard([] {
+            QDesktopServices::unsetUrlHandler("https"); QDesktopServices::unsetUrlHandler("http");
+        });
+        action("action.help")->trigger();
+        auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help);
+        auto* browser = help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        browser->setHtml("<p><a href='https://ocw.mit.edu/'>MIT reading</a></p>"
+                         "<p><a href='http://example.org/reading?a=1&b=2#lesson'>HTTP reading</a></p>");
+        const auto source = browser->source();
+        const auto linkPoint = [&](const QString& label) {
+            auto cursor = browser->document()->find(label);
+            cursor.setPosition(cursor.selectionStart()+2);
+            browser->setTextCursor(cursor); browser->ensureCursorVisible();
+            return browser->cursorRect(cursor).center();
+        };
+        QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, linkPoint("MIT reading"));
+        QCOMPARE(captureUrl.urls, QList<QUrl>{QUrl("https://ocw.mit.edu/")});
+        QCOMPARE(browser->source(), source);
+        QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, linkPoint("HTTP reading"));
+        QCOMPARE(captureUrl.urls.last(), QUrl("http://example.org/reading?a=1&b=2#lesson"));
+        QCOMPARE(browser->source(), source);
+        const auto point = linkPoint("MIT reading");
+        bool menuAction = false;
+        QTimer::singleShot(0, browser, [&] {
+            auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+            if (!menu) return;
+            for (auto* item : menu->actions()) if (item->objectName() == "help.openExternalLink") {
+                menuAction = true;
+                QTest::mouseClick(menu, Qt::LeftButton, {}, menu->actionGeometry(item).center());
+                return;
+            }
+            menu->close();
+        });
+        QVERIFY(QMetaObject::invokeMethod(browser, "customContextMenuRequested", Qt::DirectConnection, Q_ARG(QPoint, point)));
+        QVERIFY(menuAction); QCOMPARE(captureUrl.urls.size(), 3);
+        QCOMPARE(captureUrl.urls.last(), QUrl("https://ocw.mit.edu/"));
+        QCOMPARE(browser->source(), source);
+        // A bundled page need not be a top-level topic to be navigable.
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/examples/education/README.md"))));
+        QVERIFY(browser->toPlainText().contains("New education diagrams"));
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("../../education/labs/SP06-three-tap-fir/README.md#predict"))));
+        QVERIFY(browser->toPlainText().contains("Build and test a three-tap FIR filter"));
+        capture(help, "education-sp06-help", true);
+        const auto internal = browser->source();
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("file:///tmp/not-a-help-article"))));
+        QCOMPARE(browser->source(), internal); QCOMPARE(captureUrl.urls.size(), 3);
+        QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+    }
+    void helpExampleLinks() {
+        const auto input = QString(S7_GUI_EXAMPLES_DIR) + "/education/sp14_coherent_am.s7diagram";
+        QFile original(input); QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes = original.readAll(); original.close();
+        action("action.help")->trigger();
+        auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help);
+        auto* browser = help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        const QUrl guide("qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md");
+        browser->setSource(guide, QTextDocument::MarkdownResource);
+        const auto linkPoint = [&] {
+            auto cursor = browser->document()->find("sp14_coherent_am.s7diagram");
+            if (cursor.isNull()) return QPoint(-1, -1);
+            cursor.setPosition(cursor.selectionStart() + 3);
+            browser->setTextCursor(cursor); browser->ensureCursorVisible();
+            return browser->cursorRect(cursor).center();
+        };
+        auto point = linkPoint(); QVERIFY(browser->viewport()->rect().contains(point));
+        QVERIFY(browser->anchorAt(point).endsWith("sp14_coherent_am.s7diagram"));
+        capture(help, "education-open-example", true);
+        QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point);
+        QVERIFY(!help->isVisible()); QVERIFY(scene()->elementNode("recovered"));
+        QVERIFY(scene()->elementNode("message"));
+        // The same link must honor Cancel, including a running/paused capture.
+        QVERIFY(scene()->addElement({"unsaved_help", "Constant", {}, {}, {}, "Unsaved"}, {0, 0}));
+        const auto pending = window_->currentDocument();
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        const boost::json::object running{{"name", "help-cancel-run"},
+            {"elements", boost::json::array{boost::json::object{{"id", "source"}, {"type", "Constant"}}}},
+            {"connections", boost::json::array{}}};
+        runner->run(running, .001, -1, {});
+        QTRY_VERIFY(runner->isRunning()); runner->pause(); QTRY_VERIFY(runner->isPaused());
+        action("action.help")->trigger(); point = linkPoint();
+        QVERIFY(modalWorkflow([&] { QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Cancel), Qt::LeftButton); return true;
+        }));
+        QCOMPARE(window_->currentDocument(), pending); QVERIFY(runner->isPaused());
+        QVERIFY(help->isVisible()); QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+        // Local files, traversal, remote qrc authorities and parameterized paths
+        // must not trigger document replacement or the external browser.
+        BrowserUrlCapture captureUrl;
+        QDesktopServices::setUrlHandler("file", &captureUrl, "open");
+        const auto restore = qScopeGuard([] { QDesktopServices::unsetUrlHandler("file"); });
+        for (const auto& link : {"file:///tmp/other.s7diagram",
+                 "qrc:/s7studio/help/examples/../../other.s7diagram",
+                 "qrc://other/s7studio/help/examples/education/sp14_coherent_am.s7diagram",
+                 "../../../examples/education/sp14_coherent_am.s7diagram?run=1",
+                 "../../../examples/education/sp14_coherent_am.s7diagram#run",
+                 "../../../examples/education/missing.s7diagram"}) {
+            Q_EMIT browser->anchorClicked(QUrl(link));
+            QCOMPARE(window_->currentDocument(), pending); QVERIFY(runner->isPaused());
+            QVERIFY(help->isVisible()); QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+        }
+        QVERIFY(captureUrl.urls.isEmpty());
+        point = linkPoint();
+        QVERIFY(modalWorkflow([&] { QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Discard), Qt::LeftButton); return true;
+        }));
+        QVERIFY(!help->isVisible()); QVERIFY(!scene()->elementNode("unsaved_help"));
+        QCOMPARE(runner->state(), s7studio::RunState::Idle);
+        const auto saved = temporary_.filePath("help-copy.s7diagram");
+        QVERIFY(fileAction("action.save", saved)); QVERIFY(QFileInfo::exists(saved));
+        QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes);
+        original.close();
+        // Every core row in the real navigator must open its working copy.
+        const QDir examples(QString(S7_GUI_EXAMPLES_DIR) + "/education");
+        const auto diagrams = examples.entryList({"*.s7diagram"}, QDir::Files);
+        QCOMPARE(diagrams.size(), 24);
+        for (const auto& name : diagrams) {
+            action("action.help")->trigger();
+            browser->setSource(QUrl("qrc:/s7studio/help/examples/education/README.md"), QTextDocument::MarkdownResource);
+            auto cursor = browser->document()->find(name); QVERIFY2(!cursor.isNull(), qPrintable(name));
+            cursor.setPosition(cursor.selectionStart() + 3);
+            browser->setTextCursor(cursor); browser->ensureCursorVisible();
+            point = browser->cursorRect(cursor).center();
+            QVERIFY(browser->viewport()->rect().contains(point));
+            QVERIFY(browser->anchorAt(point).endsWith(name));
+            QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point);
+            QVERIFY2(!help->isVisible(), qPrintable(name));
+            QFile diagram(examples.filePath(name)); QVERIFY(diagram.open(QIODevice::ReadOnly));
+            const auto expected = QJsonDocument::fromJson(diagram.readAll()).object().value("schema").toObject().value("elements").toArray();
+            QVERIFY(!expected.isEmpty());
+            for (const auto element : expected)
+                QVERIFY2(scene()->elementNode(element.toObject().value("id").toString().toStdString()), qPrintable(name));
+        }
+    }
+    void helpExamplePathContainment() {
+        const auto root = temporary_.filePath("example-paths");
+        QVERIFY(QDir{}.mkpath(root + "/education"));
+        const auto outside = temporary_.filePath("outside.s7diagram");
+        QFile file(outside); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("{}"); file.close();
+        const auto inside = root + "/education/local.s7diagram";
+        QVERIFY(QFile::copy(outside, inside));
+        QCOMPARE(s7studio::resolveHelpExample(root, "education/local.s7diagram"), QFileInfo(inside).canonicalFilePath());
+        for (const auto& path : {QString("../outside.s7diagram"), outside, QString("education/missing.s7diagram"), QString("education")})
+            QVERIFY(s7studio::resolveHelpExample(root, path).isEmpty());
+#if defined(Q_OS_UNIX)
+        QVERIFY(QFile::link(outside, root + "/education/escape.s7diagram"));
+        QVERIFY(s7studio::resolveHelpExample(root, "education/escape.s7diagram").isEmpty());
+        QVERIFY(QFile::link(inside, root + "/education/alias.s7diagram"));
+        QCOMPARE(s7studio::resolveHelpExample(root, "education/alias.s7diagram"), QFileInfo(inside).canonicalFilePath());
+#endif
+    }
+    void diagramFrameLinks() {
+        BrowserUrlCapture captureUrl;
+        QDesktopServices::setUrlHandler("https", &captureUrl, "open");
+        const auto restore = qScopeGuard([] { QDesktopServices::unsetUrlHandler("https"); });
+        auto frame = scene()->addTextFrame("lesson", {{"text_format", "markdown"},
+            {"text", "[Student lab](qrc:/s7studio/help/education/labs/SP06-three-tap-fir/README.md)  \n"
+                     "[MIT teaching material](https://ocw.mit.edu/)"},
+            {"width", 500}, {"height", 140}}, {100, 100});
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        editor()->showItem(frame.get());
+        auto linkPoint = [&](const QString& scheme) {
+            for (int y = 8; y < 130; y += 2) for (int x = 10; x < 480; x += 2)
+                if (frame->linkAt(QPointF(x, y)).scheme() == scheme)
+                    return view->mapFromScene(frame->mapToScene(QPointF(x, y)));
+            return QPoint(-1, -1);
+        };
+        const auto before = frame->params(); const auto position = frame->pos();
+        const auto web = linkPoint("https"); QVERIFY(web.x() >= 0);
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, web);
+        QCOMPARE(captureUrl.urls, QList<QUrl>{QUrl("https://ocw.mit.edu/")});
+        QCOMPARE(frame->pos(), position); QCOMPARE(frame->params(), before);
+        const auto internal = linkPoint("qrc"); QVERIFY(internal.x() >= 0);
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, internal);
+        auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help);
+        QVERIFY(help->findChild<QTextBrowser*>("help.browser")->toPlainText().contains("Build and test a three-tap FIR filter"));
+        help->close(); window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        // Press/drag/release over a link is not an activation.
+        QTest::mousePress(view->viewport(), Qt::LeftButton, {}, web);
+        QTest::mouseMove(view->viewport(), web+QPoint(40, 0));
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, {}, web);
+        QCOMPARE(captureUrl.urls.size(), 1); QCOMPARE(frame->pos(), position);
+        // The border retains normal frame selection and keyboard editing.
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, view->mapFromScene(frame->mapToScene(QPointF(3, 3))));
+        QVERIFY(frame->isSelected()); view->setFocus();
+        QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [](QDialog* dialog) {
+            auto* format = dialog->findChild<QComboBox*>("frame.textFormat");
+            auto* text = dialog->findChild<QPlainTextEdit*>("frame.text");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!format || !text || !buttons || format->currentData().toString() != "markdown") return false;
+            format->setCurrentIndex(0); text->setPlainText("Read https://ocw.mit.edu/ today.");
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        QCOMPARE(frame->params().at("text_format").as_string(), "plain");
+        const auto plain = linkPoint("https"); QVERIFY(plain.x() >= 0);
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, plain);
+        QCOMPARE(captureUrl.urls.size(), 2);
+        const auto saved = temporary_.filePath("notes-with-links.s7diagram");
+        QVERIFY(fileAction("action.saveAs", saved)); QVERIFY(fileAction("action.open", saved));
+        const auto reopened = scene()->textFrames(); QCOMPARE(reopened.size(), std::size_t(1));
+        QCOMPARE(reopened.front()->params().at("text").as_string(), "Read https://ocw.mit.edu/ today.");
+    }
+    void educationFirEditAndRerun() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/education/sp06_three_tap_fir.s7diagram"));
+        const auto notes = scene()->textFrames(); QCOMPARE(notes.size(), std::size_t(1));
+        QSet<QString> visibleLinks;
+        for (int y = 8; y < notes.front()->height()-8; y += 3)
+            for (int x = 10; x < notes.front()->width()-10; x += 3) {
+                const auto url = notes.front()->linkAt(QPointF(x, y));
+                if (!url.isEmpty()) visibleLinks.insert(url.toString());
+            }
+        // Links must actually be visible inside the frame, not clipped below it.
+        QCOMPARE(visibleLinks.size(), qsizetype(3));
+        QVERIFY(visibleLinks.contains("qrc:/s7studio/help/education/labs/SP06-three-tap-fir/README.md"));
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        QVERIFY(QMetaObject::invokeMethod(editor(), "elementNodeDoubleClicked", Qt::DirectConnection,
+            Q_ARG(QString, "scope"), Q_ARG(QString, "Scope"), Q_ARG(int, 1)));
+        QPointer<s7studio::ui::ScopeViewWindow> scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->find("Scope", "scope"));
+        QVERIFY(scope); QTRY_VERIFY(scope->isVisible());
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        const auto referenceInput = [](qint64 n) {
+            if (n < 0) return 0.;
+            const double t = double(n)/300, pi = std::acos(-1.);
+            return .25 + std::sin(2*pi*10*t+.2) + .5*std::sin(2*pi*100*t+.7);
+        };
+        auto checkCapture = [&](bool missingTap) {
+            QVERIFY(scope);
+            const auto source = runner->recordedSource();
+            QVERIFY(source && source->status().finished && !source->status().incomplete());
+            std::optional<s7studio::observation::ChannelId> input, filtered;
+            for (const auto& channel : source->channels()) {
+                if (channel.name == "scope/input") input = channel.id;
+                if (channel.name == "scope/filtered") filtered = channel.id;
+            }
+            QVERIFY(input && filtered);
+            const auto page = source->read(0, 6000); QVERIFY(page.error.isEmpty());
+            std::size_t inputCount = 0, outputCount = 0;
+            for (const auto& sample : page.samples) {
+                if (sample.channel != *input && sample.channel != *filtered) continue;
+                QVERIFY(sample.step >= 1 && sample.step <= 1200);
+                QCOMPARE(sample.timeSeconds, double(sample.step)/300);
+                const auto n = sample.step-1;
+                const double expected = sample.channel == *input ? referenceInput(n) :
+                    (referenceInput(n) + (missingTap ? 0 : referenceInput(n-1)) + referenceInput(n-2))/3;
+                QVERIFY(std::abs(sample.value-expected) < 1e-10);
+                (sample.channel == *input ? inputCount : outputCount)++;
+            }
+            QCOMPARE(inputCount, std::size_t(1200)); QCOMPARE(outputCount, std::size_t(1200));
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+            while (scope->refreshSource()) {}
+            std::size_t liveChannels = 0;
+            for (const auto& series : scope->recording().series()) {
+                if (series.isComparison()) continue;
+                QCOMPARE(series.channelUnit, QString("V"));
+                QCOMPARE(series.receivedSamples, std::uint64_t(1200));
+                ++liveChannels;
+            }
+            QCOMPARE(liveChannels, std::size_t(2));
+        };
+        QVERIFY(configure("action.run", 4, 300));
+        QTRY_VERIFY_WITH_TIMEOUT(completed.count() > 0, 10000);
+        QVERIFY2(completed.last()[0].toBool(), qPrintable(completed.last()[1].toString()));
+        QCOMPARE(runner->completedTicks(), 1200L);
+        checkCapture(false);
+        const auto firstRun = runner->recordedSource()->runId();
+        for (auto* check : scope->findChildren<QCheckBox*>())
+            if (check->text() == "Fit full run") check->setChecked(false);
+        scope->plotView()->setXRange(0, .2);
+        capture(scope, "education-sp06-correct", true);
+        capture(window_.get(), "education-sp06-diagram", true);
+        scope->hide(); window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto tap = scene()->elementNode("tap1"); QVERIFY(tap);
+        scene()->clearSelection(); tap->setSelected(true);
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
+        QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [](QDialog* dialog) {
+            auto* factor = dialog->findChild<QLineEdit*>("parameter.factor");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!factor || !buttons) return false;
+            factor->setText("0");
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        QCOMPARE(tap->element().params.at("factor").to_number<double>(), 0.);
+        const auto copy = temporary_.filePath("sp06-missing-tap.s7diagram");
+        QVERIFY(fileAction("action.saveAs", copy));
+        QVERIFY(fileAction("action.open", copy));
+        QCOMPARE(scene()->elementNode("tap1")->element().params.at("factor").to_number<double>(), 0.);
+        // Reopening a diagram replaces its observer windows; use the new binding.
+        manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope", "scope"));
+        QVERIFY(scope);
+        completed.clear();
+        QVERIFY(configure("action.run", 4, 300));
+        QTRY_VERIFY_WITH_TIMEOUT(completed.count() > 0, 10000);
+        QVERIFY2(completed.last()[0].toBool(), qPrintable(completed.last()[1].toString()));
+        QVERIFY(runner->recordedSource()->runId() != firstRun);
+        checkCapture(true);
+        for (auto* check : scope->findChildren<QCheckBox*>())
+            if (check->text() == "Fit full run") check->setChecked(false);
+        scope->plotView()->setXRange(0, .2);
+        scope->show(); capture(scope, "education-sp06-missing-tap", true);
+    }
+    void educationFoundations_data() {
+        QTest::addColumn<QString>("lab"); QTest::addColumn<QString>("file");
+        QTest::addColumn<QString>("slug"); QTest::addColumn<QString>("editedId");
+        QTest::addColumn<QString>("parameter"); QTest::addColumn<QString>("newValue");
+        QTest::newRow("FN01") << "FN01" << "fn01_unit_delay" << "FN01-unit-delay"
+            << "output_gain" << "factor" << "1.25";
+        QTest::newRow("FN02") << "FN02" << "fn02_natural_forced" << "FN02-natural-forced"
+            << "step" << "final_value" << "2";
+        QTest::newRow("FN03") << "FN03" << "fn03_initial_conditions" << "FN03-initial-conditions"
+            << "total_memory" << "initial_value" << "0";
+    }
+    void educationFoundations() {
+        QFETCH(QString, lab); QFETCH(QString, file); QFETCH(QString, slug);
+        QFETCH(QString, editedId); QFETCH(QString, parameter); QFETCH(QString, newValue);
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto notes = scene()->textFrames(); QCOMPARE(notes.size(), std::size_t(1));
+        const auto frame = notes.front();
+        QSet<QString> links;
+        QPoint guidePoint(-1, -1);
+        for (int y = 8; y < frame->height()-8; y += 3) for (int x = 10; x < frame->width()-10; x += 3) {
+            const auto url = frame->linkAt(QPointF(x, y));
+            if (!url.isEmpty()) links.insert(url.toString());
+            if (url.scheme() == "qrc" && guidePoint.x() < 0)
+                guidePoint = view->mapFromScene(frame->mapToScene(QPointF(x+2, y+2)));
+        }
+        QCOMPARE(links.size(), qsizetype(3));
+        QVERIFY(links.contains("qrc:/s7studio/help/education/labs/"+slug+"/README.md"));
+        QVERIFY(view->viewport()->rect().contains(guidePoint));
+        // Follow the actual visible instruction-frame link as a student would.
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, guidePoint);
+        auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help && help->isVisible());
+        auto* browser = help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        QVERIFY(browser->source().path().contains(slug));
+        QVERIFY(browser->toPlainText().contains("Predict", Qt::CaseInsensitive));
+        capture(help, lab+"-student-guide", true);
+        help->close(); window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        QPointer<s7studio::ui::ScopeViewWindow> scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope", "scope"));
+        QVERIFY(scope);
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        const auto expected = [&](QString channel, int n, bool edited) -> double {
+            if (lab == "FN01") {
+                const double a = edited ? 1.25 : .5;
+                if (channel == "input") return 1;
+                if (channel == "output") return (1-std::pow(a, n+1))/(1-a);
+                if (channel == "previous") return n == 0 ? 0 : (1-std::pow(a, n))/(1-a);
+            }
+            const double natural = std::pow(.5, n);
+            const double forced = n < 5 ? 0 : 2*(1-std::pow(.5, n-4));
+            if (channel == "natural") return natural;
+            if (lab == "FN02") {
+                if (channel == "impulse response") return n < 5 ? 0 : std::pow(.5, n-5);
+                if (channel == "step response") return forced*(edited ? 2 : 1);
+            } else {
+                if (channel == "total") return forced+(edited ? 0 : natural);
+                if (channel == "forced") return forced;
+                if (channel == "residual") return edited ? -natural : 0;
+            }
+            return std::numeric_limits<double>::quiet_NaN();
+        };
+        auto checkCapture = [&](bool edited) {
+            QVERIFY(scope);
+            const auto source = runner->recordedSource(); QVERIFY(source);
+            QVERIFY(source->status().finished && !source->status().incomplete());
+            const auto channels = source->channels();
+            QCOMPARE(channels.size(), lab == "FN03" ? qsizetype(4) : qsizetype(3));
+            const auto page = source->read(0, 200); QVERIFY(page.error.isEmpty());
+            QMap<s7studio::observation::ChannelId, int> counts;
+            for (const auto& sample : page.samples) {
+                QCOMPARE(sample.step, qint64(++counts[sample.channel]));
+                QCOMPARE(sample.timeSeconds, double(sample.step)/10);
+                QString name;
+                for (const auto& channel : channels) if (channel.id == sample.channel) name = channel.name;
+                QVERIFY(name.startsWith("scope/"));
+                const double reference = expected(name.mid(6), int(sample.step)-1, edited);
+                QVERIFY(std::isfinite(reference));
+                QVERIFY(std::abs(sample.value-reference) < (lab == "FN01" && edited ? 1e-10 : 1e-12));
+            }
+            QCOMPARE(counts.size(), channels.size());
+            for (const auto count : counts) QCOMPARE(count, 20);
+            QCOMPARE(runner->completedTicks(), 20L);
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+            while (scope->refreshSource()) {}
+            QCOMPARE(scope->recording().series().size(), channels.size());
+            for (const auto& series : scope->recording().series()) {
+                QCOMPARE(series.channelUnit, QString("V"));
+                QCOMPARE(series.receivedSamples, std::uint64_t(20));
+                QVERIFY(!series.isComparison());
+            }
+        };
+        // Do not repair settings in the test: the saved file must be ready to run.
+        const auto acceptSavedRun = [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
+            auto* rate = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!duration || !rate || !buttons || duration->value() != 2 || rate->value() != 10) return false;
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        };
+        QVERIFY(dialogAction("action.run", acceptSavedRun));
+        QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(), 10000);
+        QVERIFY2(completed.last()[0].toBool(), qPrintable(completed.last()[1].toString()));
+        checkCapture(false);
+        capture(scope, lab+"-baseline-scope", true);
+        capture(window_.get(), lab+"-diagram", true);
+        scope->hide(); window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node = scene()->elementNode(editedId.toStdString()); QVERIFY(node);
+        scene()->clearSelection(); node->setSelected(true); view->setFocus();
+        QVERIFY(modalWorkflow([view] {QTest::keyClick(view->viewport(), Qt::Key_F4);}, [&](QDialog* dialog) {
+            auto* field = dialog->findChild<QLineEdit*>("parameter."+parameter);
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!field || !buttons) return false;
+            field->setText(newValue);
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        const auto copy = temporary_.filePath(file+"-edited.s7diagram");
+        QVERIFY(fileAction("action.saveAs", copy)); QVERIFY(fileAction("action.open", copy));
+        node = scene()->elementNode(editedId.toStdString()); QVERIFY(node);
+        QCOMPARE(node->element().params.at(parameter.toStdString()).to_number<double>(), newValue.toDouble());
+        manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope", "scope")); QVERIFY(scope);
+        completed.clear();
+        QVERIFY(dialogAction("action.run", acceptSavedRun));
+        QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(), 10000);
+        QVERIFY2(completed.last()[0].toBool(), qPrintable(completed.last()[1].toString()));
+        checkCapture(true);
+        capture(scope, lab+"-edited-scope", true);
+    }
+    void educationLinear_data() {
+        QTest::addColumn<int>("index");
+        int index = 0;
+        for (const auto& lab : s7tests::education::linear_labs)
+            QTest::newRow(lab.id.c_str()) << index++;
+    }
+    void educationLinear() {
+        QFETCH(int, index);
+        const auto& lab = s7tests::education::linear_labs.at(index);
+        const auto id = QString::fromStdString(lab.id), file = QString::fromStdString(lab.file);
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto frames = scene()->textFrames(); QCOMPARE(frames.size(), std::size_t(1));
+        const auto frame = frames.front();
+        QSet<QString> links; QPoint guidePoint(-1, -1);
+        for (int y=8; y<frame->height()-8; y+=3) for (int x=10; x<frame->width()-10; x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));
+            if (!url.isEmpty()) links.insert(url.toString());
+            if (url.path().contains("/labs/") && guidePoint.x()<0)
+                guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(), qsizetype(3));
+        QVERIFY(links.contains("qrc:/s7studio/help/education/labs/"+QString::fromStdString(lab.slug)+"/README.md"));
+        QVERIFY(view->viewport()->rect().contains(guidePoint));
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, {}, guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help"); QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        QVERIFY(browser->source().path().contains(QString::fromStdString(lab.slug)));
+        QVERIFY(browser->toPlainText().contains("Predict", Qt::CaseInsensitive));
+        capture(help,id+"-student-guide",true); help->close();
+        window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        capture(window_.get(),id+"-diagram",true);
+
+        QList<QPointer<s7studio::ui::ScopeViewWindow>> scopes;
+        QPointer<s7studio::viewers::ResponseWindow> response;
+        auto openViewers = [&] {
+            scopes.clear(); response.clear();
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+            for (const auto& name : QStringList{"scope", lab.id=="FN06" ? "stable_scope" : lab.id=="CT02" ? "velocity_scope" : ""}) {
+                if (name.isEmpty()) continue;
+                auto* scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope",name));
+                QVERIFY(scope); scopes.push_back(scope);
+            }
+            if (lab.id=="FN04") {
+                response=dynamic_cast<s7studio::viewers::ResponseWindow*>(manager->openObserver("FrequencyResponse","response"));
+                QVERIFY(response);
+            }
+        };
+        openViewers();
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto acceptRun = [&](bool edited, bool changeRate=false) {
+            return dialogAction("action.run",[&](QDialog* dialog) {
+                auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");
+                auto* rate=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();
+                if (!duration || !rate || !buttons || duration->value()!=lab.seconds) return false;
+                const double expected=edited && lab.id=="CT03" ? .4 : 1/lab.h;
+                if (changeRate) rate->setValue(expected);
+                if (std::abs(rate->value()-expected)>1e-6) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);
+                return true;
+            });
+        };
+        auto checkCapture = [&](bool edited) {
+            const double h=edited && lab.id=="CT03" ? 2.5 : lab.h;
+            const auto count=int(std::floor(lab.seconds/h+1e-10));
+            const auto config=runner->activeConfiguration(); QVERIFY(config);
+            QVERIFY(std::abs(config->dt-h)<1e-14);
+            const auto source=runner->recordedSource(); QVERIFY(source);
+            QVERIFY(source->status().finished && !source->status().incomplete());
+            const auto channels=source->channels();
+            QCOMPARE(channels.size(), qsizetype(lab.outputs.size()+(lab.id=="FN04" ? 2 : 0)));
+            const auto page=source->read(0,5000); QVERIFY(page.error.isEmpty());
+            QMap<s7studio::observation::ChannelId,int> counts;
+            QSet<QString> observed;
+            for (const auto& sample : page.samples) {
+                QCOMPARE(sample.step,qint64(++counts[sample.channel]));
+                QVERIFY(std::abs(sample.timeSeconds-sample.step*h)<1e-12);
+                QString name; for (const auto& c : channels) if (c.id==sample.channel) name=c.name;
+                std::string element;
+                for (const auto& probe : config->probes) if (QString::fromStdString(probe.name)==name) element=probe.element;
+                QVERIFY(std::find(lab.outputs.begin(),lab.outputs.end(),element)!=lab.outputs.end());
+                observed.insert(QString::fromStdString(element));
+                const auto reference=s7tests::education::discrete(lab.id,element,int(sample.step)-1,h,edited);
+                QVERIFY(std::abs(sample.value-reference)<1e-10*std::max(1.,std::abs(reference)));
+            }
+            QCOMPARE(observed.size(),qsizetype(lab.outputs.size()));
+            QCOMPARE(counts.size(),channels.size()); for (const auto n : counts) QCOMPARE(n,count);
+            QCOMPARE(runner->completedTicks(),long(count));
+            for (auto scope : scopes) {
+                QVERIFY(scope);
+                QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+                while (scope->refreshSource()) {}
+                QVERIFY(!scope->recording().series().isEmpty());
+                for (const auto& series : scope->recording().series()) {
+                    QCOMPARE(series.receivedSamples,std::uint64_t(count));
+                    QCOMPARE(series.channelUnit,lab.id=="CT02" ? (scope==scopes.front() ? QString("m") : QString("m/s")) : QString("V"));
+                    QVERIFY(!series.isComparison());
+                }
+                if (lab.id=="FN04") scope->plotView()->setXRange(0,1);
+                if (lab.id=="FN06" && scope!=scopes.front()) scope->plotView()->setXRange(0,12);
+                capture(scope,id+(edited ? "-edited-" : "-baseline-")+scope->probeName().replace('/','-'),true);
+                scope->hide();
+            }
+            if (response) {
+                while (response->refreshSource()) {}
+                QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(),10000);
+                QVERIFY2(response->hasResult(),qPrintable(response->error()));
+                QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+                // Check the viewer's measured complex result, not only its ability to draw.
+                const auto resultPath=temporary_.filePath(edited ? "FN04-edited.s7analysis" : "FN04-baseline.s7analysis");
+                response->saveResult(resultPath);
+                const auto result=s7studio::analysis::ResultFile::open(resultPath);
+                QCOMPARE(result.kind,QString("frequency_response"));
+                QCOMPARE(result.metadata["pulse_index"].toInt(),4);
+                QCOMPARE(result.metadata["pulse_height"].toDouble(),1.);
+                QCOMPARE(result.metadata["input_unit"].toString(),QString("V"));
+                QCOMPARE(result.metadata["output_unit"].toString(),QString("V"));
+                QVERIFY(result.x.size()>4); QCOMPARE(result.values.size(),result.x.size());
+                QCOMPARE(result.x.front(),0.); QCOMPARE(result.x.back(),10.);
+                for (std::size_t i=0; i<result.x.size(); ++i) {
+                    const auto exact=.5/(1.-(edited ? .8 : .5)*std::polar(1.,-2*std::acos(-1.)*result.x[i]/20));
+                    QVERIFY(result.valid[i]);
+                    QVERIFY(std::abs(result.values[i]-exact)<1e-10);
+                }
+                capture(response,id+(edited ? "-edited-response" : "-baseline-response"),true);
+                response->hide();
+            }
+        };
+        QVERIFY(acceptRun(false)); QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);
+        QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        checkCapture(false);
+        window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        if (lab.id=="CT03") {
+            completed.clear(); QVERIFY(acceptRun(true,true));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);
+            QVERIFY(completed.last()[0].toBool());
+        } else {
+            auto node=scene()->elementNode(lab.edit_id); QVERIFY(node);
+            scene()->clearSelection(); node->setSelected(true); view->setFocus();
+            QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+                auto* field=dialog->findChild<QLineEdit*>("parameter."+QString::fromStdString(lab.parameter));
+                auto* buttons=dialog->findChild<QDialogButtonBox*>(); if (!field || !buttons) return false;
+                field->setText(QString::number(lab.edited_value,'g',16));
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton); return true;
+            }));
+        }
+        const auto copy=temporary_.filePath(file+"-edited.s7diagram");
+        QVERIFY(fileAction("action.saveAs",copy)); QVERIFY(fileAction("action.open",copy));
+        if (!lab.edit_id.empty()) {
+            auto node=scene()->elementNode(lab.edit_id); QVERIFY(node);
+            QCOMPARE(node->element().params.at(lab.parameter).to_number<double>(),lab.edited_value);
+        }
+        openViewers(); completed.clear(); QVERIFY(acceptRun(true));
+        QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);
+        QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        checkCapture(true);
+    }
+    void educationSignals_data() {
+        QTest::addColumn<QString>("lab");
+        QTest::newRow("SP01") << "SP01"; QTest::newRow("SP03") << "SP03";
+    }
+    void educationSignals() {
+        QFETCH(QString, lab);
+        const bool synthesis=lab=="SP01";
+        const auto file=synthesis ? QString("sp01_fourier_synthesis") : QString("sp03_aliasing");
+        const auto slug=synthesis ? QString("SP01-fourier-synthesis") : QString("SP03-aliasing");
+        const double savedRate=synthesis ? 128 : 64;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* view=editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto frames=scene()->textFrames(); QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front(); QPoint guidePoint(-1,-1); QSet<QString> links;
+        for (int y=8;y<frame->height()-8;y+=3) for (int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y)); if (!url.isEmpty()) links.insert(url.toString());
+            if (url.path().contains("/labs/") && guidePoint.x()<0)
+                guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));
+        QVERIFY(links.contains("qrc:/s7studio/help/education/labs/"+slug+"/README.md"));
+        QVERIFY(QFile::exists(":/s7studio/help/docs/SIGNAL_SOURCES.md"));
+        QVERIFY(view->viewport()->rect().contains(guidePoint));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help"); QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        QVERIFY(browser->source().path().contains(slug));
+        QVERIFY(browser->toPlainText().contains("Predict",Qt::CaseInsensitive));
+        capture(help,lab+"-student-guide",true);help->close();
+        capture(window_.get(),lab+"-diagram",true);
+        QPointer<s7studio::ui::ScopeViewWindow> scope;
+        auto openScope=[&] {
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+            scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope","scope")); QVERIFY(scope);
+        };
+        openScope();
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&](double rate,bool changeRate=false) {
+            completed.clear();
+            QVERIFY(dialogAction("action.run",[&](QDialog* dialog) {
+                auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");
+                auto* frequency=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();
+                if (!duration || !frequency || !buttons || duration->value()!=2) return false;
+                if (changeRate) frequency->setValue(rate);
+                if (frequency->value()!=rate) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);
+            QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        };
+        auto checkViewers=[&](double rate,bool edited,const QString& label) {
+            QVERIFY(scope);
+            const auto source=runner->recordedSource(); QVERIFY(source);
+            QVERIFY(source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration(); QVERIFY(config);
+            const auto channels=source->channels(); QCOMPARE(channels.size(),qsizetype(4));
+            const auto page=source->read(0,4096); QVERIFY(page.error.isEmpty());
+            const int count=int(2*rate);
+            QCOMPARE(page.samples.size(),qsizetype(4*count)); QCOMPARE(runner->completedTicks(),long(count));
+            QMap<s7studio::observation::ChannelId,int> counts;
+            for (const auto& sample:page.samples) {
+                QCOMPARE(sample.step,qint64(++counts[sample.channel]));
+                QVERIFY(std::abs(sample.timeSeconds-sample.step/rate)<1e-12);
+                QString name;for (const auto& c:channels) if (c.id==sample.channel) name=c.name;
+                std::string element;
+                for (const auto& probe:config->probes) if (QString::fromStdString(probe.name)==name) element=probe.element;
+                QVERIFY(!element.empty());
+                const auto expected=s7tests::education::signal_reference(lab.toStdString(),element,int(sample.step)-1,rate,edited);
+                QVERIFY(std::abs(sample.value-expected)<1e-10);
+            }
+            QCOMPARE(counts.size(),qsizetype(4));for (auto n:counts) QCOMPARE(n,count);
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+            while (scope->refreshSource()) {}
+            QTRY_COMPARE(scope->recording().series().size(),qsizetype(4));
+            for (auto it=scope->recording().series().cbegin();it!=scope->recording().series().cend();++it) {
+                const auto& series=it.value();
+                QCOMPARE(series.receivedSamples,std::uint64_t(count));QCOMPARE(series.channelUnit,QString("V"));
+                QVERIFY(!series.isComparison());
+                auto* line=scope->plottedSeries(it.key()); QVERIFY(line);
+                QTRY_COMPARE(line->points().size(),qsizetype(count));
+                QCOMPARE(line->name(),series.displayName());
+                const auto points=line->points();
+                std::string element;
+                for (const auto& probe:config->probes)
+                    if (probe.name==("scope/"+series.channelName).toStdString()) element=probe.element;
+                QVERIFY(!element.empty());
+                for (int n=0;n<count;++n) {
+                    QCOMPARE(points[n].x(),series.time[n]);QCOMPARE(points[n].y(),series.value[n]);
+                    QVERIFY(std::abs(points[n].x()-(n+1)/rate)<1e-12);
+                    const auto expected=s7tests::education::signal_reference(lab.toStdString(),element,n,rate,edited);
+                    QVERIFY(std::abs(points[n].y()-expected)<1e-10);
+                }
+            }
+            QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));
+            QCOMPARE(scope->plotView()->yTitle(),QString("value (V)"));
+            QCOMPARE(scope->plotView()->xMin(),1/rate);QCOMPARE(scope->plotView()->xMax(),2.);
+            capture(scope,lab+'-'+label+"-time",true);
+
+            auto* start=scope->findChild<QDoubleSpinBox*>("scope.analysisStart"); QVERIFY(start);
+            auto* end=scope->findChild<QDoubleSpinBox*>("scope.analysisEnd"); QVERIFY(end);
+            auto* analyze=scope->findChild<QPushButton*>("scope.analyze"); QVERIFY(analyze);
+            auto* tabs=scope->findChild<QTabWidget*>("scope.analysisTabs"); QVERIFY(tabs);
+            auto* spectrum=scope->findChild<s7studio::viewers::SpectrumView*>(); QVERIFY(spectrum);
+            auto* window=spectrum->controlPanel()->findChild<QComboBox*>("spectrum.window"); QVERIFY(window);
+            auto* quantity=spectrum->controlPanel()->findChild<QComboBox*>("spectrum.quantity"); QVERIFY(quantity);
+            auto* scale=spectrum->controlPanel()->findChild<QComboBox*>("spectrum.scale"); QVERIFY(scale);
+            auto* all=spectrum->controlPanel()->findChild<QCheckBox*>("spectrum.allInputs"); QVERIFY(all);
+            auto* remove=spectrum->controlPanel()->findChild<QCheckBox*>("spectrum.removeMean"); QVERIFY(remove);
+            auto* range=spectrum->controlPanel()->findChild<QComboBox*>("spectrum.frequencyRange"); QVERIFY(range);
+            window->setCurrentIndex(0);quantity->setCurrentIndex(0);scale->setCurrentIndex(0);
+            all->setChecked(true);remove->setChecked(false);range->setCurrentIndex(1);
+            auto checkSpectrum=[&](double seconds,int q) {
+                if (q==0) {
+                    start->setValue(0);end->setValue(seconds);analyze->click();tabs->setCurrentIndex(1);
+                }
+                quantity->setCurrentIndex(q);
+                const auto expectedQuantity=static_cast<s7studio::analysis::SpectrumQuantity>(q);
+                const auto size=std::size_t(rate*seconds);
+                QTRY_VERIFY_WITH_TIMEOUT(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready
+                    && spectrum->result()->size==size && spectrum->result()->settings.quantity==expectedQuantity,10000);
+                const auto& result=*spectrum->result();
+                QCOMPARE(result.runId,source->runId());QCOMPARE(result.firstStep,std::int64_t(1));
+                QCOMPARE(result.lastStep,std::int64_t(size));QCOMPARE(result.sampleRate,rate);
+                QCOMPARE(result.binSpacing,rate/size);QCOMPARE(result.coherentGain,1.);
+                QCOMPARE(result.settings.window,s7studio::analysis::SpectrumWindow::Rectangular);
+                QCOMPARE(result.traces.size(),std::size_t(4)); QVERIFY(result.frame);
+                QCOMPARE(result.frame->steps.size(),qsizetype(size));
+                QCOMPARE(result.frequencies.front(),0.);QCOMPARE(result.frequencies.back(),rate/2);
+                const auto names=result.frame->channels;
+                QSet<QLineSeries*> checkedLines;
+                for (const auto& trace:result.traces) {
+                    QCOMPARE(trace.unit,QString("V"));
+                    std::vector<double> values;
+                    const auto name=names[qsizetype(trace.channel)].name;
+                    std::string element;
+                    for (const auto& probe:config->probes) if (probe.name==("scope/"+name).toStdString()) element=probe.element;
+                    QVERIFY(!element.empty());
+                    for (std::size_t n=0;n<size;++n) {
+                        const auto actual=result.frame->values[qsizetype(n*4+trace.channel)];
+                        const auto expected=s7tests::education::signal_reference(lab.toStdString(),element,int(n),rate,edited);
+                        QVERIFY(std::abs(actual-expected)<1e-10);values.push_back(actual);
+                    }
+                    const auto direct=s7tests::education::signal_dft(values);
+                    QLineSeries* line=nullptr;
+                    const QString plottedUnit=q==0 ? "V" : q==1 ? "V²" : "V²/Hz";
+                    for (auto* candidate:spectrum->plotView()->series()) if (candidate->name()==name+" ["+plottedUnit+"]") line=candidate;
+                    QVERIFY(line && line->isVisible());checkedLines.insert(line);
+                    const auto points=line->points();QCOMPARE(points.size(),qsizetype(size/2+1));
+                    double integrated=0,meanSquare=0;for (double value:values) meanSquare+=value*value/size;
+                    for (std::size_t k=0;k<trace.values.size();++k) {
+                        const double fold=k==0 || k==size/2 ? 1 : 2;
+                        const double expected=q==0 ? fold*std::abs(direct[k]) : fold*std::norm(direct[k])/(q==2 ? result.binSpacing : 1);
+                        QVERIFY(std::abs(trace.values[k]-expected)<1e-9);
+                        QCOMPARE(result.frequencies[k],k*result.binSpacing);
+                        QCOMPARE(points[qsizetype(k)].x(),result.frequencies[k]);
+                        QVERIFY(std::abs(points[qsizetype(k)].y()-expected)<1e-9);
+                        if (q>0) integrated+=trace.values[k]*(q==2 ? result.binSpacing : 1);
+                    }
+                    if (q>0) QVERIFY(std::abs(integrated-meanSquare)<1e-10);
+                }
+                QCOMPARE(checkedLines.size(),qsizetype(4));
+                QCOMPARE(spectrum->plotView()->xTitle(),QString("Frequency (Hz)"));
+                QCOMPARE(spectrum->plotView()->yTitle(),q==0 ? QString("Peak amplitude (V)") : q==1 ? QString("Power / bin (V²)") : QString("PSD (V²/Hz)"));
+                QCOMPARE(spectrum->plotView()->xMin(),0.);QCOMPARE(spectrum->plotView()->xMax(),rate/2);
+            };
+            checkSpectrum(2,0);capture(scope,lab+'-'+label+"-spectrum",true);
+            checkSpectrum(2,1);checkSpectrum(2,2);checkSpectrum(1,0);
+            capture(scope,lab+'-'+label+"-selected-interval",true);
+            tabs->setCurrentIndex(0);scope->hide();
+        };
+        auto editParameter=[&](const std::string& id,const QString& parameter,double value) {
+            window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+            auto node=scene()->elementNode(id);QVERIFY(node);
+            scene()->clearSelection();node->setSelected(true);view->setFocus();
+            QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+                auto* field=dialog->findChild<QLineEdit*>("parameter."+parameter);
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();if (!field || !buttons) return false;
+                field->setText(QString::number(value,'g',16));QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+        };
+        run(savedRate);checkViewers(savedRate,false,"baseline");
+        editParameter(synthesis ? "weight9" : "shifted",synthesis ? "factor" : "frequency_hz",synthesis ? 0 : 70);
+        const auto copy=temporary_.filePath(file+"-edited.s7diagram");
+        QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openScope();run(savedRate);checkViewers(savedRate,true,"edited");
+        if (!synthesis) {
+            editParameter("shifted","frequency_hz",74);
+            openScope();run(256,true);checkViewers(256,false,"256Hz");
+        }
+    }
+    void educationLti_data() {
+        QTest::addColumn<QString>("lab");
+        QTest::newRow("SP05") << "SP05"; QTest::newRow("SP07") << "SP07";
+    }
+    void educationLti() {
+        QFETCH(QString,lab);
+        const bool convolution=lab=="SP05";
+        const auto file=convolution ? QString("sp05_convolution") : QString("sp07_filter_transfer");
+        const auto slug=convolution ? QString("SP05-convolution") : QString("SP07-filter-transfer");
+        const double rate=convolution ? 20 : 64,seconds=convolution ? 2 : 64;
+        const int count=int(rate*seconds);
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
+        const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front();QSet<QString> links;QPoint guidePoint(-1,-1);
+        for (int y=8;y<frame->height()-8;y+=3) for (int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if (!url.isEmpty()) links.insert(url.toString());
+            if (url.path().contains("/labs/") && guidePoint.x()<0)
+                guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));
+        QVERIFY(links.contains("qrc:/s7studio/help/education/labs/"+slug+"/README.md"));
+        QVERIFY(view->viewport()->rect().contains(guidePoint));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");QVERIFY(browser);
+        QVERIFY(browser->source().path().contains(slug));QVERIFY(browser->toPlainText().contains("Predict",Qt::CaseInsensitive));
+        capture(help,lab+"-student-guide",true);help->close();capture(window_.get(),lab+"-diagram",true);
+        QMap<QString,QPointer<s7studio::ui::ScopeViewWindow>> scopes;
+        QMap<QString,QPointer<s7studio::viewers::ResponseWindow>> responses;
+        auto openViewers=[&] {
+            scopes.clear();responses.clear();
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+            for (const auto& name:QStringList{"scope",convolution ? "parts_scope" : "input_scope"}) {
+                auto* scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope",name));QVERIFY(scope);scopes[name]=scope;
+            }
+            if (!convolution) for (const auto& name:QStringList{"low_response","resonant_response"}) {
+                auto* response=dynamic_cast<s7studio::viewers::ResponseWindow*>(manager->openObserver("FrequencyResponse",name));
+                QVERIFY(response);responses[name]=response;
+            }
+        };
+        openViewers();
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&] {
+            completed.clear();QVERIFY(dialogAction("action.run",[&](QDialog* dialog) {
+                auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");
+                auto* frequency=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();
+                if (!duration || !frequency || !buttons || duration->value()!=seconds || frequency->value()!=rate) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),15000);
+            QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        };
+        auto checkViewers=[&](bool edited) {
+            const auto source=runner->recordedSource();QVERIFY(source);
+            QVERIFY(source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration();QVERIFY(config);
+            const auto channels=source->channels();QCOMPARE(channels.size(),qsizetype(convolution ? 6 : 7));
+            auto elementFor=[&](const QString& name) {
+                for (const auto& probe:config->probes) if (QString::fromStdString(probe.name)==name) return probe.element;
+                return std::string{};
+            };
+            QMap<s7studio::observation::ChannelId,int> counts;std::uint64_t cursor=0;
+            while (cursor<source->status().samples) {
+                const auto page=source->read(cursor,4096);QVERIFY(page.error.isEmpty());QVERIFY(page.next>cursor);
+                for (const auto& sample:page.samples) {
+                    QCOMPARE(sample.step,qint64(++counts[sample.channel]));
+                    QVERIFY(std::abs(sample.timeSeconds-sample.step/rate)<1e-12);
+                    QString name;for (const auto& c:channels) if (c.id==sample.channel) name=c.name;
+                    const auto element=elementFor(name);QVERIFY(!element.empty());
+                    const auto expected=s7tests::education::lti_reference(lab.toStdString(),element,int(sample.step)-1,rate,edited);
+                    QVERIFY(std::abs(sample.value-expected)<1e-10*std::max(1.,std::abs(expected)));
+                }
+                cursor=page.next;
+            }
+            QCOMPARE(counts.size(),channels.size());for (auto n:counts) QCOMPARE(n,count);
+            QCOMPARE(runner->completedTicks(),long(count));
+            for (auto it=scopes.cbegin();it!=scopes.cend();++it) {
+                auto scope=it.value();QVERIFY(scope);QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+                while (scope->refreshSource()) {}
+                const int expectedChannels=it.key()=="scope" ? (convolution ? 4 : 2) : (convolution ? 2 : 1);
+                QCOMPARE(scope->recording().series().size(),qsizetype(expectedChannels));
+                for (auto series=scope->recording().series().cbegin();series!=scope->recording().series().cend();++series) {
+                    QCOMPARE(series->receivedSamples,std::uint64_t(count));QCOMPARE(series->channelUnit,QString("V"));QVERIFY(!series->isComparison());
+                    auto* line=scope->plottedSeries(series.key());QVERIFY(line);
+                    QTRY_VERIFY(!line->points().isEmpty());
+                    QTRY_COMPARE(line->points().back().x(),series->lastTime);
+                    QCOMPARE(line->name(),series->displayName());
+                    const auto element=elementFor(it.key()+"/"+series->channelName);QVERIFY(!element.empty());
+                    QCOMPARE(series->time.size(),qsizetype(count));QCOMPARE(series->value.size(),qsizetype(count));
+                    for (int n=0;n<count;++n) {
+                        QVERIFY(std::abs(series->time[n]-(n+1)/rate)<1e-12);
+                        const auto expected=s7tests::education::lti_reference(lab.toStdString(),element,n,rate,edited);
+                        QVERIFY(std::abs(series->value[n]-expected)<1e-10*std::max(1.,std::abs(expected)));
+                    }
+                    // Dense displays retain a pixel envelope, while the recording stays exact.
+                    const auto points=line->points();QVERIFY(points.size()<=count);
+                    if (convolution) QCOMPARE(points.size(),qsizetype(count));
+                    QCOMPARE(points.front().x(),series->time.front());QCOMPARE(points.back().x(),series->time.back());
+                    double plottedLow=points.front().y(),plottedHigh=plottedLow,previous=0;
+                    for (const auto& point:points) {
+                        const int n=int(std::llround(point.x()*rate))-1;QVERIFY(n>=0 && n<count);
+                        QCOMPARE(point.x(),series->time[n]);QCOMPARE(point.y(),series->value[n]);
+                        QVERIFY(point.x()>previous);previous=point.x();
+                        plottedLow=std::min(plottedLow,point.y());plottedHigh=std::max(plottedHigh,point.y());
+                    }
+                    QCOMPARE(plottedLow,*std::min_element(series->value.cbegin(),series->value.cend()));
+                    QCOMPARE(plottedHigh,*std::max_element(series->value.cbegin(),series->value.cend()));
+                }
+                QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),QString("value (V)"));
+                QCOMPARE(scope->plotView()->xMin(),1/rate);QCOMPARE(scope->plotView()->xMax(),seconds);
+                QCheckBox* fitFull=nullptr;
+                for (auto* box:scope->findChildren<QCheckBox*>()) if (box->text()=="Fit full run") fitFull=box;
+                QVERIFY(fitFull);fitFull->setChecked(false);
+                scope->plotView()->setXRange(0,convolution ? .6 : it.key()=="input_scope" ? .25 : 10);
+                capture(scope,lab+(edited ? "-edited-" : "-baseline-")+it.key(),true);scope->hide();
+            }
+            for (auto it=responses.cbegin();it!=responses.cend();++it) {
+                auto response=it.value();QVERIFY(response);
+                while (response->refreshSource()) {}
+                QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(),15000);
+                QVERIFY2(response->hasResult(),qPrintable(response->error()));
+                QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+                const auto channel=it.key()=="low_response" ? std::string("low") : std::string("resonant");
+                const auto resultPath=temporary_.filePath(lab+it.key()+(edited ? "-edited" : "-baseline")+".s7analysis");
+                response->saveResult(resultPath);const auto result=s7studio::analysis::ResultFile::open(resultPath);
+                QCOMPARE(result.kind,QString("frequency_response"));
+                QCOMPARE(result.metadata["run_id"].toString(),QString::number(source->runId()));
+                QCOMPARE(result.metadata["pulse_index"].toInt(),8);
+                QCOMPARE(result.metadata["pulse_height"].toDouble(),1.);QCOMPARE(result.metadata["response_samples"].toInt(),count-8);
+                QCOMPARE(result.metadata["input_unit"].toString(),QString("V"));QCOMPARE(result.metadata["output_unit"].toString(),QString("V"));
+                QCOMPARE(result.x.size(),std::size_t(2049));QCOMPARE(result.x.front(),0.);QCOMPARE(result.x.back(),rate/2);
+                for (std::size_t k=0;k<result.x.size();++k) {
+                    QCOMPARE(result.x[k],double(k)/64);QVERIFY(result.valid[k]);
+                    const auto expected=s7tests::education::lti_transfer(channel,result.x[k],rate,edited);
+                    QVERIFY(std::abs(result.values[k]-expected)<1e-9);
+                }
+                auto* magnitude=response->findChild<s7studio::viewers::LinePlotView*>("response.magnitude");QVERIFY(magnitude);
+                auto* phase=response->findChild<s7studio::viewers::LinePlotView*>("response.phase");QVERIFY(phase);
+                auto* unwrap=response->findChild<QCheckBox*>("response.unwrap");QVERIFY(unwrap && unwrap->isChecked());
+                auto* reference=response->findChild<QDoubleSpinBox*>("response.reference");QVERIFY(reference);QCOMPARE(reference->value(),1.);
+                auto* overlay=response->findChild<QCheckBox*>("response.referenceModel");QVERIFY(overlay && !overlay->isChecked());
+                auto checkBode=[&](bool unwrapped,double gainReference) {
+                    QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+                    QCOMPARE(magnitude->xTitle(),QString("log10(f / 1 Hz)"));QCOMPARE(phase->xTitle(),magnitude->xTitle());
+                    QCOMPARE(magnitude->yTitle(),QString("Gain (dB, explicit reference)"));
+                    QCOMPARE(phase->yTitle(),unwrapped ? QString("Phase (degrees; unwrapped)") : QString("Phase (degrees; wrapped)"));
+                    int magnitudePoints=0,phasePoints=0;
+                    for (auto* line:magnitude->series()) {
+                        if (line->name()=="Analytical reference") continue;
+                        QCOMPARE(line->name(),QString("Response"));
+                        for (const auto& point:line->points()) {
+                            const double f=std::pow(10.,point.x());
+                            const auto expected=s7tests::education::lti_transfer(channel,f,rate,edited);
+                            QVERIFY(std::abs(point.y()-20*std::log10(std::abs(expected)/gainReference))<1e-7);++magnitudePoints;
+                        }
+                    }
+                    for (auto* line:phase->series()) {
+                        if (line->name()=="Analytical reference") continue;
+                        QCOMPARE(line->name(),QString("Response"));
+                        for (const auto& point:line->points()) {
+                        const double f=std::pow(10.,point.x());
+                        const double expected=unwrapped ? s7tests::education::lti_phase(channel,f,rate,edited)
+                            : std::arg(s7tests::education::lti_transfer(channel,f,rate,edited))*180/std::acos(-1.);
+                        if (unwrapped) QVERIFY2(std::abs(point.y()-expected)<1e-6,
+                            qPrintable(QString("%1 phase at %2 Hz: actual %3, expected %4").arg(QString::fromStdString(channel)).arg(f,0,'g',17).arg(point.y(),0,'g',17).arg(expected,0,'g',17)));
+                        else {QVERIFY(std::abs(std::remainder(point.y()-expected,360.))<1e-6);QVERIFY(std::abs(point.y())<=180+1e-8);}
+                        ++phasePoints;
+                        }
+                    }
+                    QCOMPARE(magnitudePoints,2048);QCOMPARE(phasePoints,2048);
+                };
+                checkBode(true,1);QVERIFY(!QTest::currentTestFailed());capture(response,lab+(edited ? "-edited-" : "-baseline-")+it.key(),true);
+                reference->setValue(2);checkBode(true,2);QVERIFY(!QTest::currentTestFailed());
+                reference->setValue(1);unwrap->setChecked(false);checkBode(false,1);QVERIFY(!QTest::currentTestFailed());
+                capture(response,lab+(edited ? "-edited-" : "-baseline-")+it.key()+"-wrapped",true);
+                unwrap->setChecked(true);
+                if (channel=="resonant") {
+                    auto* omega=response->findChild<QDoubleSpinBox*>("response.omega");QVERIFY(omega);
+                    auto* damping=response->findChild<QDoubleSpinBox*>("response.damping");QVERIFY(damping);
+                    auto* gain=response->findChild<QDoubleSpinBox*>("response.modelGain");QVERIFY(gain);
+                    overlay->setChecked(true);
+                    QVERIFY(omega->isEnabled() && damping->isEnabled() && gain->isEnabled());
+                    omega->setValue(4);damping->setValue(edited ? .4 : .2);gain->setValue(1);
+                    checkBode(true,1);QVERIFY(!QTest::currentTestFailed());
+                    for (auto* plot:{magnitude,phase}) {
+                        int checked=0;
+                        for (auto* line:plot->series()) if (line->name()=="Analytical reference") {
+                            for (const auto& point:line->points()) {
+                                const double f=std::pow(10.,point.x());const std::complex<double> s(0,2*std::acos(-1.)*f);
+                                const auto continuous=16./(s*s+(edited ? 3.2 : 1.6)*s+16.);
+                                const double expected=plot==magnitude ? 20*std::log10(std::abs(continuous)) : std::arg(continuous)*180/std::acos(-1.);
+                                QVERIFY(std::abs(point.y()-expected)<1e-7);++checked;
+                            }
+                        }
+                        QCOMPARE(checked,2048);
+                    }
+                    capture(response,lab+(edited ? "-edited-" : "-baseline-")+it.key()+"-continuous-reference",true);
+                }
+                response->hide();
+            }
+        };
+        run();QVERIFY(!QTest::currentTestFailed());checkViewers(false);QVERIFY(!QTest::currentTestFailed());
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node=scene()->elementNode(convolution ? "weight" : "damping");QVERIFY(node);
+        scene()->clearSelection();node->setSelected(true);view->setFocus();
+        QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>("parameter.factor");auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            if (!field || !buttons) return false;field->setText(convolution ? "0.75" : "3.2");
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
+        const auto copy=temporary_.filePath(file+"-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openViewers();run();QVERIFY(!QTest::currentTestFailed());checkViewers(true);QVERIFY(!QTest::currentTestFailed());
+    }
+    void educationAm() {
+        using namespace s7tests::education;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp14_coherent_am.s7diagram"));openTeachingGuide("SP14","SP14-coherent-am");QVERIFY(!QTest::currentTestFailed());
+        const TeachingBindings bindings{{"rf_scope/rf",{"transmit",0,"V"}},{"baseband_scope/target",{"envelope",0,"V"}},
+            {"baseband_scope/recovered",{"recovered",0,"V"}},{"mixer_scope/mixed",{"mixed",0,"V"}},
+            {"carrier_scope/carrier",{"carrier",0,"1"}},{"carrier_scope/local",{"local",0,"1"}}};
+        for(bool edited:{false,true}) {
+            const double phase=edited ? std::numbers::pi/3:0;
+            if(edited) {editTeachingNumber("local","phase",phase);QVERIFY(!QTest::currentTestFailed());const auto copy=temporary_.filePath("SP14-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));}
+            TeachingScopes scopes;openTeachingScopes({"rf_scope","baseband_scope","mixer_scope","carrier_scope"},scopes);
+            runTeachingProfile(4,256);QVERIFY(!QTest::currentTestFailed());const auto trace=am_reference(phase);const QString stem=edited ? "SP14-edited":"SP14-baseline";
+            checkTeachingCapture(bindings,[&](const std::string& id,std::size_t port,int n) {return trace[std::size_t(n)].at(control_key(id,port));},1024,256,scopes,stem,.25);QVERIFY(!QTest::currentTestFailed());
+            auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+            for(const auto& id:QStringList{"rf_scope","baseband_scope","mixer_scope"}) {
+                auto* scope=scopes[id].data();QVERIFY(scope);scope->show();
+                auto* start=scope->findChild<QDoubleSpinBox*>("scope.analysisStart");auto* end=scope->findChild<QDoubleSpinBox*>("scope.analysisEnd");
+                auto* analyze=scope->findChild<QPushButton*>("scope.analyze");auto* tabs=scope->findChild<QTabWidget*>("scope.analysisTabs");
+                auto* spectrum=scope->findChild<s7studio::viewers::SpectrumView*>();QVERIFY(start && end && analyze && tabs && spectrum);
+                auto* panel=spectrum->controlPanel();auto* window=panel->findChild<QComboBox*>("spectrum.window");auto* quantity=panel->findChild<QComboBox*>("spectrum.quantity");
+                auto* scale=panel->findChild<QComboBox*>("spectrum.scale");auto* range=panel->findChild<QComboBox*>("spectrum.frequencyRange");
+                auto* all=panel->findChild<QCheckBox*>("spectrum.allInputs");auto* remove=panel->findChild<QCheckBox*>("spectrum.removeMean");
+                auto* size=panel->findChild<QComboBox*>("spectrum.size");QVERIFY(window && quantity && scale && range && all && remove && size);
+                window->setCurrentIndex(0);scale->setCurrentIndex(0);range->setCurrentIndex(1);all->setChecked(true);remove->setChecked(false);
+                start->setValue(2.002);end->setValue(4);analyze->click();tabs->setCurrentIndex(1);size->setCurrentIndex(size->findData(512));
+                for(int q=0;q<3;++q) {
+                    quantity->setCurrentIndex(q);
+                    QTRY_VERIFY_WITH_TIMEOUT(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready && spectrum->result()->size==512 && int(spectrum->result()->settings.quantity)==q,10000);
+                    const auto& r=*spectrum->result();QCOMPARE(r.runId,runner->recordedSource()->runId());QCOMPARE(r.firstStep,std::int64_t(513));QCOMPARE(r.lastStep,std::int64_t(1024));
+                    QCOMPARE(r.sampleRate,256.);QCOMPARE(r.binSpacing,.5);QCOMPARE(r.coherentGain,1.);QVERIFY(r.frame);QCOMPARE(r.frame->steps.size(),qsizetype(512));
+                    QCOMPARE(r.traces.size(),std::size_t(id=="baseband_scope" ? 2:1));
+                    for(const auto& t:r.traces) {
+                        QCOMPARE(t.unit,QString("V"));const auto name=r.frame->channels[qsizetype(t.channel)].name;const auto key=id+"/"+name;QVERIFY(bindings.contains(key));
+                        const auto& [element,port,unit]=bindings[key];(void)unit;std::vector<double> values;
+                        for(int n=0;n<512;++n) {
+                            const auto value=trace[std::size_t(n+512)].at(control_key(element,port));values.push_back(value);
+                            QVERIFY(std::abs(r.frame->values[qsizetype(n*r.frame->channels.size()+qsizetype(t.channel))]-value)<1e-10);
+                        }
+                        const QString plottedUnit=q==0 ? "V":q==1 ? "V²":"V²/Hz";QLineSeries* line=nullptr;
+                        for(auto* candidate:spectrum->plotView()->series()) if(candidate->name()==name+" ["+plottedUnit+"]") line=candidate;
+                        QVERIFY(line && line->isVisible());QCOMPARE(line->points().size(),qsizetype(257));double integrated=0,meanSquare=0;for(double value:values) meanSquare+=value*value/512;
+                        for(std::size_t k=0;k<257;++k) {
+                            const auto direct=am_bin(values,k);const double fold=k==0 || k==256 ? 1:2;
+                            const auto value=q==0 ? fold*std::abs(direct):fold*std::norm(direct)/(q==2 ? .5:1);
+                            QCOMPARE(r.frequencies[k],k*.5);QVERIFY(std::abs(t.values[k]-value)<1e-9);QCOMPARE(line->points()[qsizetype(k)].x(),k*.5);
+                            QVERIFY(std::abs(line->points()[qsizetype(k)].y()-value)<1e-9);if(q>0) integrated+=value*(q==2 ? .5:1);
+                        }if(q>0) QVERIFY(std::abs(integrated-meanSquare)<1e-10);
+                    }
+                    QCOMPARE(spectrum->plotView()->xTitle(),QString("Frequency (Hz)"));QCOMPARE(spectrum->plotView()->yTitle(),q==0 ? QString("Peak amplitude (V)"):q==1 ? QString("Power / bin (V²)"):QString("PSD (V²/Hz)"));
+                    QCOMPARE(spectrum->plotView()->xMin(),0.);QCOMPARE(spectrum->plotView()->xMax(),128.);
+                    if(q!=1) capture(scope,stem+"-"+id+QString("-spectrum-q%1").arg(q),true);
+                }
+                tabs->setCurrentIndex(0);scope->hide();
+            }
+        }
+    }
+    void educationCompensator() {
+        using namespace s7tests::education;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/ct08_lead_lag.s7diagram"));openTeachingGuide("CT08","CT08-lead-lag");QVERIFY(!QTest::currentTestFailed());
+        const TeachingBindings bindings{{"scope/reference",{"reference",0,"1"}},{"scope/P_output",{"base_y",0,"1"}},{"scope/lead_output",{"lead_y",0,"1"}},
+            {"command_scope/P_command",{"base",0,"1"}},{"command_scope/lead_command",{"lead",0,"1"}},
+            {"pulse_scope/pulse",{"pulse",0,"1"}},{"pulse_scope/open_output",{"open_y",0,"1"}},
+            {"response/input",{"pulse",0,"1"}},{"response/output",{"open_y",0,"1"}}};
+        for(int variant:{0,1}) {
+            if(variant) {editTeachingNumber("zero","value",.2);QVERIFY(!QTest::currentTestFailed());const auto copy=temporary_.filePath("CT08-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));}
+            TeachingScopes scopes;openTeachingScopes({"scope","command_scope","pulse_scope"},scopes);
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+            auto* response=dynamic_cast<s7studio::viewers::ResponseWindow*>(manager->openObserver("FrequencyResponse","response"));QVERIFY(response);
+            runTeachingProfile(64,10);QVERIFY(!QTest::currentTestFailed());const auto trace=compensator_reference(variant);const QString stem=variant ? "CT08-edited":"CT08-baseline";
+            checkTeachingCapture(bindings,[&](const std::string& id,std::size_t port,int n) {return trace[std::size_t(n)].at(control_key(id,port));},640,10,scopes,stem,10);QVERIFY(!QTest::currentTestFailed());
+            response->show();while(response->refreshSource()) {}
+            QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(),10000);QVERIFY2(response->hasResult(),qPrintable(response->error()));QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+            auto* reference=response->findChild<QDoubleSpinBox*>("response.reference");QVERIFY(reference);QCOMPARE(reference->value(),1.);
+            auto* unwrap=response->findChild<QCheckBox*>("response.unwrap");QVERIFY(unwrap && unwrap->isChecked());
+            const auto path=temporary_.filePath(stem+".s7analysis");response->saveResult(path);const auto result=s7studio::analysis::ResultFile::open(path);
+            QCOMPARE(result.x.size(),std::size_t(513));QCOMPARE(result.metadata["pulse_index"].toInt(),8);QCOMPARE(result.metadata["response_samples"].toInt(),632);
+            QCOMPARE(result.metadata["input_unit"].toString(),QString("1"));QCOMPARE(result.metadata["output_unit"].toString(),QString("1"));
+            for(std::size_t k=0;k<513;++k) {QCOMPARE(result.x[k],k*10./1024);QVERIFY(result.valid[k]);QVERIFY(std::abs(result.values[k]-compensator_transfer(result.x[k],variant))<1e-10);}
+            auto* magnitude=response->findChild<s7studio::viewers::LinePlotView*>("response.magnitude");auto* phase=response->findChild<s7studio::viewers::LinePlotView*>("response.phase");
+            s7studio::viewers::LinePlotView* nyquist=nullptr;for(auto* p:response->findChildren<s7studio::viewers::LinePlotView*>()) if(p->xTitle()=="Re(H)") nyquist=p;
+            QVERIFY(magnitude && phase && nyquist);auto* tabs=response->findChild<QTabWidget*>("response.views");QVERIFY(tabs);
+            for(int p=0;p<3;++p) {
+                auto* plot=p==0 ? magnitude:p==1 ? phase:nyquist;tabs->setCurrentIndex(p==2 ? 1:0);
+                QTRY_VERIFY(plot->quickWidget());QTRY_COMPARE(plot->quickWidget()->status(),QQuickWidget::Ready);
+                std::size_t count=0;
+                for(auto* series:plot->series()) if(series->isVisible()) for(const auto& point:series->points()) {
+                    const auto k=p==2 ? count:count+1;QVERIFY(k<513);const auto f=result.x[k],theta=2*std::numbers::pi*f/10;
+                    const auto h=compensator_transfer(f,variant);const double a=variant ? .2:.8;
+                    const auto degrees=(std::atan2(std::sin(theta),std::cos(theta)-a)-std::atan2(std::sin(theta),std::cos(theta)-.2)-2*std::atan2(std::sin(theta),std::cos(theta)-.9))*180/std::numbers::pi;
+                    QVERIFY(std::abs(point.x()-(p==2 ? h.real():std::log10(f)))<1e-9);
+                    QVERIFY(std::abs(point.y()-(p==0 ? 20*std::log10(std::abs(h)):p==1 ? degrees:h.imag()))<1e-8);++count;
+                }QCOMPARE(count,std::size_t(p==2 ? 513:512));capture(response,stem+(p==2 ? "-nyquist":"-bode"),true);
+            }
+            response->openResult(path);QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);const auto copy=temporary_.filePath(stem+"-reopened.s7analysis");response->saveResult(copy);QCOMPARE(s7studio::analysis::ResultFile::open(copy).values,result.values);response->hide();
+        }
+    }
+    void educationLoop_data() {
+        QTest::addColumn<bool>("margins");QTest::newRow("CT06")<<false;QTest::newRow("CT07")<<true;
+    }
+    void educationLoop() {
+        QFETCH(bool,margins);using namespace s7tests::education;
+        const QString lab=margins ? "CT07":"CT06",file=margins ? "ct07_stability_margins":"ct06_closed_loop_poles",slug=margins ? "CT07-stability-margins":"CT06-closed-loop-poles";
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));openTeachingGuide(lab,slug);QVERIFY(!QTest::currentTestFailed());
+        TeachingBindings bindings;
+        if(margins) bindings={{"scope/reference",{"reference",0,"1"}},{"scope/closed_output",{"closed_y",0,"1"}},
+            {"pulse_scope/pulse",{"pulse",0,"1"}},{"pulse_scope/open_output",{"open_y",0,"1"}},
+            {"response/input",{"pulse",0,"1"}},{"response/output",{"open_y",0,"1"}}};
+        else bindings={{"scope/reference",{"reference",0,"1"}},{"scope/first_state",{"x",0,"1"}},{"scope/output",{"y",0,"1"}},
+            {"command_scope/command",{"command",0,"1"}},{"command_scope/error",{"error",0,"1"}}};
+        TeachingScopes scopes;QPointer<s7studio::viewers::ResponseWindow> response;
+        auto open=[&] {
+            openTeachingScopes({"scope",margins ? "pulse_scope":"command_scope"},scopes);
+            if(margins) {
+                auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+                response=dynamic_cast<s7studio::viewers::ResponseWindow*>(manager->openObserver("FrequencyResponse","response"));QVERIFY(response);
+            }
+        };
+        for(bool edited:{false,true}) {
+            if(edited) {
+                editTeachingNumber("gain","value",16);QVERIFY(!QTest::currentTestFailed());const auto copy=temporary_.filePath(file+"-edited.s7diagram");
+                QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+            }
+            open();runTeachingProfile(margins ? 64:32,10);QVERIFY(!QTest::currentTestFailed());
+            const double gain=edited ? 16:4;const auto trace=loop_reference(margins,gain);const auto stem=lab+(edited ? "-edited":"-baseline");
+            checkTeachingCapture(bindings,[&](const std::string& id,std::size_t port,int n) {return trace[std::size_t(n)].at(control_key(id,port));},int(trace.size()),10,scopes,stem);QVERIFY(!QTest::currentTestFailed());
+            if(!margins) continue;
+            response->show();while(response->refreshSource()) {}
+            QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(),10000);QVERIFY2(response->hasResult(),qPrintable(response->error()));
+            QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+            auto* reference=response->findChild<QDoubleSpinBox*>("response.reference");QVERIFY(reference);QCOMPARE(reference->value(),1.);
+            auto* unwrap=response->findChild<QCheckBox*>("response.unwrap");QVERIFY(unwrap && unwrap->isChecked());
+            const auto path=temporary_.filePath(stem+".s7analysis");response->saveResult(path);const auto result=s7studio::analysis::ResultFile::open(path);
+            QCOMPARE(result.kind,QString("frequency_response"));QCOMPARE(result.x.size(),std::size_t(513));QCOMPARE(result.x.front(),0.);QCOMPARE(result.x.back(),5.);
+            QCOMPARE(result.metadata["pulse_index"].toInt(),8);QCOMPARE(result.metadata["response_samples"].toInt(),632);
+            QCOMPARE(result.metadata["input_unit"].toString(),QString("1"));QCOMPARE(result.metadata["output_unit"].toString(),QString("1"));
+            for(std::size_t k=0;k<result.x.size();++k) {QCOMPARE(result.x[k],k*10./1024);QVERIFY(result.valid[k]);QVERIFY(std::abs(result.values[k]-loop_transfer(result.x[k],gain))<1e-10);}
+            auto* magnitude=response->findChild<s7studio::viewers::LinePlotView*>("response.magnitude");auto* phase=response->findChild<s7studio::viewers::LinePlotView*>("response.phase");
+            s7studio::viewers::LinePlotView* nyquist=nullptr;for(auto* plot:response->findChildren<s7studio::viewers::LinePlotView*>()) if(plot->xTitle()=="Re(H)") nyquist=plot;
+            QVERIFY(magnitude && phase && nyquist);QCOMPARE(nyquist->yTitle(),QString("Im(H)"));
+            auto* tabs=response->findChild<QTabWidget*>("response.views");QVERIFY(tabs);
+            for(int which=0;which<3;++which) {
+                auto* plot=which==0 ? magnitude:which==1 ? phase:nyquist;tabs->setCurrentIndex(which==2 ? 1:0);
+                QTRY_VERIFY(plot->quickWidget());QTRY_COMPARE(plot->quickWidget()->status(),QQuickWidget::Ready);
+                std::size_t points=0;
+                for(auto* line:plot->series()) if(line->isVisible()) for(const auto& point:line->points()) {
+                    const std::size_t k=which==2 ? points:points+1;QVERIFY(k<result.x.size());const auto h=loop_transfer(result.x[k],gain);
+                    const auto theta=2*std::numbers::pi*result.x[k]/10;
+                    const auto degrees=-2*std::atan2(std::sin(theta),std::cos(theta)-.9)*180/std::numbers::pi;
+                    const auto x=which==2 ? h.real():std::log10(result.x[k]);const auto y=which==0 ? 20*std::log10(std::abs(h)):which==1 ? degrees:h.imag();
+                    QVERIFY(std::abs(point.x()-x)<1e-9);QVERIFY(std::abs(point.y()-y)<1e-8);++points;
+                }
+                QCOMPARE(points,std::size_t(which==2 ? 513:512));capture(response,stem+(which==2 ? "-nyquist":"-bode"),true);
+            }
+            // Inspector must label the actual nearest bin, not the requested continuous crossover.
+            auto* frequency=response->findChild<QDoubleSpinBox*>("response.frequency");QVERIFY(frequency);
+            frequency->setValue(loop_margins(gain).phaseCrossover);
+            QLabel* inspection=nullptr;for(auto* label:response->findChildren<QLabel*>()) if(label->text().contains("| H=(")) inspection=label;
+            QVERIFY(inspection);const auto bin=std::size_t(std::llround(frequency->value()*1024/10));
+            QTRY_VERIFY(inspection->text().startsWith(QString::number(result.x[bin],'g',9)+" Hz"));
+            response->openResult(path);response->show();QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(),10000);
+            const auto reopened=temporary_.filePath(stem+"-reopened.s7analysis");response->saveResult(reopened);
+            QCOMPARE(s7studio::analysis::ResultFile::open(reopened).values,result.values);response->hide();
+        }
+    }
+    void educationControl_data() {
+        QTest::addColumn<bool>("windup");QTest::newRow("CT04")<<false;QTest::newRow("CT05")<<true;
+    }
+    void educationControl() {
+        QFETCH(bool,windup);
+        using namespace s7tests::education;
+        const QString lab=windup ? "CT05":"CT04",file=windup ? "ct05_actuator_windup":"ct04_controller_comparison";
+        const QString slug=windup ? "CT05-actuator-windup":"CT04-controller-comparison";
+        const int count=windup ? 1200:1600;const double seconds=windup ? 12:16;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* root=editor();auto* view=root->findChild<QGraphicsView*>();QVERIFY(view);
+        const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        auto frame=frames.front();QSet<QString> links;QPoint guide(-1,-1);
+        for(int y=8;y<frame->height()-8;y+=3) for(int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if(!url.isEmpty()) links.insert(url.toString());
+            if(url.path().contains("/labs/") && guide.x()<0) guide=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));QVERIFY(view->viewport()->rect().contains(guide));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guide);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");QVERIFY(browser && browser->source().path().contains(slug));
+        QVERIFY(browser->toPlainText().contains("Predict"));capture(help,lab+"-student-guide",true);help->close();
+        capture(window_.get(),lab+"-diagram",true);
+        using Binding=std::pair<std::string,std::size_t>;QMap<QString,Binding> bindings;
+        if(windup) bindings={{"scope/reference",{"reference",0}}, {"scope/aw_output",{"aw_y",0}}, {"scope/free_output",{"free_y",0}},
+            {"actuator_scope/aw_control",{"aw",0}}, {"actuator_scope/free_control",{"free",0}},
+            {"raw_scope/aw_unlimited",{"aw",1}}, {"raw_scope/free_unlimited",{"free",1}},
+            {"state_scope/aw_integral",{"aw",2}}, {"state_scope/free_integral",{"free",2}}};
+        else {
+            bindings.insert("scope/reference",{"reference_step",0});
+            for(const std::string mode:{"p","pi","pid"}) {
+                const auto m=QString::fromStdString(mode);bindings.insert("scope/"+m+"_output",{mode+"_y",0});
+                bindings.insert("error_scope/"+m+"_error",{mode+"_error",0});
+                bindings.insert("actuator_scope/"+m+"_control",{mode=="p" ? "p_limit":mode,0});
+            }
+        }
+        QMap<QString,QPointer<s7studio::ui::ScopeViewWindow>> scopes;
+        auto openScopes=[&] {
+            scopes.clear();auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+            for(const auto& fullName:bindings.keys()) {
+                const auto id=fullName.section('/',0,0);if(scopes.contains(id)) continue;
+                auto* scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope",id));QVERIFY(scope);scopes[id]=scope;
+            }
+        };
+        auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);QSignalSpy complete(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&] {
+            complete.clear();QVERIFY(dialogAction("action.run",[&](QDialog* dialog) {
+                auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");auto* frequency=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!duration || !frequency || !buttons || duration->value()!=seconds || frequency->value()!=100) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!complete.empty(),10000);QVERIFY2(complete.last()[0].toBool(),qPrintable(complete.last()[1].toString()));
+            QCOMPARE(runner->completedTicks(),long(count));
+        };
+        auto check=[&](bool edited) {
+            const auto expected=control_reference(windup,edited);
+            const auto source=runner->recordedSource();QVERIFY(source && source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration();QVERIFY(config);QCOMPARE(config->probes.size(),std::size_t(bindings.size()));
+            for(const auto& probe:config->probes) {
+                const auto name=QString::fromStdString(probe.name);QVERIFY(bindings.contains(name));
+                QCOMPARE(probe.element,bindings[name].first);QCOMPARE(probe.port,bindings[name].second);QCOMPARE(probe.unit,std::string("1"));
+            }
+            const auto channels=source->channels();QCOMPARE(channels.size(),bindings.size());
+            QMap<s7studio::observation::ChannelId,int> counts;std::uint64_t cursor=0;
+            while(true) {
+                const auto page=source->read(cursor,4096);QVERIFY(page.error.isEmpty());if(page.samples.isEmpty()) break;
+                for(const auto& sample:page.samples) {
+                    QString name;for(const auto& c:channels) if(c.id==sample.channel) {name=c.name;}
+                    QVERIFY(bindings.contains(name));const auto binding=bindings[name];
+                    QCOMPARE(sample.step,qint64(++counts[sample.channel]));QCOMPARE(sample.timeSeconds,sample.step/100.);
+                    const auto value=expected[std::size_t(sample.step-1)].at(control_key(binding.first,binding.second));
+                    QVERIFY(std::abs(sample.value-value)<1e-10*std::max(1.,std::abs(value)));
+                }
+                QVERIFY(page.next>cursor);cursor=page.next;
+            }
+            QCOMPARE(counts.size(),channels.size());for(auto n:counts) QCOMPARE(n,count);
+            for(auto it=scopes.cbegin();it!=scopes.cend();++it) {
+                auto* scope=it.value().data();QVERIFY(scope);scope->show();scope->resize(1100,750);
+                QTRY_VERIFY(scope->source() && scope->source()->status().finished);while(scope->refreshSource()) {}
+                int expectedChannels=0;for(const auto& key:bindings.keys()) expectedChannels+=key.startsWith(it.key()+"/");
+                QTRY_COMPARE(scope->recording().series().size(),qsizetype(expectedChannels));
+                for(auto s=scope->recording().series().cbegin();s!=scope->recording().series().cend();++s) {
+                    QVERIFY(!s->isComparison());QCOMPARE(s->receivedSamples,std::uint64_t(count));QCOMPARE(s->channelUnit,QString("1"));
+                    const auto binding=bindings[it.key()+"/"+s->channelName];
+                    QCOMPARE(s->time.size(),qsizetype(count));QCOMPARE(s->value.size(),qsizetype(count));
+                    for(int n=0;n<count;++n) {
+                        QCOMPARE(s->time[n],(n+1)/100.);const auto value=expected[std::size_t(n)].at(control_key(binding.first,binding.second));
+                        QVERIFY(std::abs(s->value[n]-value)<1e-10*std::max(1.,std::abs(value)));
+                    }
+                    auto* line=scope->plottedSeries(s.key());QVERIFY(line);QTRY_VERIFY(!line->points().empty());QTRY_COMPARE(line->points().back().x(),seconds);
+                    QCOMPARE(line->name(),s->displayName());QVERIFY(line->isVisible());const auto points=line->points();
+                    QCOMPARE(points.front().x(),.01);QVERIFY(points.size()<=count);double previous=0,low=points.front().y(),high=low;
+                    for(const auto& point:points) {
+                        const auto n=int(std::llround(point.x()*100))-1;QVERIFY(n>=0 && n<count);QVERIFY(point.x()>previous);previous=point.x();
+                        QCOMPARE(point.x(),s->time[n]);QCOMPARE(point.y(),s->value[n]);low=std::min(low,point.y());high=std::max(high,point.y());
+                    }
+                    QCOMPARE(low,*std::min_element(s->value.cbegin(),s->value.cend()));QCOMPARE(high,*std::max_element(s->value.cbegin(),s->value.cend()));
+                }
+                QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),QString("value (1)"));
+                QCOMPARE(scope->plotView()->xMin(),.01);QCOMPARE(scope->plotView()->xMax(),seconds);
+                capture(scope,lab+(edited ? "-edited-":"-baseline-")+it.key(),true);scope->hide();
+            }
+        };
+        openScopes();run();check(false);QVERIFY(!QTest::currentTestFailed());
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        s7studio::diagram::DiagramEditor* edit=root;
+        if(windup) {
+            // Exercise the same double-click instance navigation as the guide.
+            QVERIFY(QMetaObject::invokeMethod(root,"elementNodeDoubleClicked",Qt::DirectConnection,Q_ARG(QString,"aw"),Q_ARG(QString,"PIController"),Q_ARG(int,1)));
+            auto* tabs=window_->findChild<s7studio::SchemaTabs*>();QVERIFY(tabs);edit=tabs->activeEditor();QVERIFY(edit && edit!=root);
+        }
+        auto node=edit->scene()->elementNode(windup ? "i_rate":"kd");QVERIFY(node);edit->showItem(node.get());
+        auto* canvas=edit->findChild<QGraphicsView*>();QVERIFY(canvas);canvas->setFocus();
+        QVERIFY(modalWorkflow([&] {QTest::keyClick(canvas->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>(windup ? "parameter.weights":"parameter.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            if(!field || !buttons) return false;field->setText(windup ? "[1,0]":"0");QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
+        if(windup) {
+            capture(window_.get(),lab+"-nested-edit",true);bool rootFound=false;
+            for(auto* tabs:window_->findChildren<QTabWidget*>()) if(tabs->indexOf(root)>=0) {tabs->setCurrentWidget(root);rootFound=true;break;}
+            QVERIFY(rootFound);
+        }
+        const auto copy=temporary_.filePath(file+"-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openScopes();run();check(true);
+    }
+    void hiddenPlotReplacementClearsOldCurves() {
+        s7studio::viewers::LinePlotView plot;plot.resize(640,400);
+        plot.setXRange(0,1);plot.setYRange(0,1);
+        auto* old=plot.addSeries("old",{QColor("#d62728"),3,false});
+        s7studio::viewers::LinePlotView::setPoints(old,{{0,.8},{1,.8}});plot.show();
+        QTRY_VERIFY(plot.quickWidget());QTRY_COMPARE(plot.quickWidget()->status(),QQuickWidget::Ready);
+        auto* graph=plot.quickWidget()->rootObject()->findChild<QQuickItem*>("viewer.graphs");QVERIFY(graph);
+        auto colorCounts=[&] {
+            const auto image=plot.quickWidget()->grabFramebuffer();std::array<int,2> count{};
+            const auto area=graph->mapRectToScene(graph->property("plotArea").toRectF());
+            const double dpr=image.devicePixelRatio();
+            const auto clipped=QRectF(area.topLeft()*dpr,area.size()*dpr).toAlignedRect().intersected(image.rect());
+            // Font subpixel antialiasing can create red/blue label pixels.
+            // Only data inside the graph's current plot area counts.
+            for(int y=clipped.top();y<=clipped.bottom();++y) for(int x=clipped.left();x<=clipped.right();++x) {
+                const auto c=image.pixelColor(x,y);
+                count[0]+=c.red()>150 && c.green()<100 && c.blue()<100;
+                count[1]+=c.blue()>150 && c.red()<100 && c.green()<140;
+            }return count;
+        };
+        QTRY_VERIFY(colorCounts()[0]>50);
+        plot.hide();plot.clearSeries();
+        auto* current=plot.addSeries("current",{QColor("#1565c0"),3,false});
+        s7studio::viewers::LinePlotView::setPoints(current,{{0,.2},{1,.2}});plot.show();
+        QTRY_VERIFY(colorCounts()[1]>50);capture(&plot,"hidden-plot-replacement",true);QTRY_COMPARE(colorCounts()[0],0);
+        QCOMPARE(plot.series().size(),qsizetype(1));
+    }
+    void educationStft() {
+        using namespace s7tests::education;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp11_short_time_fourier.s7diagram"));
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
+        const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front();QPoint guidePoint(-1,-1);QSet<QString> links;
+        for(int y=8;y<frame->height()-8;y+=3) for(int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if(!url.isEmpty()) links.insert(url.toString());
+            if(url.path().contains("/labs/") && guidePoint.x()<0) guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));QVERIFY(view->viewport()->rect().contains(guidePoint));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");QVERIFY(browser && browser->source().path().contains("SP11-short-time-fourier"));
+        QVERIFY(browser->toPlainText().contains("Predict"));capture(help,"SP11-student-guide",true);help->close();
+        capture(window_.get(),"SP11-diagram",true);
+        QPointer<s7studio::ui::ScopeViewWindow> scope;
+        QMap<QString,QPointer<s7studio::viewers::TimeFrequencyWindow>> maps;
+        auto openViewers=[&] {
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);maps.clear();
+            scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope","scope"));QVERIFY(scope);
+            for(const auto& id:{QString("burst_map"),QString("map")}) {
+                auto* map=dynamic_cast<s7studio::viewers::TimeFrequencyWindow*>(manager->openObserver("TimeFrequency",id));QVERIFY(map);maps[id]=map;
+            }
+        };
+        openViewers();auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&] {
+            completed.clear();QVERIFY(dialogAction("action.run",[](QDialog* dialog) {
+                auto* rate=dialog->findChild<QDoubleSpinBox*>("run.frequency");auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!rate || !duration || !buttons || rate->value()!=128 || duration->value()!=4) return false;
+                buttons->button(QDialogButtonBox::Ok)->click();return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        };
+        auto check=[&](bool edited) {
+            const auto source=runner->recordedSource();QVERIFY(source && source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration();QVERIFY(config);QCOMPARE(config->dt,1./128);QCOMPARE(runner->completedTicks(),512L);
+            const QMap<QString,QString> binding{{"scope/burst","burst"},{"scope/chirp","chirp"},{"scope/mixture","mixture"},
+                                               {"burst_map/in","burst"},{"map/in","mixture"}};
+            for(auto it=binding.cbegin();it!=binding.cend();++it) {
+                bool found=false;for(const auto& p:config->probes) if(QString::fromStdString(p.name)==it.key()) {
+                    QCOMPARE(QString::fromStdString(p.element),it.value());found=true;
+                }QVERIFY(found);
+            }
+            const auto channels=source->channels();QCOMPARE(channels.size(),qsizetype(5));
+            const auto page=source->read(0,4096);QVERIFY(page.error.isEmpty());QCOMPARE(page.samples.size(),qsizetype(2560));
+            QMap<s7studio::observation::ChannelId,int> count;
+            for(const auto& sample:page.samples) {
+                QCOMPARE(sample.step,qint64(++count[sample.channel]));QCOMPARE(sample.timeSeconds,sample.step/128.);
+                QString name;for(const auto& c:channels) if(c.id==sample.channel) name=c.name;
+                QVERIFY(binding.contains(name));QVERIFY(std::abs(sample.value-stft_signal(binding[name].toStdString(),int(sample.step)-1,edited))<1e-10);
+            }
+            QCOMPARE(count.size(),qsizetype(5));for(auto n:count) QCOMPARE(n,512);
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);while(scope->refreshSource()) {}
+            QCOMPARE(scope->recording().series().size(),qsizetype(3));
+            for(auto it=scope->recording().series().cbegin();it!=scope->recording().series().cend();++it) {
+                QCOMPARE(it->receivedSamples,std::uint64_t(512));QCOMPARE(it->channelUnit,QString("V"));
+                auto* line=scope->plottedSeries(it.key());QVERIFY(line);QTRY_COMPARE(line->points().size(),qsizetype(512));
+                QCOMPARE(line->name(),it->displayName());
+                for(int n=0;n<512;++n) {
+                    QCOMPARE(line->points()[n].x(),(n+1)/128.);QCOMPARE(line->points()[n].y(),it->value[n]);
+                    QVERIFY(std::abs(it->value[n]-stft_signal(it->channelName.toStdString(),n,edited))<1e-10);
+                }
+            }
+            QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),QString("value (V)"));
+            capture(scope,QString("SP11-")+(edited ? "edited" : "baseline")+"-time",true);scope->hide();
+            const boost::json::value schema=window_->currentDocument().at("schema");
+            for(auto it=maps.cbegin();it!=maps.cend();++it) {
+                auto map=it.value();QVERIFY(map);map->show();map->raise();while(map->refreshSource()) {}
+                QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() || !map->error().isEmpty(),15000);QVERIFY2(map->hasResult(),qPrintable(map->error()));
+                auto* fft=map->findChild<QComboBox*>("timeFrequency.fftSize");auto* hop=map->findChild<QSpinBox*>("timeFrequency.hopSize");
+                auto* quantity=map->findChild<QComboBox*>("timeFrequency.quantity");auto* tabs=map->findChild<QTabWidget*>("timeFrequency.views");
+                auto* row=map->findChild<QSpinBox*>("timeFrequency.row");auto* column=map->findChild<QSpinBox*>("timeFrequency.column");
+                auto* band=map->findChild<QDoubleSpinBox*>("timeFrequency.displayMaximum");
+                auto* plot=map->findChild<s7studio::viewers::SurfacePlotView*>();
+                auto* slice=map->findChild<s7studio::viewers::LinePlotView*>("timeFrequency.frequencySlice");
+                auto* trace=map->findChild<s7studio::viewers::LinePlotView*>("timeFrequency.inputTrace");
+                QVERIFY(fft && hop && quantity && tabs && row && column && band && plot && slice && trace);band->setValue(64);
+                std::vector<double> input;for(int n=0;n<512;++n) input.push_back(stft_signal(it.key()=="map" ? "mixture" : "burst",n,edited));
+                for(const auto [n,h]:std::array<std::pair<int,int>,3>{{{64,32},{128,64},{64,16}}}) {
+                    fft->setCurrentIndex(fft->findData(n));hop->setValue(h);
+                    QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() && map->result()->metadata["window_size"].toInt()==n &&
+                        map->result()->metadata["hop_size"].toInt()==h && !map->isPreparingDisplay(),15000);
+                    QVERIFY2(map->error().isEmpty(),qPrintable(map->error()));const auto& result=*map->result();
+                    QCOMPARE(result.metadata["run_id"].toString(),QString::number(source->runId()));QCOMPARE(result.metadata["unit"].toString(),QString("V"));
+                    QCOMPARE(result.metadata["first_step"].toString(),QString("1"));QCOMPARE(result.metadata["last_step"].toString(),QString("512"));
+                    QVERIFY(result.metadata["boundary"].toString().contains("full windows only"));
+                    QCOMPARE(result.metadata["rate_hz"].toDouble(),128.);QCOMPARE(result.metadata["origin_time"].toDouble(),1./128);
+                    QCOMPARE(result.input.size(),std::size_t(512));for(int i=0;i<512;++i) QVERIFY(std::abs(result.input[std::size_t(i)]-input[std::size_t(i)])<1e-10);
+                    const auto expected=stft_reference(input,std::size_t(n),std::size_t(h));QVERIFY(result.x==expected.times && result.y==expected.frequencies);
+                    QCOMPARE(result.values.size(),expected.coefficients.size());
+                    for(std::size_t i=0;i<result.values.size();++i) {QVERIFY(result.valid[i]);QVERIFY(std::abs(result.values[i]-expected.coefficients[i])<1e-9);}
+                    column->setValue(128/h);row->setValue(32*n/128);
+                    for(int q=0;q<5;++q) {
+                        tabs->setCurrentIndex(0);quantity->setCurrentIndex(q);
+                        QTRY_VERIFY_WITH_TIMEOUT(!map->isPreparingDisplay() && !plot->isPreparing(),10000);
+                        const auto grid=plot->displayedGrid();QVERIFY(grid);QVERIFY(grid->x==expected.times && grid->y==expected.frequencies);
+                        QCOMPARE(grid->values.size(),expected.coefficients.size());
+                        const QString unit=q==2 ? "rad" : q==4 ? "V²/Hz" : q==0 ? "V" : "V²";
+                        const auto label=quantity->currentText()+" ("+unit+")";
+                        bool unitLabel=false;for(const auto& l:plot->bridge()->labels()) if(l.toMap()["text"].toString()==label) unitLabel=true;QVERIFY(unitLabel);
+                        for(std::size_t k=0;k<expected.frequencies.size();++k) for(std::size_t t=0;t<expected.times.size();++t) {
+                            const auto i=k*expected.times.size()+t;const auto c=expected.coefficients[i];
+                            const bool valid=q!=2 || std::abs(c)>1e-12;QCOMPARE(bool(grid->present[i]),valid);
+                            if(!valid) continue;const auto value=stft_quantity(c,k,std::size_t(n),q);
+                            const auto error=q==2 ? std::remainder(grid->values[i].real()-value,2*std::numbers::pi) : grid->values[i].real()-value;
+                            QVERIFY(std::abs(error)<(q==2 ? 1e-6 : 1e-9));
+                        }
+                        if(!edited && it.key()=="burst_map" && n==64 && h==32 && q==2) {
+                            // At 19% of the numeric time extent, nearest center
+                            // is column 3. Check the coordinate-rasterized color
+                            // and cursor agree, rather than trusting matrix indices.
+                            auto* heat=map->findChild<QWidget*>("surface.heatmap");QVERIFY(heat);
+                            map->raise();map->activateWindow();QVERIFY(QTest::qWaitForWindowActive(map));
+                            QPoint position;
+                            QVERIFY(hoverUntil(heat,[&] {
+                                const auto area=QRectF(heat->rect()).adjusted(62,16,-18,-52);
+                                position=QPointF(area.left()+.19*area.width(),area.bottom()-area.height()*4/64).toPoint();
+                                return position;
+                            },[&] {return column->value()==3 && row->value()==2;}));
+                            const auto image=heat->grab().toImage();const auto color=image.pixelColor((position.x())*image.devicePixelRatio(),(position.y()+3)*image.devicePixelRatio());
+                            QVERIFY(std::max({color.red(),color.green(),color.blue()})-std::min({color.red(),color.green(),color.blue()})>80);
+                            column->setValue(128/h);row->setValue(32*n/128);
+                        }
+                        tabs->setCurrentIndex(2);QTRY_VERIFY_WITH_TIMEOUT(!map->isPreparingDisplay(),10000);
+                        QCOMPARE(slice->xTitle(),QString("Frequency (Hz)"));QCOMPARE(slice->yTitle(),label);
+                        int points=0;for(auto* line:slice->series()) for(const auto& p:line->points()) {
+                            const auto k=std::size_t(std::llround(p.x()*n/128));QCOMPARE(p.x(),expected.frequencies[k]);
+                            const auto c=expected.coefficients[k*expected.times.size()+std::size_t(column->value())];
+                            QVERIFY(q!=2 || std::abs(c)>1e-12);const auto value=stft_quantity(c,k,std::size_t(n),q);
+                            const auto error=q==2 ? std::remainder(p.y()-value,2*std::numbers::pi) : p.y()-value;
+                            QVERIFY(std::abs(error)<(q==2 ? 1e-6 : 1e-9));++points;
+                        }
+                        int expectedPoints=0;for(std::size_t k=0;k<expected.frequencies.size();++k)
+                            if(q!=2 || std::abs(expected.coefficients[k*expected.times.size()+std::size_t(column->value())])>1e-12) ++expectedPoints;
+                        QCOMPARE(points,expectedPoints);
+                        if(!edited && it.key()=="map" && n==64 && h==32 && q==4) {
+                            // Compare actual rendered strokes with the independent
+                            // PSD polyline. Model points alone cannot catch retired
+                            // phase/magnitude geometry remaining in Qt Graphs.
+                            auto* quick=slice->quickWidget();QVERIFY(quick);QTRY_COMPARE(quick->status(),QQuickWidget::Ready);
+                            auto* graph=quick->rootObject()->findChild<QQuickItem*>("viewer.graphs");QVERIFY(graph);
+                            double worstPixel=0;
+                            auto pixelsMatch=[&] {
+                                const auto area=graph->property("plotArea").toRectF();if(area.width()<100 || area.height()<100) return false;
+                                const auto image=quick->grabFramebuffer();const double dpr=image.devicePixelRatio();
+                                QList<QPointF> curve;
+                                for(std::size_t k=0;k<expected.frequencies.size();++k) {
+                                    const auto value=stft_quantity(expected.coefficients[k*expected.times.size()+std::size_t(column->value())],k,std::size_t(n),4);
+                                    curve.append(graph->mapToScene(QPointF(area.left()+(expected.frequencies[k]-slice->xMin())/(slice->xMax()-slice->xMin())*area.width(),
+                                        area.top()+(slice->yMax()-value)/(slice->yMax()-slice->yMin())*area.height()))*dpr);
+                                }
+                                const auto visible=graph->mapRectToScene(area).toAlignedRect();int blue=0;worstPixel=0;
+                                const auto clipped=QRect(int(visible.x()*dpr),int(visible.y()*dpr),int(visible.width()*dpr),int(visible.height()*dpr)).intersected(image.rect());
+                                for(int y=clipped.top();y<=clipped.bottom();++y) for(int x=clipped.left();x<=clipped.right();++x) {
+                                    const auto color=image.pixelColor(x,y);if(!(color.blue()>150 && color.red()<100 && color.green()<160)) continue;
+                                    ++blue;double nearest=1e9;
+                                    for(int j=1;j<curve.size();++j) {
+                                        const auto a=curve[j-1],delta=curve[j]-a;const double length=delta.x()*delta.x()+delta.y()*delta.y();
+                                        const double u=length ? std::clamp(((x-a.x())*delta.x()+(y-a.y())*delta.y())/length,0.,1.) : 0;
+                                        nearest=std::min(nearest,std::hypot(x-a.x()-u*delta.x(),y-a.y()-u*delta.y()));
+                                    }worstPixel=std::max(worstPixel,nearest);
+                                }
+                                return blue>50 && worstPixel<3;
+                            };
+                            QTRY_VERIFY_WITH_TIMEOUT(pixelsMatch(),5000);QVERIFY2(worstPixel<3,qPrintable(QString("Unexpected stale stroke, %1 px from independent PSD").arg(worstPixel)));
+                            capture(map,"SP11-baseline-map-slice-PSD",true);
+                        }
+                        tabs->setCurrentIndex(0);QTRY_VERIFY_WITH_TIMEOUT(!plot->isPreparing(),10000);
+                        if(q==0 || (n==64 && h==32 && (q==2 || q==4)))
+                            capture(map,QString("SP11-")+(edited ? "edited-" : "baseline-")+it.key()+QString("-N%1-H%2-q%3").arg(n).arg(h).arg(q),true);
+                    }
+                    QCOMPARE(trace->xTitle(),QString("Model time (s)"));QCOMPARE(trace->yTitle(),QString("Input (V)"));
+                    int tracePoints=0;for(auto* line:trace->series()) for(const auto& p:line->points()) {
+                        const auto index=std::size_t(std::llround(p.x()*128))-1;QVERIFY(index<512);QCOMPARE(p.x(),(index+1)/128.);
+                        QVERIFY(std::abs(p.y()-input[index])<1e-10);++tracePoints;
+                    }QCOMPARE(tracePoints,512);
+                }
+                const auto path=temporary_.filePath(QString("SP11-")+it.key()+ (edited ? "-edited" : "-baseline")+".s7analysis");
+                map->saveResult(path);const auto saved=*map->result();hop->setValue(32);map->openResult(path);
+                QTRY_VERIFY_WITH_TIMEOUT(!map->isPreparingDisplay(),10000);QCOMPARE(hop->value(),16);QVERIFY(map->result()->values==saved.values);
+                for(int fault=0;fault<5;++fault) {
+                    auto bad=saved;if(fault==0) bad.metadata["hop_size"]=0;
+                    if(fault==1) bad.metadata["hop_size"]=65;
+                    if(fault==2) bad.x[0]+=.001;
+                    if(fault==3) bad.y[1]+=.125;
+                    if(fault==4) bad.input.pop_back();
+                    const auto badPath=temporary_.filePath(QString("SP11-invalid-%1.s7analysis").arg(fault));bad.save(badPath);
+                    QVERIFY_EXCEPTION_THROWN(map->openResult(badPath),std::invalid_argument);QVERIFY(map->result()->values==saved.values);QCOMPARE(hop->value(),16);
+                }
+                map->hide();
+            }
+            QVERIFY(window_->currentDocument().at("schema")==schema);
+        };
+        run();QVERIFY(!QTest::currentTestFailed());check(false);QVERIFY(!QTest::currentTestFailed());
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node=scene()->elementNode("stop");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
+        QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>("parameter.start_time");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
+            field->setText("1.5");buttons->button(QDialogButtonBox::Ok)->click();return true;
+        }));
+        const auto copy=temporary_.filePath("sp11-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openViewers();run();QVERIFY(!QTest::currentTestFailed());check(true);QVERIFY(!QTest::currentTestFailed());
+    }
+    void finishedAnalysisFramesStopWaiting() {
+        s7studio::viewers::SpectrumView spectrum;
+        spectrum.resize(900,500);spectrum.show();
+        auto frame=std::make_shared<s7studio::observation::LiveFrame>();
+        frame->runId=42;frame->generation=1;frame->rateNumerator=8;frame->rateDenominator=1;frame->dt=.125;
+        frame->channels={{"finite input","V","f64"}};frame->received=8;frame->capacity=8;
+        for(int i=1;i<=8;++i) {frame->steps.push_back(i);frame->times.push_back(i/8.);frame->values.push_back(1);}
+        spectrum.setAnalysisSize(16);spectrum.setFrame(frame);
+        QTRY_VERIFY(spectrum.result() && spectrum.result()->state==s7studio::analysis::SpectrumResult::State::Filling);
+        auto finished=std::make_shared<s7studio::observation::LiveFrame>(*frame);finished->finished=true;
+        spectrum.setFrame(finished);
+        QTRY_VERIFY(spectrum.result() && spectrum.result()->state==s7studio::analysis::SpectrumResult::State::Unavailable);
+        QVERIFY(spectrum.result()->message.contains("Run finished"));QVERIFY(spectrum.plotView()->series().front()->points().isEmpty());
+        spectrum.setAnalysisSize(8);
+        QTRY_VERIFY(spectrum.result() && spectrum.result()->state==s7studio::analysis::SpectrumResult::State::Ready && spectrum.result()->size==8);
+        QVERIFY(spectrum.result()->frame->finished);QCOMPARE(spectrum.result()->runId,std::uint64_t(42));
+        QCOMPARE(spectrum.result()->firstStep,std::int64_t(1));QCOMPARE(spectrum.result()->lastStep,std::int64_t(8));
+        QVERIFY(std::abs(spectrum.result()->values[0]-1)<1e-12);
+        s7studio::viewers::PairAnalysisView correlation(s7studio::analysis::PairKind::Correlation);
+        correlation.resize(900,500);correlation.show();
+        auto pair=std::make_shared<s7studio::observation::LiveFrame>();
+        pair->runId=43;pair->generation=1;pair->rateNumerator=128;pair->rateDenominator=1;pair->dt=1./128;
+        pair->channels={{"A","V","f64"},{"B","V","f64"}};pair->received=64;pair->capacity=64;
+        for(int i=1;i<=64;++i) {pair->steps.push_back(i);pair->times.push_back(i/128.);pair->values.push_back(i);pair->values.push_back(2*i+1);}
+        correlation.setAnalysisSize(128);correlation.setFrame(pair);
+        QTRY_VERIFY(correlation.result() && correlation.result()->state==s7studio::analysis::PairResult::State::Filling);
+        auto pairFinished=std::make_shared<s7studio::observation::LiveFrame>(*pair);pairFinished->finished=true;
+        correlation.setFrame(pairFinished);
+        QTRY_VERIFY(correlation.result() && correlation.result()->state==s7studio::analysis::PairResult::State::Unavailable);
+        QVERIFY(correlation.result()->message.contains("Run finished"));QVERIFY(correlation.plotView()->series().front()->points().isEmpty());
+        correlation.setAnalysisSize(64);
+        QTRY_VERIFY(correlation.result() && correlation.result()->state==s7studio::analysis::PairResult::State::Ready);
+        QCOMPARE(correlation.result()->runId,std::uint64_t(43));QVERIFY(correlation.result()->frame->finished);
+    }
+    void educationConvolution() {
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp10_circular_convolution.s7diagram"));
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
+        const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front();QPoint guidePoint(-1,-1),implementationPoint(-1,-1);QSet<QString> links;
+        for(int y=8;y<frame->height()-8;y+=3) for(int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if(!url.isEmpty()) links.insert(url.toString());
+            if(url.path().contains("/labs/") && guidePoint.x()<0) guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+            if(url.path().endsWith("/docs/CONVOLUTION.md") && implementationPoint.x()<0) implementationPoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));QVERIFY(view->viewport()->rect().contains(guidePoint));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");
+        QVERIFY(browser && browser->source().path().contains("SP10-circular-convolution"));
+        QVERIFY(browser->toPlainText().contains("Predict"));capture(help,"SP10-student-guide",true);help->close();
+        QVERIFY(view->viewport()->rect().contains(implementationPoint));
+        QTest::mouseClick(view->viewport(),Qt::LeftButton,{},implementationPoint);
+        QVERIFY(help->isVisible());QVERIFY(browser->source().path().endsWith("/docs/CONVOLUTION.md"));
+        QVERIFY(browser->toPlainText().contains("FirConvolution"));help->close();
+        capture(window_.get(),"SP10-diagram",true);
+        QMap<QString,QPointer<s7studio::ui::ScopeViewWindow>> scopes;
+        auto openScopes=[&] {
+            scopes.clear();auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+            for(const auto& id:{QString("inputs"),QString("scope")}) {
+                auto* scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope",id));QVERIFY(scope);scopes[id]=scope;
+            }
+        };
+        openScopes();auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&] {
+            completed.clear();QVERIFY(dialogAction("action.run",[](QDialog* dialog) {
+                auto* rate=dialog->findChild<QDoubleSpinBox*>("run.frequency");auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!rate || !duration || !buttons || rate->value()!=8 || duration->value()!=2) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        };
+        auto check=[&](bool edited) {
+            const auto source=runner->recordedSource();QVERIFY(source && source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration();QVERIFY(config);QCOMPARE(config->dt,.125);QCOMPARE(runner->completedTicks(),16L);
+            const QMap<QString,QString> binding{{"inputs/isolated input","linear_input"},{"inputs/period 4 input","cyclic4_input"},
+                {"inputs/period 8 input","padded8_input"},{"scope/linear","linear"},{"scope/circular 4","cyclic4"},
+                {"scope/padded 8","padded8"},{"scope/padded minus linear","difference"}};
+            for(auto it=binding.cbegin();it!=binding.cend();++it) {
+                bool found=false;for(const auto& p:config->probes) if(QString::fromStdString(p.name)==it.key()) {
+                    QCOMPARE(QString::fromStdString(p.element),it.value());found=true;
+                }QVERIFY(found);
+            }
+            const auto channels=source->channels();QCOMPARE(channels.size(),qsizetype(7));
+            const auto page=source->read(0,4096);QVERIFY(page.error.isEmpty());QCOMPARE(page.samples.size(),qsizetype(112));
+            QMap<s7studio::observation::ChannelId,int> count;
+            for(const auto& sample:page.samples) {
+                QCOMPARE(sample.step,qint64(++count[sample.channel]));QCOMPARE(sample.timeSeconds,sample.step/8.);
+                QString name;for(const auto& c:channels) if(c.id==sample.channel) name=c.name;
+                QVERIFY(binding.contains(name));
+                QCOMPARE(sample.value,s7tests::education::convolution_signal(binding[name].toStdString(),int(sample.step)-1,edited));
+            }
+            QCOMPARE(count.size(),qsizetype(7));for(auto n:count) QCOMPARE(n,16);
+            const boost::json::value originalSchema=window_->currentDocument().at("schema");
+            for(auto it=scopes.cbegin();it!=scopes.cend();++it) {
+                auto scope=it.value();QVERIFY(scope);QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+                while(scope->refreshSource()) {}
+                QCOMPARE(scope->recording().series().size(),qsizetype(it.key()=="inputs" ? 3 : 4));
+                for(auto series=scope->recording().series().cbegin();series!=scope->recording().series().cend();++series) {
+                    QCOMPARE(series->receivedSamples,std::uint64_t(16));QCOMPARE(series->channelUnit,QString("V"));
+                    auto* line=scope->plottedSeries(series.key());QVERIFY(line);QTRY_COMPARE(line->points().size(),qsizetype(16));
+                    QCOMPARE(line->name(),series->displayName());const auto element=binding[it.key()+"/"+series->channelName];QVERIFY(!element.isEmpty());
+                    for(int n=0;n<16;++n) {
+                        QCOMPARE(line->points()[n].x(),(n+1)/8.);
+                        QCOMPARE(line->points()[n].y(),series->value[n]);
+                        QCOMPARE(series->value[n],s7tests::education::convolution_signal(element.toStdString(),n,edited));
+                    }
+                }
+                QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),QString("value (V)"));
+                QCheckBox* fit=nullptr;for(auto* box:scope->findChildren<QCheckBox*>()) if(box->text()=="Fit full run") fit=box;
+                QVERIFY(fit);fit->setChecked(false);scope->plotView()->setXRange(1,2);
+                capture(scope,QString("SP10-")+(edited ? "edited-" : "baseline-")+it.key(),true);
+                if(it.key()=="scope") {
+                    auto* start=scope->findChild<QDoubleSpinBox*>("scope.analysisStart");auto* end=scope->findChild<QDoubleSpinBox*>("scope.analysisEnd");
+                    auto* analyze=scope->findChild<QPushButton*>("scope.analyze");auto* tabs=scope->findChild<QTabWidget*>("scope.analysisTabs");
+                    auto* spectrum=scope->findChild<s7studio::viewers::SpectrumView*>();QVERIFY(start && end && analyze && tabs && spectrum);
+                    auto* controls=spectrum->controlPanel();
+                    auto* window=controls->findChild<QComboBox*>("spectrum.window");auto* quantity=controls->findChild<QComboBox*>("spectrum.quantity");
+                    auto* scale=controls->findChild<QComboBox*>("spectrum.scale");auto* all=controls->findChild<QCheckBox*>("spectrum.allInputs");
+                    auto* remove=controls->findChild<QCheckBox*>("spectrum.removeMean");QVERIFY(window && quantity && scale && all && remove);
+                    window->setCurrentIndex(0);quantity->setCurrentIndex(0);scale->setCurrentIndex(0);all->setChecked(true);remove->setChecked(false);
+                    start->setValue(1.125);end->setValue(2);analyze->click();tabs->setCurrentIndex(1);
+                    QTRY_VERIFY_WITH_TIMEOUT(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready &&
+                        spectrum->result()->size==8 && spectrum->result()->firstStep==9 && spectrum->result()->lastStep==16 &&
+                        spectrum->result()->traces.size()==4,10000);
+                    const auto& result=*spectrum->result();QCOMPARE(result.runId,source->runId());QCOMPARE(result.binSpacing,1.);
+                    QCOMPARE(result.frame->channels.size(),qsizetype(4));
+                    for(const auto& trace:result.traces) {
+                        const auto name=result.frame->channels[qsizetype(trace.channel)].name;const auto element=binding["scope/"+name];QVERIFY(!element.isEmpty());
+                        std::vector<double> values;for(int n=8;n<16;++n) values.push_back(s7tests::education::convolution_signal(element.toStdString(),n,edited));
+                        for(int n=0;n<8;++n) QCOMPARE(result.frame->values[n*4+trace.channel],values[std::size_t(n)]);
+                        const auto dft=s7tests::education::signal_dft(values);QLineSeries* line=nullptr;
+                        for(auto* candidate:spectrum->plotView()->series()) if(candidate->name()==name+" [V]") line=candidate;
+                        QVERIFY(line);QCOMPARE(line->points().size(),qsizetype(5));QCOMPARE(trace.values.size(),std::size_t(5));
+                        for(int k=0;k<5;++k) {
+                            const double expected=(k==0 || k==4 ? 1 : 2)*std::abs(dft[std::size_t(k)]);
+                            QVERIFY(std::abs(trace.values[std::size_t(k)]-expected)<1e-10);
+                            QCOMPARE(line->points()[k].x(),double(k));QVERIFY(std::abs(line->points()[k].y()-expected)<1e-10);
+                        }
+                    }
+                    capture(scope,QString("SP10-")+(edited ? "edited" : "baseline")+"-selected-spectrum",true);
+                }
+                scope->hide();
+            }
+            QVERIFY(window_->currentDocument().at("schema")==originalSchema);
+        };
+        run();QVERIFY(!QTest::currentTestFailed());check(false);QVERIFY(!QTest::currentTestFailed());
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node=scene()->elementNode("last_tap");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
+        QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>("parameter.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
+            field->setText("0.5");QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
+        const auto copy=temporary_.filePath("sp10-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openScopes();run();QVERIFY(!QTest::currentTestFailed());check(true);QVERIFY(!QTest::currentTestFailed());
+    }
+    void educationSpectral_data() {
+        QTest::addColumn<QString>("lab");QTest::newRow("SP08") << "SP08";QTest::newRow("SP09") << "SP09";
+    }
+    void educationSpectral() {
+        QFETCH(QString,lab);
+        const bool leakage=lab=="SP08";
+        const auto file=leakage ? QString("sp08_dft_leakage") : QString("sp09_window_normalization");
+        const auto slug=leakage ? QString("SP08-dft-leakage") : QString("SP09-window-normalization");
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
+        const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
+        const auto frame=frames.front();QPoint guidePoint(-1,-1);QSet<QString> links;
+        for (int y=8;y<frame->height()-8;y+=3) for (int x=10;x<frame->width()-10;x+=3) {
+            const auto url=frame->linkAt(QPointF(x,y));if (!url.isEmpty()) links.insert(url.toString());
+            if (url.path().contains("/labs/") && guidePoint.x()<0) guidePoint=view->mapFromScene(frame->mapToScene(QPointF(x+2,y+2)));
+        }
+        QCOMPARE(links.size(),qsizetype(3));QVERIFY(links.contains("qrc:/s7studio/help/education/labs/"+slug+"/README.md"));
+        QVERIFY(view->viewport()->rect().contains(guidePoint));QTest::mouseClick(view->viewport(),Qt::LeftButton,{},guidePoint);
+        auto* help=window_->findChild<QDialog*>("dialog.help");QVERIFY(help && help->isVisible());
+        auto* browser=help->findChild<QTextBrowser*>("help.browser");QVERIFY(browser && browser->source().path().contains(slug));
+        QVERIFY(browser->toPlainText().contains("Predict",Qt::CaseInsensitive));capture(help,lab+"-student-guide",true);help->close();
+        capture(window_.get(),lab+"-diagram",true);
+        QPointer<s7studio::ui::ScopeViewWindow> scope;
+        auto openScope=[&] {
+            auto* manager=window_->findChild<s7studio::viewers::ViewerManager*>();QVERIFY(manager);
+            scope=dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope","scope"));QVERIFY(scope);
+        };
+        openScope();auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+        QSignalSpy completed(runner,&s7studio::LocalSchemaRunner::runCompleted);
+        auto run=[&] {
+            completed.clear();QVERIFY(dialogAction("action.run",[](QDialog* dialog) {
+                auto* duration=dialog->findChild<QDoubleSpinBox*>("run.duration");auto* rate=dialog->findChild<QDoubleSpinBox*>("run.frequency");
+                auto* buttons=dialog->findChild<QDialogButtonBox*>();if (!duration || !rate || !buttons || duration->value()!=2 || rate->value()!=128) return false;
+                QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(),10000);QVERIFY2(completed.last()[0].toBool(),qPrintable(completed.last()[1].toString()));
+        };
+        auto check=[&](bool edited) {
+            const auto source=runner->recordedSource();QVERIFY(source);QVERIFY(source->status().finished && !source->status().incomplete());
+            const auto config=runner->activeConfiguration();QVERIFY(config);QCOMPARE(config->dt,1./128);
+            const auto channels=source->channels();QCOMPARE(channels.size(),qsizetype(4));
+            auto elementFor=[&](const QString& name) {for (const auto& p:config->probes) if (QString::fromStdString(p.name)==name) return p.element;return std::string{};};
+            const QMap<QString,QString> bindings=leakage
+                ? QMap<QString,QString>{{"coherent reference","coherent"},{"test tone","test"},{"offset mixture","offset"},{"DC reference","dc"}}
+                : QMap<QString,QString>{{"calibration","calibration"},{"strong tone","strong"},{"weak reference","weak"},{"mixture","mixture"}};
+            for (auto it=bindings.cbegin();it!=bindings.cend();++it)
+                QCOMPARE(QString::fromStdString(elementFor("scope/"+it.key())),it.value());
+            const auto page=source->read(0,4096);QVERIFY(page.error.isEmpty());QCOMPARE(page.samples.size(),qsizetype(1024));
+            QMap<s7studio::observation::ChannelId,int> counts;
+            for (const auto& sample:page.samples) {
+                QCOMPARE(sample.step,qint64(++counts[sample.channel]));QCOMPARE(sample.timeSeconds,sample.step/128.);
+                QString name;for (const auto& c:channels) if (c.id==sample.channel) name=c.name;
+                const auto element=elementFor(name);QVERIFY(!element.empty());
+                QVERIFY(std::abs(sample.value-s7tests::education::spectral_signal(lab.toStdString(),element,int(sample.step)-1,edited))<1e-10);
+            }
+            QCOMPARE(counts.size(),qsizetype(4));for (auto n:counts) QCOMPARE(n,256);QCOMPARE(runner->completedTicks(),256L);
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished);while(scope->refreshSource()) {}
+            QCOMPARE(scope->recording().series().size(),qsizetype(4));
+            for (auto it=scope->recording().series().cbegin();it!=scope->recording().series().cend();++it) {
+                QCOMPARE(it->receivedSamples,std::uint64_t(256));QCOMPARE(it->channelUnit,QString("V"));QVERIFY(!it->isComparison());
+                auto* line=scope->plottedSeries(it.key());QVERIFY(line);QTRY_COMPARE(line->points().size(),qsizetype(256));
+                const auto element=elementFor("scope/"+it->channelName);QVERIFY(!element.empty());QCOMPARE(line->name(),it->displayName());
+                const auto points=line->points();
+                for (int n=0;n<256;++n) {
+                    QCOMPARE(points[n].x(),(n+1)/128.);QCOMPARE(points[n].y(),it->value[n]);
+                    QVERIFY(std::abs(points[n].y()-s7tests::education::spectral_signal(lab.toStdString(),element,n,edited))<1e-10);
+                }
+            }
+            QCOMPARE(scope->plotView()->xTitle(),QString("model time (s)"));QCOMPARE(scope->plotView()->yTitle(),QString("value (V)"));
+            capture(scope,lab+(edited ? "-edited-time" : "-baseline-time"),true);
+            const boost::json::value originalSchema=window_->currentDocument().at("schema");
+            auto* start=scope->findChild<QDoubleSpinBox*>("scope.analysisStart");auto* end=scope->findChild<QDoubleSpinBox*>("scope.analysisEnd");
+            auto* analyze=scope->findChild<QPushButton*>("scope.analyze");auto* tabs=scope->findChild<QTabWidget*>("scope.analysisTabs");
+            auto* spectrum=scope->findChild<s7studio::viewers::SpectrumView*>();QVERIFY(start && end && analyze && tabs && spectrum);
+            auto* controls=spectrum->controlPanel();
+            auto* window=controls->findChild<QComboBox*>("spectrum.window");auto* quantity=controls->findChild<QComboBox*>("spectrum.quantity");
+            auto* scale=controls->findChild<QComboBox*>("spectrum.scale");auto* range=controls->findChild<QComboBox*>("spectrum.frequencyRange");
+            auto* all=controls->findChild<QCheckBox*>("spectrum.allInputs");auto* remove=controls->findChild<QCheckBox*>("spectrum.removeMean");
+            auto* reference=controls->findChild<QDoubleSpinBox*>("spectrum.reference");auto* floor=controls->findChild<QDoubleSpinBox*>("spectrum.floor");
+            auto* dbOffset=controls->findChild<QDoubleSpinBox*>("spectrum.dbOffset");auto* offset=controls->findChild<QDoubleSpinBox*>("spectrum.frequencyOffset");
+            QVERIFY(window && quantity && scale && range && all && remove && reference && floor && dbOffset && offset);
+            all->setChecked(true);remove->setChecked(false);scale->setCurrentIndex(0);window->setCurrentIndex(0);quantity->setCurrentIndex(0);
+            range->setCurrentIndex(1);floor->setValue(-120);dbOffset->setValue(0);offset->setValue(0);reference->setValue(1);
+            auto interval=[&](int first,int n) {
+                start->setValue(first==0 ? 0 : (first+1)/128.);end->setValue((first+n)/128.);analyze->click();tabs->setCurrentIndex(1);
+            };
+            auto waitResult=[&](int first,int n,int w,int q,bool subtract) {
+                QTRY_VERIFY_WITH_TIMEOUT(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready &&
+                    spectrum->result()->size==std::size_t(n) && spectrum->result()->firstStep==first+1 &&
+                    spectrum->result()->lastStep==first+n && spectrum->result()->settings.window==static_cast<s7studio::analysis::SpectrumWindow>(w) &&
+                    spectrum->result()->settings.quantity==static_cast<s7studio::analysis::SpectrumQuantity>(q) && spectrum->result()->settings.removeMean==subtract,10000);
+            };
+            auto checkInterval=[&](int first,int n,int w,bool subtract,bool takeCapture) {
+                window->setCurrentIndex(w);remove->setChecked(subtract);quantity->setCurrentIndex(0);scale->setCurrentIndex(0);interval(first,n);
+                waitResult(first,n,w,0,subtract);QVERIFY(!QTest::currentTestFailed());
+                const auto frame=spectrum->result()->frame;QVERIFY(frame);QCOMPARE(frame->channels.size(),qsizetype(4));
+                std::vector<s7tests::education::LessonSpectrum> expected;
+                for (int c=0;c<4;++c) {
+                    const auto element=elementFor("scope/"+frame->channels[c].name);QVERIFY(!element.empty());std::vector<double> values;
+                    QCOMPARE(frame->channels[c].unit,QString("V"));
+                    for (int i=0;i<n;++i) {
+                        const double actual=frame->values[i*4+c];QVERIFY(std::abs(actual-s7tests::education::spectral_signal(lab.toStdString(),element,first+i,edited))<1e-10);
+                        values.push_back(actual);
+                    }
+                    expected.push_back(s7tests::education::lesson_spectrum(values,w,128,subtract));
+                }
+                for (int q=0;q<3;++q) {
+                    quantity->setCurrentIndex(q);waitResult(first,n,w,q,subtract);QVERIFY(!QTest::currentTestFailed());
+                    const auto& result=*spectrum->result();QCOMPARE(result.runId,source->runId());QCOMPARE(result.traces.size(),std::size_t(4));
+                    QCOMPARE(result.sampleRate,128.);QCOMPARE(result.binSpacing,128./n);QCOMPARE(result.frequencies.back(),(n/2)*128./n);
+                    QVERIFY(std::abs(result.coherentGain-expected[0].cg)<1e-12);QVERIFY(std::abs(result.enbw-expected[0].enbw)<1e-12);
+                    for (const auto& trace:result.traces) {
+                        const auto& ref=expected.at(trace.channel);QCOMPARE(trace.values.size(),ref.quantity[q].size());QCOMPARE(trace.unit,QString("V"));
+                        double integrated=0;
+                        for (std::size_t k=0;k<trace.values.size();++k) {
+                            QCOMPARE(result.frequencies[k],k*128./n);QVERIFY(std::abs(trace.values[k]-ref.quantity[q][k])<1e-9);
+                            if (q>0) integrated+=trace.values[k]*(q==2 ? 128./n : 1);
+                        }
+                        if (q>0) QVERIFY(std::abs(integrated-ref.weightedPower)<1e-9);
+                    }
+                    const QString unit=q==0 ? "V" : q==1 ? "V²" : "V²/Hz";
+                    auto checkPlot=[&](bool db,double r) {
+                        scale->setCurrentIndex(db ? 1 : 0);reference->setValue(r);
+                        QCOMPARE(spectrum->plotView()->xTitle(),QString("Frequency (Hz)"));
+                        QCOMPARE(spectrum->plotView()->yTitle(),db ? QString("dB re %1 %2").arg(r).arg(unit) : quantity->currentText()+" ("+unit+")");
+                        QCOMPARE(spectrum->plotView()->xMin(),0.);QCOMPARE(spectrum->plotView()->xMax(),(n/2)*128./n);
+                        for (const auto& trace:result.traces) {
+                            const auto name=frame->channels[qsizetype(trace.channel)].name+" ["+unit+"]";
+                            QLineSeries* line=nullptr;for (auto* candidate:spectrum->plotView()->series()) if(candidate->name()==name) line=candidate;
+                            QVERIFY2(line && line->isVisible(),qPrintable("Missing quantity-labelled trace: "+name));
+                            const auto points=line->points();QCOMPARE(points.size(),qsizetype(n/2+1));
+                            for (int k=0;k<points.size();++k) {
+                                const double value=expected.at(trace.channel).quantity[q][std::size_t(k)];
+                                const double y=db ? std::max(-120.,value>0 ? (q==0 ? 20 : 10)*std::log10(value/r) : -std::numeric_limits<double>::infinity()) : value;
+                                QCOMPARE(points[k].x(),k*128./n);QVERIFY(std::abs(points[k].y()-y)<(db ? 1e-4 : 1e-9));
+                            }
+                        }
+                    };
+                    checkPlot(false,1);QVERIFY(!QTest::currentTestFailed());
+                    checkPlot(true,1);QVERIFY(!QTest::currentTestFailed());
+                    if(takeCapture && (q==0 || (!leakage && w==1 && n==128)))
+                        capture(scope,lab+(edited ? "-edited-" : "-baseline-")+QString("w%1-n%2-first%3-q%4-dB").arg(w).arg(n).arg(first).arg(q),true);
+                    checkPlot(true,2);QVERIFY(!QTest::currentTestFailed());
+                }
+            };
+            if (leakage) {
+                checkInterval(0,128,0,false,true);QVERIFY(!QTest::currentTestFailed());
+                checkInterval(0,256,0,false,true);QVERIFY(!QTest::currentTestFailed());
+                checkInterval(128,128,0,false,true);QVERIFY(!QTest::currentTestFailed());
+                checkInterval(127,129,0,false,true);QVERIFY(!QTest::currentTestFailed());
+                checkInterval(0,128,0,true,false);QVERIFY(!QTest::currentTestFailed());
+            } else {
+                for (int w=0;w<3;++w) {checkInterval(0,128,w,false,true);QVERIFY(!QTest::currentTestFailed());}
+                checkInterval(0,256,1,false,true);QVERIFY(!QTest::currentTestFailed());
+                checkInterval(0,128,1,true,false);QVERIFY(!QTest::currentTestFailed());
+                remove->setChecked(false);quantity->setCurrentIndex(2);all->setChecked(false);scale->setCurrentIndex(0);
+                auto* channel=controls->findChild<QComboBox*>("spectrum.channel");QVERIFY(channel);
+                const auto index=channel->findText("calibration [V]");QVERIFY(index>=0);channel->setCurrentIndex(index);
+                QTRY_VERIFY(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready &&
+                    spectrum->result()->traces.empty() && spectrum->result()->settings.channel==std::size_t(index) &&
+                    spectrum->result()->settings.quantity==s7studio::analysis::SpectrumQuantity::Psd && !spectrum->result()->settings.removeMean &&
+                    spectrum->result()->settings.window==s7studio::analysis::SpectrumWindow::Hann && spectrum->result()->size==128);
+                QCOMPARE(spectrum->result()->runId,source->runId());
+                auto* single=spectrum->plotView()->series().front();QVERIFY(single->name()=="calibration [V²/Hz]");
+                std::vector<double> calibration;for (int n=0;n<128;++n) calibration.push_back(s7tests::education::spectral_signal("SP09","calibration",n,edited));
+                const auto singleExpected=s7tests::education::lesson_spectrum(calibration,1,128);
+                QCOMPARE(single->points().size(),qsizetype(65));
+                for (std::size_t k=0;k<65;++k) {
+                    QVERIFY(std::abs(spectrum->result()->values[k]-singleExpected.quantity[2][k])<1e-9);
+                    QVERIFY(std::abs(single->points()[qsizetype(k)].y()-singleExpected.quantity[2][k])<1e-9);
+                }
+            }
+            QVERIFY(window_->currentDocument().at("schema")==originalSchema);scope->hide();
+        };
+        run();QVERIFY(!QTest::currentTestFailed());check(false);QVERIFY(!QTest::currentTestFailed());
+        window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node=scene()->elementNode(leakage ? "test" : "weak");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
+        QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
+            auto* field=dialog->findChild<QLineEdit*>(leakage ? "parameter.frequency_hz" : "parameter.amplitude");
+            auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;field->setText(leakage ? "18" : "0.1");
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
+        }));
+        const auto copy=temporary_.filePath(file+"-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
+        openScope();run();QVERIFY(!QTest::currentTestFailed());check(true);QVERIFY(!QTest::currentTestFailed());
+    }
     void simulationAndViewers_data() {
         QTest::addColumn<QString>("diagram");
         QTest::addColumn<QString>("observerType");
@@ -2269,7 +4264,8 @@ private slots:
     // diagram's own 1/dt. Live-only demonstrations use a short run.
     static double documentedSeconds(const QString& path) {
         static const QList<std::pair<QString, double>> table{
-            {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
+            {"education/fn04_", 10}, {"education/fn05_", 6}, {"education/fn06_", 30},
+            {"education/ct01_", 5}, {"education/ct02_", 8}, {"education/ct03_", 10}, {"education/fn", 2}, {"education/sp01_", 2}, {"education/sp03_", 2}, {"education/sp05_", 2}, {"education/sp07_", 64}, {"education/sp08_", 2}, {"education/sp09_", 2}, {"education/sp10_", 2}, {"education/ct08_", 64}, {"education/ct06_", 32}, {"education/ct07_", 64}, {"education/ct04_", 16}, {"education/ct05_", 12}, {"education/sp14_", 4}, {"education/sp11_", 4}, {"education/sp06_", 4}, {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
             {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
             {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
             {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},
@@ -2296,7 +4292,10 @@ private slots:
         const double span = plot->yMax() - plot->yMin();
         if (low < plot->yMin() - span * 1e-9 || high > plot->yMax() + span * 1e-9)
             return QString("data y[%1,%2] outside axis y[%3,%4]").arg(low).arg(high).arg(plot->yMin()).arg(plot->yMax());
-        if (high > low && (high - low) < span * 0.25)
+        // Flat dB responses intentionally retain a readable context range;
+        // tiny FFT roundoff must not be enlarged into an apparent ripple.
+        const bool flatGain = plot->yTitle().startsWith("Gain (dB") && high - low < 1e-10;
+        if (!flatGain && high > low && (high - low) < span * 0.25)
             return QString("data y[%1,%2] fills %3% of axis y[%4,%5]").arg(low).arg(high)
                 .arg((high - low) / span * 100, 0, 'f', 1).arg(plot->yMin()).arg(plot->yMax());
         return {};

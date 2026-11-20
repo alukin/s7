@@ -1,0 +1,322 @@
+{
+  "id": "fn01_unit_delay",
+  "description": "Original S7 lab FN01. Start with the yellow instructions and linked student guide.",
+  "dt": 0.1,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 240
+  },
+  "schema": {
+    "name": "FN01 \u2014 One sample of memory",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "input",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "output",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "output_memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "output_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 0
+      },
+      {
+        "from_element": "output",
+        "from_port": 0,
+        "to_element": "output_memory",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_memory",
+        "from_port": 0,
+        "to_element": "output_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_gain",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "input",
+        "position": [
+          4,
+          20
+        ],
+        "title": "Input u[n] = 1 V"
+      },
+      {
+        "id": "output",
+        "position": [
+          35,
+          20
+        ],
+        "title": "Output y[n]"
+      },
+      {
+        "id": "output_memory",
+        "position": [
+          35,
+          29
+        ],
+        "title": "Past output: starts at 0 V"
+      },
+      {
+        "id": "output_gain",
+        "position": [
+          20,
+          29
+        ],
+        "title": "Remember half: a = 0.5"
+      },
+      {
+        "id": "scope",
+        "position": [
+          52,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "input",
+            "output",
+            "previous"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_memory",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            22
+          ],
+          [
+            46,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "output_memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            31
+          ],
+          [
+            46,
+            36
+          ],
+          [
+            18,
+            36
+          ],
+          [
+            18,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "output_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            31,
+            31
+          ],
+          [
+            31,
+            24
+          ]
+        ]
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "output_memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**FN01 \u2014 One sample of memory**  \n**1 Predict \u2192 2 Run \u2192 3 Inspect \u2192 4 Change one thing.** Run **2 s at 10 Hz**, then open Scope.  \n`y[n]=u[n]+0.5 y[n\u22121]`; stored past `y[\u22121]=0 V`.  \nPredict output: 1, 1.5, 1.75, 1.875 V. The previous channel is one sample behind.  \nTry: select output_gain, press F4, change factor 0.5 to 1.25; rerun. Does it settle?  \n[Open FN01 student lab](qrc:/s7studio/help/education/labs/FN01-unit-delay/README.md) \u00b7 [MIT difference equations](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap1/) \u00b7 [MIT block diagrams](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/)",
+          "text_format": "markdown",
+          "width": 1240,
+          "height": 360,
+          "font_size": 16
+        }
+      }
+    ]
+  }
+}

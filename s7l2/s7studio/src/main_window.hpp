@@ -127,6 +127,8 @@ private slots:
 
 private:
     void buildUi();
+    QString examplesDirectory() const;
+    bool openHelpExample(const QString& relativePath);
     bool confirmDocumentReplacement();
     void markDocumentSaved();
     void refreshDocumentTitle();

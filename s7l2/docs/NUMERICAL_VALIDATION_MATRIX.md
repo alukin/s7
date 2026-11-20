@@ -94,3 +94,15 @@ values, steps and times matched the headless traces exactly, including first
 and final samples. Errors above combine differently dimensioned channels for a
 compact envelope summary; the 0.05 threshold is applied in each channel's own
 units, not interpreted as one physical quantity across channels.
+
+### Discrete lead/lag resource and CT08
+
+`LeadLagController` is a schema network, not a special C++ controller.
+`s7core_schema_elements_smoke` checks its control/memory outputs against an
+independent recurrence for lead, cancellation, lag and unstable-pole settings,
+and rejects a direct algebraic feedback path. `s7tests_education_compensator`
+checks the exact CT08 saved graph, nested plants, open-loop finite convolution,
+rational frequency response, primary zero edit and wrong feedback sign.
+See [the CT08 contract](../education/labs/CT08-lead-lag/README.md) and
+[executed evidence](../education/EVIDENCE.md); these are development checks,
+not installed-package or general control-system qualification.

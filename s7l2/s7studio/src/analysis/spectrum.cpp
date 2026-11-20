@@ -16,7 +16,7 @@ struct Sum {
 }
 std::vector<double> spectrumWindow(SpectrumWindow window, std::size_t size)
 {
-    if (size < 64 || size > 65536) throw std::invalid_argument("FFT size must be from 64 to 65536.");
+    if (size < 2 || size > 65536) throw std::invalid_argument("FFT size must be from 2 to 65536.");
     std::vector<double> weights(size);
     for (std::size_t i = 0; i < size; ++i) {
         const double phase = 2*std::numbers::pi*static_cast<double>(i)/static_cast<double>(size);
@@ -58,8 +58,8 @@ SpectrumResult SpectrumAnalyzer::analyze(const observation::LiveFrame& frame, co
     const auto n = settings.size;
     if (frame.timeEnvelope) return fail(SpectrumResult::State::Unavailable, "Time display envelopes are not full-rate FFT input.");
     const auto width = static_cast<std::size_t>(frame.channels.size());
-    if (n < 64 || n > 65536)
-        return fail(SpectrumResult::State::Unavailable, "FFT size must be from 64 to 65536.");
+    if (n < 2 || n > 65536)
+        return fail(SpectrumResult::State::Unavailable, "FFT size must be from 2 to 65536.");
     if (settings.channel >= width || (settings.iq && (settings.quadrature >= width || settings.channel == settings.quadrature)))
         return fail(SpectrumResult::State::Unavailable, "Select a source channel, or two different I/Q channels.");
     if (!frame.rateNumerator || !frame.rateDenominator)
@@ -76,8 +76,11 @@ SpectrumResult SpectrumAnalyzer::analyze(const observation::LiveFrame& frame, co
     }
     if (frame.steps.size() != frame.times.size() || frame.values.size() != frame.steps.size()*width)
         return fail(SpectrumResult::State::Unavailable, "Inconsistent acquisition frame.");
-    if (frame.steps.size() < n)
+    if (frame.steps.size() < n) {
+        if (frame.finished)
+            return fail(SpectrumResult::State::Unavailable, QStringLiteral("Run finished with %1/%2 retained samples. Select a smaller N or a longer interval/run.").arg(frame.steps.size()).arg(n));
         return fail(SpectrumResult::State::Filling, QStringLiteral("Filling: %1/%2 raw samples. Increase retention if it is below N.").arg(frame.steps.size()).arg(n));
+    }
     const bool changed = !settings_ || *settings_ != settings || run_ != frame.runId || generation_ != frame.generation ||
         rateNumerator_ != frame.rateNumerator || rateDenominator_ != frame.rateDenominator;
     if (changed) {

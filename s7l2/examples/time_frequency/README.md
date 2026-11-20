@@ -8,6 +8,11 @@ actual STFT magnitude map; opening its full window adds transform controls and
 numeric inspection.
 CWT defaults to 32 logarithmically spaced frequencies over 2–100 Hz. The PLL
 example retains its original rate and **6-second** experiment; open `wavelet_map`.
+At lower sample rates, untouched CWT defaults adapt below Nyquist: the upper
+frequency is at most 45% of the sample rate and the lower frequency is at most
+one eighth of that upper bound. Explicit frequency edits and imported CWT bands
+are preserved; an invalid band produces a visible error. The frequency controls
+accept small values without rounding them to whole millihertz.
 
 | Diagram | Expected features |
 |---|---|
@@ -25,6 +30,16 @@ peak-tone normalization, including the distinct DC/Nyquist factors. CWT uses a
 DC-corrected complex Morlet, omega0=6, finite support ±4 sigma and discrete L2
 normalization. Its magnitudes are not calibrated tone amplitudes or PSD.
 Squared magnitude remains squared coefficient magnitude, not PSD.
+**Hop (samples)** selects the step between STFT window starts, from 1 through
+N. Changing FFT size resets hop to N/2; choose a custom hop afterward. CWT
+disables this control. Smaller hop adds overlapping time columns without
+changing the window's frequency spacing. Saved results retain the chosen hop;
+opening them restores it. See the original [SP11 student lab](../../education/labs/SP11-short-time-fourier/README.md).
+
+STFT returns only full windows, with centers at the midpoint of their endpoint
+sample timestamps. It does not zero-extend the capture edges. Incomplete final
+windows are discarded, and no column is promised at the first or last raw
+sample. CWT instead evaluates edge-affected coefficients with a support mask.
 The FFT selector offers powers of two, and only the active method's settings
 are enabled. **Display up to (Hz)** initially focuses the map and slice on
 0–100 Hz (2–100 Hz for the default CWT). Raise it to inspect higher bins;
@@ -72,3 +87,6 @@ integrating PSD with bin spacing yields the window-weighted mean square.
 These two options are disabled for CWT. Saved/exported complex coefficients
 remain peak-amplitude STFT coefficients with transform metadata, independent
 of the selected display quantity.
+Frequency slices and maps label the chosen quantity's units consistently.
+Import rejects STFT hop, time-center or frequency-coordinate metadata that
+contradicts the matrix/rate/window before replacing the displayed result.

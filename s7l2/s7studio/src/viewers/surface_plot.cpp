@@ -647,6 +647,9 @@ void SurfacePlotView::hideEvent(QHideEvent *event) {
     work_->dirty = pending && grid_ && !grid_->values.empty();
     QWidget::hideEvent(event);
 }
+std::shared_ptr<const analysis::SurfaceGrid> SurfacePlotView::displayedGrid() const {
+    return work_->displayed ? work_->displayed->display : nullptr;
+}
 void SurfacePlotView::selectCell(int row, int column) {
     work_->selection = std::pair(row, column);
     if (!work_->displayed)

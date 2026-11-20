@@ -58,6 +58,37 @@ are qualification **targets**, not completed tests. See the
 [source review](../education/SOURCES.md) and
 [lab quality standard](../education/LAB_STANDARD.md).
 
+The [core implementation manifest](../education/CORE_MANIFEST.md) records the
+2026-11-19 decision to create new educational diagrams and the remaining gaps.
+Begin with [FN01 — one sample of memory](../education/labs/FN01-unit-delay/README.md),
+then FN02–FN06 and CT01–CT03 in the [learning route](../examples/education/README.md).
+[SP01 — Fourier synthesis](../education/labs/SP01-fourier-synthesis/README.md)
+and [SP03 — aliasing](../education/labs/SP03-aliasing/README.md) add harmonic
+and sampling experiments, with explicit viewer verification.
+[SP06 — three-tap FIR](../education/labs/SP06-three-tap-fir/README.md) applies
+the delay concept to filtering. [SP05 — convolution](../education/labs/SP05-convolution/README.md) and
+[SP07 — filter transfer](../education/labs/SP07-filter-transfer/README.md) add
+shifted responses and independently checked Bode magnitude/phase.
+[SP08 — leakage](../education/labs/SP08-dft-leakage/README.md) and
+[SP09 — periodic windows](../education/labs/SP09-window-normalization/README.md)
+add checked interval selection and amplitude/power/PSD normalization.
+[SP10 — circular convolution](../education/labs/SP10-circular-convolution/README.md)
+adds explicit padding, startup interpretation and recorded-input verification
+of both production convolution processors.
+[SP11 — short-time Fourier analysis](../education/labs/SP11-short-time-fourier/README.md)
+adds independently checked burst/chirp maps, window/hop controls and edge interpretation.
+[CT04/CT05 — controller comparison and windup](../education/labs/CT04-controller-comparison/README.md)
+add checked feedback states, actuator limits and saved anti-windup edits.
+[CT06/CT07 — sampled poles and margins](../education/labs/CT06-closed-loop-poles/README.md)
+connect mode powers with measured Bode/Nyquist responses.
+[CT08 — lead/lag compensation](../education/labs/CT08-lead-lag/README.md)
+adds a reusable schema controller, matched-DC comparison and control effort.
+[SP14 — coherent AM](../education/labs/SP14-coherent-am/README.md)
+checks sidebands, phase error, finite-filter states and calibrated spectra.
+[Development evidence](../education/EVIDENCE.md)
+is separate from release qualification. Description frames link to offline
+guides and original MIT online teaching materials.
+
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) remains the single
 [status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
 with the delivered N0–N4 research, existing runtime baseline,

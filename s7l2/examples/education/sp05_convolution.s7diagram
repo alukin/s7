@@ -1,0 +1,1043 @@
+{
+  "id": "sp05_convolution",
+  "dt": 0.05,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 500,
+    "height_mm": 390
+  },
+  "schema": {
+    "name": "SP05 \u2014 Add shifted impulse responses",
+    "dt": 0.05,
+    "elements": [
+      {
+        "id": "first",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.05,
+          "start_time": 0.2
+        }
+      },
+      {
+        "id": "second",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.05,
+          "start_time": 0.3
+        }
+      },
+      {
+        "id": "weight",
+        "type": "Gain",
+        "params": {
+          "factor": -0.5
+        }
+      },
+      {
+        "id": "first_response_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "first_response_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "first_response",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            -0.25
+          ]
+        }
+      },
+      {
+        "id": "second_response_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "second_response_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "second_response",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            -0.25
+          ]
+        }
+      },
+      {
+        "id": "input",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "output_d1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "output_d2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "output",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.5,
+            -0.25
+          ]
+        }
+      },
+      {
+        "id": "sum",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "residual",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "second",
+        "from_port": 0,
+        "to_element": "weight",
+        "to_port": 0
+      },
+      {
+        "from_element": "first",
+        "from_port": 0,
+        "to_element": "first_response",
+        "to_port": 0
+      },
+      {
+        "from_element": "first",
+        "from_port": 0,
+        "to_element": "first_response_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "first_response_d1",
+        "from_port": 0,
+        "to_element": "first_response_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "first_response_d1",
+        "from_port": 0,
+        "to_element": "first_response",
+        "to_port": 1
+      },
+      {
+        "from_element": "first_response_d2",
+        "from_port": 0,
+        "to_element": "first_response",
+        "to_port": 2
+      },
+      {
+        "from_element": "weight",
+        "from_port": 0,
+        "to_element": "second_response",
+        "to_port": 0
+      },
+      {
+        "from_element": "weight",
+        "from_port": 0,
+        "to_element": "second_response_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "second_response_d1",
+        "from_port": 0,
+        "to_element": "second_response_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "second_response_d1",
+        "from_port": 0,
+        "to_element": "second_response",
+        "to_port": 1
+      },
+      {
+        "from_element": "second_response_d2",
+        "from_port": 0,
+        "to_element": "second_response",
+        "to_port": 2
+      },
+      {
+        "from_element": "first",
+        "from_port": 0,
+        "to_element": "input",
+        "to_port": 0
+      },
+      {
+        "from_element": "weight",
+        "from_port": 0,
+        "to_element": "input",
+        "to_port": 1
+      },
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 0
+      },
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "output_d1",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_d1",
+        "from_port": 0,
+        "to_element": "output_d2",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_d1",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 1
+      },
+      {
+        "from_element": "output_d2",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 2
+      },
+      {
+        "from_element": "first_response",
+        "from_port": 0,
+        "to_element": "sum",
+        "to_port": 0
+      },
+      {
+        "from_element": "second_response",
+        "from_port": 0,
+        "to_element": "sum",
+        "to_port": 1
+      },
+      {
+        "from_element": "output",
+        "from_port": 0,
+        "to_element": "residual",
+        "to_port": 0
+      },
+      {
+        "from_element": "sum",
+        "from_port": 0,
+        "to_element": "residual",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "first",
+        "position": [
+          3,
+          18
+        ],
+        "title": "First unit sample: n=4"
+      },
+      {
+        "id": "second",
+        "position": [
+          3,
+          36
+        ],
+        "title": "Second unit sample: n=6"
+      },
+      {
+        "id": "weight",
+        "position": [
+          15,
+          36
+        ],
+        "title": "Second pulse weight: edit factor"
+      },
+      {
+        "id": "first_response_d1",
+        "position": [
+          25,
+          27
+        ],
+        "title": "One sample of input history"
+      },
+      {
+        "id": "first_response_d2",
+        "position": [
+          37,
+          27
+        ],
+        "title": "Two samples of input history"
+      },
+      {
+        "id": "first_response",
+        "position": [
+          49,
+          18
+        ],
+        "title": "Kernel weights: 1, 0.5, \u22120.25"
+      },
+      {
+        "id": "second_response_d1",
+        "position": [
+          25,
+          45
+        ],
+        "title": "One sample of input history"
+      },
+      {
+        "id": "second_response_d2",
+        "position": [
+          37,
+          45
+        ],
+        "title": "Two samples of input history"
+      },
+      {
+        "id": "second_response",
+        "position": [
+          49,
+          36
+        ],
+        "title": "Kernel weights: 1, 0.5, \u22120.25"
+      },
+      {
+        "id": "input",
+        "position": [
+          15,
+          54
+        ],
+        "title": "Combined input"
+      },
+      {
+        "id": "output_d1",
+        "position": [
+          25,
+          63
+        ],
+        "title": "One sample of input history"
+      },
+      {
+        "id": "output_d2",
+        "position": [
+          37,
+          63
+        ],
+        "title": "Two samples of input history"
+      },
+      {
+        "id": "output",
+        "position": [
+          49,
+          54
+        ],
+        "title": "Kernel weights: 1, 0.5, \u22120.25"
+      },
+      {
+        "id": "sum",
+        "position": [
+          63,
+          36
+        ],
+        "title": "Sum of shifted responses"
+      },
+      {
+        "id": "residual",
+        "position": [
+          63,
+          54
+        ],
+        "title": "Actual minus shifted sum"
+      },
+      {
+        "id": "parts_scope",
+        "position": [
+          63,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Shifted contributions",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "first contribution",
+            "second contribution"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "scope",
+        "position": [
+          79,
+          54
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Convolution comparison",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "input",
+            "actual",
+            "shifted sum",
+            "difference"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "second",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "first",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "first_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "first",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "first_response_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "first_response_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "first_response_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "first_response_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "first_response",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            35,
+            29
+          ],
+          [
+            35,
+            22
+          ]
+        ]
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "first_response_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "first_response",
+            "in",
+            2
+          ]
+        },
+        "bends": [
+          [
+            47,
+            29
+          ],
+          [
+            47,
+            24
+          ]
+        ]
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "weight",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "second_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "weight",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "second_response_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "second_response_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "second_response_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "second_response_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "second_response",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            35,
+            47
+          ],
+          [
+            35,
+            40
+          ]
+        ]
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "second_response_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "second_response",
+            "in",
+            2
+          ]
+        },
+        "bends": [
+          [
+            47,
+            47
+          ],
+          [
+            47,
+            42
+          ]
+        ]
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "first",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            13,
+            20
+          ],
+          [
+            13,
+            56
+          ]
+        ]
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "weight",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_d1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "output_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_d2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "output_d1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            35,
+            65
+          ],
+          [
+            35,
+            58
+          ]
+        ]
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "output_d2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            2
+          ]
+        },
+        "bends": [
+          [
+            47,
+            65
+          ],
+          [
+            47,
+            60
+          ]
+        ]
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "first_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "second_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "residual",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "residual",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "first_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "parts_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "second_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "parts_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "residual",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP05 \u2014 Add shifted impulse responses**  \n**Does filtering a sum equal adding the shifted responses?** Run **2 s at 20 Hz**.  \nKernel h=[1, 0.5, \u22120.25]. At n=4\u20268 predict 1, 0.5, \u22120.75, \u22120.25, 0.125 V; difference stays zero.  \nChange weight factor \u22120.5 \u2192 0.75; predict the overlap at n=6. All six Delay states start at zero. Zoom to read the three rows.  \n[Open SP05 student lab](qrc:/s7studio/help/education/labs/SP05-convolution/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec08/) \u00b7 [S7 timing and integrators](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1789,
+          "height": 300,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

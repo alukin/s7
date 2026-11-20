@@ -1,0 +1,769 @@
+{
+  "id": "sp14_coherent_am",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.00390625,
+  "studio_run": {
+    "runtime_seconds": 4,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 475,
+    "height_mm": 365
+  },
+  "schema": {
+    "name": "SP14 \u2014 AM sidebands and coherent detection",
+    "dt": 0.00390625,
+    "elements": [
+      {
+        "id": "message",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 0.6,
+          "frequency_hz": 4,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "carrier",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 32,
+          "phase": 0
+        }
+      },
+      {
+        "id": "local",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 2,
+          "frequency_hz": 32,
+          "phase": 0
+        }
+      },
+      {
+        "id": "bias",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "envelope",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "transmit",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "mixed",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "tau",
+        "type": "Constant",
+        "params": {
+          "value": 0.02
+        }
+      },
+      {
+        "id": "low1",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.00390625
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.00390625
+        }
+      },
+      {
+        "id": "recovered",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.00390625
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.00390625
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "message",
+        "from_port": 0,
+        "to_element": "envelope",
+        "to_port": 0
+      },
+      {
+        "from_element": "bias",
+        "from_port": 0,
+        "to_element": "envelope",
+        "to_port": 1
+      },
+      {
+        "from_element": "envelope",
+        "from_port": 0,
+        "to_element": "transmit",
+        "to_port": 0
+      },
+      {
+        "from_element": "carrier",
+        "from_port": 0,
+        "to_element": "transmit",
+        "to_port": 1
+      },
+      {
+        "from_element": "transmit",
+        "from_port": 0,
+        "to_element": "mixed",
+        "to_port": 0
+      },
+      {
+        "from_element": "local",
+        "from_port": 0,
+        "to_element": "mixed",
+        "to_port": 1
+      },
+      {
+        "from_element": "mixed",
+        "from_port": 0,
+        "to_element": "low1",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "low1",
+        "to_port": 1
+      },
+      {
+        "from_element": "low1",
+        "from_port": 0,
+        "to_element": "recovered",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "recovered",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "message",
+        "position": [
+          3.0,
+          23.75
+        ],
+        "title": "Message: 0.6 V peak, 4 Hz cosine"
+      },
+      {
+        "id": "carrier",
+        "position": [
+          16.5,
+          38.75
+        ],
+        "title": "Carrier: unit sine, 32 Hz"
+      },
+      {
+        "id": "local",
+        "position": [
+          30.0,
+          38.75
+        ],
+        "title": "Local sine \u00d72; edit phase 0 \u2192 \u03c0/3"
+      },
+      {
+        "id": "bias",
+        "position": [
+          3.0,
+          35.0
+        ],
+        "title": "Carrier bias: 1 V"
+      },
+      {
+        "id": "envelope",
+        "position": [
+          16.5,
+          23.75
+        ],
+        "title": "Target envelope: 1 + message (V)"
+      },
+      {
+        "id": "transmit",
+        "position": [
+          30.0,
+          23.75
+        ],
+        "title": "AM radio signal (V)"
+      },
+      {
+        "id": "mixed",
+        "position": [
+          43.5,
+          23.75
+        ],
+        "title": "Coherent mixing before filtering (V)"
+      },
+      {
+        "id": "tau",
+        "position": [
+          57.0,
+          38.75
+        ],
+        "title": "Each low-pass time constant: 0.02 s"
+      },
+      {
+        "id": "low1",
+        "position": [
+          57.0,
+          23.75
+        ],
+        "title": "First low-pass state"
+      },
+      {
+        "id": "recovered",
+        "position": [
+          70.5,
+          23.75
+        ],
+        "title": "Recovered envelope: two old-state lags"
+      },
+      {
+        "id": "rf_scope",
+        "position": [
+          30.0,
+          53.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "RF: inspect carrier and sidebands",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "rf"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "baseband_scope",
+        "position": [
+          70.5,
+          48.5
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Baseband: settling, gain and phase",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "target",
+            "recovered"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "mixer_scope",
+        "position": [
+          43.5,
+          53.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Unfiltered mixer: DC, message and images",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "mixed"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "carrier_scope",
+        "position": [
+          16.5,
+          53.75
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Dimensionless carrier / local reference",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "carrier",
+            "local"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "envelope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "bias",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "envelope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "envelope",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "transmit",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "transmit",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "transmit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixed",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "local",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixed",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "mixed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "low1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "recovered",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "recovered",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "transmit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "rf_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "envelope",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "baseband_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "recovered",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "baseband_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "mixed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixer_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "carrier_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "local",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "carrier_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP14 \u2014 Which parts of an AM signal survive coherent detection?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change local phase. Run 4 s at 256 Hz.** Envelope=1+0.6cos(2\u03c04t) V; sine carrier=32 Hz. Expect RF peaks at 28,32,36 Hz: 0.3,1,0.3 V.  \nOpen the separate RF, baseband and mixer Scopes. For steady spectra select From 2.002 s to 4 s, Rectangular, no mean removal. The 512 selected samples give \u0394f=0.5 Hz. Use Peak amplitude (V).  \nTwo forward-Euler low-pass states settle from zero; the 4 Hz message is attenuated/delayed and 60/64/68 Hz images are finite. Select local, F4: phase 0 \u2192 1.0471975511965976 (\u03c0/3); DC/message halve, RF stays unchanged.  \nSample n is observed at Scope time (n+1)/256 s. Carrier/local use unit 1; RF and baseband use V.  \n[Open SP14 student lab](qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md) \u00b7 [MIT modulation](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/08c6a7bc7e56eda548248c354886dc37_MIT6_003F11_lec23.pdf) \u00b7 [MIT synchronous detection](https://ocw.mit.edu/courses/res-6-007-signals-and-systems-spring-2011/a774c49855ba6bfe7266943eb8b5bc41_MITRES_6_007S11_lec13.pdf)",
+          "text_format": "markdown",
+          "width": 1680,
+          "height": 420,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

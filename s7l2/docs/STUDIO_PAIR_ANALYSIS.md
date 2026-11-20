@@ -48,7 +48,10 @@ Counts disappear when their raw pairs expire; there is no repaint-based decay.
 
 Auto-correlation uses A for both inputs; cross-correlation selects A and B.
 The latest N consecutive samples are used, with power-of-two N from 64 to 65536.
-Insufficient retention reports **Filling**. Missing steps and nonfinite values
+Insufficient retention reports **Filling** while acquisition is active. A
+finished run instead reports an unavailable result and asks for a smaller N
+or a longer interval/run; it cannot acquire additional samples. The minimum
+correlation length remains 64. Missing steps and nonfinite values
 reject the interval rather than filling it with zeros.
 
 The convention is `rAB[l] = sum(A[n] * B[n+l])` over overlapping indices:

@@ -38,6 +38,24 @@ ObserverDescriptor scope(int count = 1) {
 class ObserverPresentationsTest : public QObject {
     Q_OBJECT
 private slots:
+    void timePreviewQuantityUnits() {
+        auto source=std::make_shared<observation::ObservationSource>(42);
+        for(int c=0;c<2;++c) {
+            const auto id=source->channel(QString("scope/c%1").arg(c));
+            QVERIFY(source->append({id,1,.01,double(c)}));QVERIFY(source->append({id,2,.02,double(c+1)}));
+        }
+        for(const auto& units:QList<QStringList>{{"1","1","Value (1)"},{"V","V","Value (V)"},
+                {"V","A","Value (mixed units; see channels)"},{"V","","Value (mixed units; see channels)"},
+                {"","","Value (unit unspecified)"}}) {
+            for(const auto& type:QStringList{"Scope","LiveOscilloscope"}) {
+                auto descriptor=scope(2);descriptor.type=type;descriptor.inputs[0].unit=units[0];descriptor.inputs[1].unit=units[1];
+                const auto data=preparePreview({descriptor,{0,1},source});QCOMPARE(data.valueAxis,units[2]);
+                ObserverPresentation presentation(type);presentation.present(data);QCOMPARE(presentation.linePlot()->yTitle(),units[2]);
+                const auto selected=preparePreview({descriptor,{0},source});
+                QCOMPARE(selected.valueAxis,"Value ("+(units[0].isEmpty() ? QString("unit unspecified"):units[0])+")");
+            }
+        }
+    }
     void completedAnalysisReadsAllPages_data() {
         QTest::addColumn<int>("count");
         for (const auto count : {16384, 16385, 32768, 65536})

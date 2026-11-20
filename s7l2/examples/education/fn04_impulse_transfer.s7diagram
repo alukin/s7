@@ -1,0 +1,359 @@
+{
+  "id": "fn04_impulse_transfer",
+  "dt": 0.05,
+  "description": "Original S7 lesson FN04; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 10,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 280
+  },
+  "schema": {
+    "name": "FN04 \u2014 From one pulse to a transfer function",
+    "dt": 0.05,
+    "elements": [
+      {
+        "id": "input",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.05,
+          "start_time": 0.2
+        }
+      },
+      {
+        "id": "input_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      },
+      {
+        "id": "output",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "feedback_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "input_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "input_gain",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 0
+      },
+      {
+        "from_element": "output",
+        "from_port": 0,
+        "to_element": "memory",
+        "to_port": 0
+      },
+      {
+        "from_element": "memory",
+        "from_port": 0,
+        "to_element": "feedback_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "feedback_gain",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "input",
+        "position": [
+          3,
+          21
+        ],
+        "title": "One 1 V sample at n=4"
+      },
+      {
+        "id": "input_gain",
+        "position": [
+          17,
+          21
+        ],
+        "title": "Input weight = 0.5"
+      },
+      {
+        "id": "output",
+        "position": [
+          33,
+          21
+        ],
+        "title": "Current output y[n]"
+      },
+      {
+        "id": "memory",
+        "position": [
+          33,
+          33
+        ],
+        "title": "Previous y: starts at 0 V"
+      },
+      {
+        "id": "feedback_gain",
+        "position": [
+          17,
+          33
+        ],
+        "title": "Feedback weight = 0.5"
+      },
+      {
+        "id": "scope",
+        "position": [
+          51,
+          21
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "input",
+            "output"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "response",
+        "position": [
+          51,
+          36
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Frequency response",
+        "params": {
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "input_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "memory",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "feedback_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "feedback_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**FN04 \u2014 From one pulse to a transfer function**  \n**Can one pulse predict the response at every frequency?** Run **10 s at 20 Hz**, then open Scope.  \nPulse response: 0.5, 0.25, 0.125 V; DC gain 1, Nyquist gain 1/3.  \nChange feedback_gain factor 0.5 \u2192 0.8; predict DC gain 2.5. Inspect Scope at 0\u20131 s.  \n[Open FN04 student lab](qrc:/s7studio/help/education/labs/FN04-impulse-transfer/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec09/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1241,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

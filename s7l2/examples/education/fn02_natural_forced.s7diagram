@@ -1,0 +1,713 @@
+{
+  "id": "fn02_natural_forced",
+  "description": "Original S7 lab FN02. Start with the yellow instructions and linked student guide.",
+  "dt": 0.1,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "FN02 \u2014 Three ways to excite a system",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "zero",
+        "type": "Constant",
+        "params": {
+          "value": 0
+        }
+      },
+      {
+        "id": "impulse",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.1,
+          "start_time": 0.5
+        }
+      },
+      {
+        "id": "step",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "start_time": 0.5
+        }
+      },
+      {
+        "id": "natural",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "natural_memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 2
+        }
+      },
+      {
+        "id": "natural_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      },
+      {
+        "id": "impulse_response",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "impulse_response_memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "impulse_response_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      },
+      {
+        "id": "step_response",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "step_response_memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "step_response_gain",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "zero",
+        "from_port": 0,
+        "to_element": "natural",
+        "to_port": 0
+      },
+      {
+        "from_element": "natural",
+        "from_port": 0,
+        "to_element": "natural_memory",
+        "to_port": 0
+      },
+      {
+        "from_element": "natural_memory",
+        "from_port": 0,
+        "to_element": "natural_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "natural_gain",
+        "from_port": 0,
+        "to_element": "natural",
+        "to_port": 1
+      },
+      {
+        "from_element": "impulse",
+        "from_port": 0,
+        "to_element": "impulse_response",
+        "to_port": 0
+      },
+      {
+        "from_element": "impulse_response",
+        "from_port": 0,
+        "to_element": "impulse_response_memory",
+        "to_port": 0
+      },
+      {
+        "from_element": "impulse_response_memory",
+        "from_port": 0,
+        "to_element": "impulse_response_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "impulse_response_gain",
+        "from_port": 0,
+        "to_element": "impulse_response",
+        "to_port": 1
+      },
+      {
+        "from_element": "step",
+        "from_port": 0,
+        "to_element": "step_response",
+        "to_port": 0
+      },
+      {
+        "from_element": "step_response",
+        "from_port": 0,
+        "to_element": "step_response_memory",
+        "to_port": 0
+      },
+      {
+        "from_element": "step_response_memory",
+        "from_port": 0,
+        "to_element": "step_response_gain",
+        "to_port": 0
+      },
+      {
+        "from_element": "step_response_gain",
+        "from_port": 0,
+        "to_element": "step_response",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "zero",
+        "position": [
+          4,
+          20
+        ],
+        "title": "No input: 0 V"
+      },
+      {
+        "id": "impulse",
+        "position": [
+          4,
+          40
+        ],
+        "title": "One sample: 1 V at n=5"
+      },
+      {
+        "id": "step",
+        "position": [
+          4,
+          60
+        ],
+        "title": "Sustained: 1 V from n=5"
+      },
+      {
+        "id": "natural",
+        "position": [
+          35,
+          20
+        ],
+        "title": "Natural: stored past = 2 V"
+      },
+      {
+        "id": "natural_memory",
+        "position": [
+          35,
+          29
+        ],
+        "title": "Past output: starts at 2 V"
+      },
+      {
+        "id": "natural_gain",
+        "position": [
+          20,
+          29
+        ],
+        "title": "Remember half: a = 0.5"
+      },
+      {
+        "id": "impulse_response",
+        "position": [
+          35,
+          40
+        ],
+        "title": "Impulse response: zero past"
+      },
+      {
+        "id": "impulse_response_memory",
+        "position": [
+          35,
+          49
+        ],
+        "title": "Past output: starts at 0 V"
+      },
+      {
+        "id": "impulse_response_gain",
+        "position": [
+          20,
+          49
+        ],
+        "title": "Remember half: a = 0.5"
+      },
+      {
+        "id": "step_response",
+        "position": [
+          35,
+          60
+        ],
+        "title": "Step response: zero past"
+      },
+      {
+        "id": "step_response_memory",
+        "position": [
+          35,
+          69
+        ],
+        "title": "Past output: starts at 0 V"
+      },
+      {
+        "id": "step_response_gain",
+        "position": [
+          20,
+          69
+        ],
+        "title": "Remember half: a = 0.5"
+      },
+      {
+        "id": "scope",
+        "position": [
+          52,
+          40
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "natural",
+            "impulse response",
+            "step response"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "zero",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "natural",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "natural",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "natural_memory",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            22
+          ],
+          [
+            46,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "natural_memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "natural_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            31
+          ],
+          [
+            46,
+            36
+          ],
+          [
+            18,
+            36
+          ],
+          [
+            18,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "natural_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "natural",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            31,
+            31
+          ],
+          [
+            31,
+            24
+          ]
+        ]
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "impulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "impulse_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "impulse_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "impulse_response_memory",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            42
+          ],
+          [
+            46,
+            51
+          ]
+        ]
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "impulse_response_memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "impulse_response_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            51
+          ],
+          [
+            46,
+            56
+          ],
+          [
+            18,
+            56
+          ],
+          [
+            18,
+            51
+          ]
+        ]
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "impulse_response_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "impulse_response",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            31,
+            51
+          ],
+          [
+            31,
+            44
+          ]
+        ]
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "step",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "step_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "step_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "step_response_memory",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            62
+          ],
+          [
+            46,
+            71
+          ]
+        ]
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "step_response_memory",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "step_response_gain",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            46,
+            71
+          ],
+          [
+            46,
+            76
+          ],
+          [
+            18,
+            76
+          ],
+          [
+            18,
+            71
+          ]
+        ]
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "step_response_gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "step_response",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            31,
+            71
+          ],
+          [
+            31,
+            64
+          ]
+        ]
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "natural",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "impulse_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "step_response",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**FN02 \u2014 Three ways to excite a system**  \n**1 Predict \u2192 2 Run \u2192 3 Inspect \u2192 4 Change one thing.** Run **2 s at 10 Hz**, then open Scope.  \nSame rule: `y[n]=u[n]+0.5 y[n\u22121]`. Inputs begin at n=5 (Scope time 0.6 s).  \nBefore n=5 only natural response remains. At n=5 both forced responses start at 1 V.  \nTry: select step, press F4, change final_value 1 to 2; rerun. Which curve changes?  \n[Open FN02 student lab](qrc:/s7studio/help/education/labs/FN02-natural-forced/README.md) \u00b7 [MIT difference equations](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap1/) \u00b7 [MIT block diagrams](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/)",
+          "text_format": "markdown",
+          "width": 1240,
+          "height": 360,
+          "font_size": 16
+        }
+      }
+    ]
+  }
+}

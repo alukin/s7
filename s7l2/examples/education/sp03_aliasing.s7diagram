@@ -1,0 +1,264 @@
+{
+  "id": "sp03_aliasing",
+  "dt": 0.015625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 310
+  },
+  "schema": {
+    "name": "SP03 \u2014 Three tones, one sampled sequence",
+    "dt": 0.015625,
+    "elements": [
+      {
+        "id": "low",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 10,
+          "phase": 0.375
+        }
+      },
+      {
+        "id": "shifted",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 74,
+          "phase": 0.375
+        }
+      },
+      {
+        "id": "reflected",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 54,
+          "phase": 2.766592653589793
+        }
+      },
+      {
+        "id": "residual",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            -1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "low",
+        "from_port": 0,
+        "to_element": "residual",
+        "to_port": 0
+      },
+      {
+        "from_element": "shifted",
+        "from_port": 0,
+        "to_element": "residual",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "low",
+        "position": [
+          6,
+          18
+        ],
+        "title": "10 Hz: reference tone"
+      },
+      {
+        "id": "shifted",
+        "position": [
+          6,
+          32
+        ],
+        "title": "Shifted tone: edit frequency_hz"
+      },
+      {
+        "id": "reflected",
+        "position": [
+          6,
+          46
+        ],
+        "title": "54 Hz: 64 \u2212 10, reflected phase"
+      },
+      {
+        "id": "residual",
+        "position": [
+          29,
+          25
+        ],
+        "title": "Difference: shifted minus reference"
+      },
+      {
+        "id": "scope",
+        "position": [
+          49,
+          25
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "reference",
+            "shifted",
+            "reflected",
+            "difference"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "residual",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "shifted",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "residual",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "shifted",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "reflected",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "residual",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP03 \u2014 Three tones, one sampled sequence**  \n**Can a 10 Hz spectral peak identify the original tone?** Run **2 s at 64 Hz**; open Scope.  \nAt 64 Hz all three source sequences match; difference is zero. Overlay is intentional: hide channels to inspect each.  \nChange shifted frequency_hz 74 \u2192 70: predict a 6 Hz alias. Restore 74, then run at 256 Hz to distinguish the tones.  \n[Open SP03 student lab](qrc:/s7studio/help/education/labs/SP03-aliasing/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec21/) \u00b7 [S7 signal sources](qrc:/s7studio/help/docs/SIGNAL_SOURCES.md)",
+          "text_format": "markdown",
+          "width": 1241,
+          "height": 320,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

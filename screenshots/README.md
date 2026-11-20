@@ -15,19 +15,18 @@ for inspection.
 
 ## README overview: the Lorenz model and its observers
 
-**Layout provisional, 2026-11-18:** the maintainer requested a later layout
-revision. The current image is retained for now; the
-[open follow-up](../s7l2/docs/OPEN_PROBLEMS.md#readme-screenshot-layout--follow-up)
-records the requested improvements.
+**Layout approved, 2026-11-20:** the usual right-hand observer previews remain
+visible, with the full 3D viewer slightly overlapping the main window below them.
 
-![The Lorenz causal block diagram above a 3D phase trajectory and a three-channel Scope, all in one actual Studio session.](07-lorenz-overview.png)
+![Lorenz causal block diagrams with two recorded Scope previews on the right and a floating 3D attractor viewer below them, all in one actual Studio session.](07-lorenz-overview.png)
 
 The main README shows **one captured Studio desktop**: the diagram viewport
-focuses on the `base` network, the **3D Phase Trajectory** displays its butterfly
-attractor, and **Scope** shows `base_x`, `base_y` and `base_z` over model time
-20–40. The bundled example also computes the nearby-initial-condition network;
-the viewport focus does not remove it from the model. The windows were arranged
-before capture; the image is not a montage of separate plots.
+contains the base and nearby-initial-condition networks, and the right-hand
+**Observers** panel shows their three-channel Scope previews over the recent
+recorded interval, **38.976–40 model seconds**. The floating **3D Phase Trajectory**
+window displays the base network's full butterfly attractor. Its position below
+the previews keeps both time plots visible. The windows were arranged before
+capture; the image is not a montage of separate plots.
 
 This is the bundled `lorenz/lorenz_attractor.s7diagram` after a successful
 **40-model-second run at 4 kHz**, with sigma=10, rho=28, beta=8/3 and base initial
@@ -44,30 +43,39 @@ The system comes from Edward N. Lorenz,
 
 ### Overview capture provenance and reproduction
 
-Captured 2026-11-18 from runtime revision `4cc4ef8` plus the publication-only
-layout changes in `s7studio/tests/gui/workflows_test.cpp`. No runtime, numerical
-or viewer implementation was changed for the image. It uses a private
-2400×1500 Xvfb display, Qt 6.11.2 and Mesa llvmpipe. The dedicated Lorenz row
-passed with no failures or skips. Source logs and the original PNG are retained
-in `/tmp/s7-lorenz-readme-artifacts3/` and `/tmp/s7-lorenz-readme-captures3/` for
-this working session.
+Captured 2026-11-20 from source revision `609d38e`, using the Release application
+libraries and a local capture-only extension of the existing GUI workflow.
+No runtime, numerical or viewer implementation was changed for the image.
+It uses a private 2400×1600 Xvfb display with Openbox window decorations,
+Qt 6.11.2 and Mesa llvmpipe. The dedicated Lorenz row passed with no failures
+or skips, including the 160,000-point and recording-integrity checks.
+The maintainer reviewed this exact image before committing it.
 
-From `s7l2/`, reproduce the overview with:
+The local helper, logs and original captures remain outside Git under
+`/var/tmp/s7-readme-layout-2026-11-20/`. The published image is the approved
+`lorenz-overview-proposed.png` from that directory, copied without image edits.
+Its SHA-256 is:
 
-```sh
-cmake --build build-release --target s7studio_gui_workflows_test s7studio_gui_capture --parallel 2
-S7_README_SCREENSHOTS=1 S7_GUI_EXAMPLES=0/1 \
-S7_USABILITY_CAPTURE_DIR=/tmp/s7-lorenz-readme-captures3 \
-python3 -B tools/run_gui_test.py --artifacts /tmp/s7-lorenz-readme-artifacts3 \
-  --capture build-release/s7studio/s7studio_gui_capture --graphics \
-  --screen-size 2400x1500 --timeout 240 \
-  -- build-release/s7studio/s7studio_gui_workflows_test \
-  bundledExamplesRunAndRender:lorenz/lorenz_attractor.s7diagram
+```text
+d10c7710b6051443e5518381d7a65fd3ba8ec38f4c6b67a80b166b30e27f89d0
 ```
 
-Inspect `lorenz-overview.png` before copying it to `07-lorenz-overview.png`.
-The publication mode selects the recorded Time view and arranges real windows;
-ordinary example tests keep their existing analysis and layout checks.
+To reproduce the composition in Studio:
+
+1. Open `lorenz/lorenz_attractor.s7diagram` and run **40 seconds at 4 kHz**.
+2. Show **Observers** (**Alt+3**) on the right. Choose the `base_scope` and
+   `nearby_scope` previews and leave both expanded until they show recorded data.
+3. Use **Fit Diagram to Window** (**Ctrl+8**) to show both networks.
+4. Open `base_trajectory`, wait for the completed recording, and select **3D**.
+   Adjust the camera zoom so the entire attractor and axis labels fit.
+5. On a 2400×1600 desktop, place the main window near the upper left at
+   approximately **1840×1150**, with an approximately **480-pixel** observer
+   panel. Place the **810×625** 3D window near **(1560, 930)**, below the previews
+   and slightly overlapping the main window. Capture the desktop in one image.
+
+Inspect the resulting PNG before replacing `07-lorenz-overview.png`. The earlier
+`S7_README_SCREENSHOTS` workflow still arranges the old tiled overview; this
+capture's local helper applies the right-hand-preview layout described above.
 
 ## 1. Lorenz attractor: a trajectory in three dimensions
 

@@ -7,6 +7,7 @@
 #include "viewers/quick_support.hpp"
 
 #include <QQuickWidget>
+#include <QQuickWindow>
 #include <QShortcut>
 #include <QVBoxLayout>
 #include <QVariantMap>
@@ -293,13 +294,23 @@ void LinePlotView::removeSeries(QLineSeries* series)
 
 void LinePlotView::retire(QXYSeries* series)
 {
-    emit bridge_->seriesRemoved(series);
+    // Notify the still-attached renderer before detaching. A hidden GraphsView
+    // can retain its preceding geometry until its next polish.
+    series->setVisible(false);
+    series->setOpacity(0);
+    series->clear();
     if (!quick_) {
+        emit bridge_->seriesRemoved(series);
         delete series;
         return;
     }
-    series->clear();
     retired_.push_back(series);
+    // Let the attached GraphsView synchronize the empty/hidden series before
+    // removing it. Detaching first can strand its old geometry while hidden.
+    connect(quick_->quickWindow(), &QQuickWindow::afterSynchronizing, this, [this, series] {
+        if (quick_) emit bridge_->seriesRemoved(series);
+    }, static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::SingleShotConnection));
+    quick_->update();
 }
 
 void LinePlotView::clearSeries()

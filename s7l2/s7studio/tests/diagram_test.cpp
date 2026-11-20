@@ -211,6 +211,23 @@ int main(int argc, char** argv)
         DiagramScene reopened;
         reload(textScene, reopened);
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
+        const auto hasLink = [](const TextFrameNode& note, const QUrl& expected) {
+            for (int y = 8; y < 100; y += 2) for (int x = 10; x < 240; x += 2)
+                if (note.linkAt(QPointF(x, y)) == expected) return true;
+            return false;
+        };
+        after["text_format"] = "markdown";
+        after["font_size"] = 10;
+        after["text"] = "[Read MIT](https://ocw.mit.edu/)";
+        textScene.changeTextFrame(frame, after);
+        check(hasLink(*frame, QUrl("https://ocw.mit.edu/")), "Markdown link hit region uses rendered label");
+        check(frame->linkAt(QPointF(2, 2)).isEmpty(), "frame border is not a link");
+        reload(textScene, reopened);
+        check(hasLink(*reopened.textFrames().front(), QUrl("https://ocw.mit.edu/")), "Markdown link survives save/load");
+        after["text_format"] = "plain";
+        after["text"] = "Read https://ocw.mit.edu/, then compare x[n-1].";
+        textScene.changeTextFrame(frame, after);
+        check(hasLink(*frame, QUrl("https://ocw.mit.edu/")), "plain URL is clickable without adjacent punctuation");
     }
     {
         DiagramScene edits;

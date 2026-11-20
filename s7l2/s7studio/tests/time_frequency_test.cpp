@@ -42,6 +42,48 @@ int main(int argc, char **argv) {
     try {
         QTemporaryDir directory;
         require(directory.isValid(), "Temporary directory");
+        // Education SP11 runs at 128 Hz, below the old 100 Hz CWT upper
+        // default. Untouched defaults must work when changing transforms.
+        for (const double rate : {128., 1., .01}) {
+            auto source = std::make_shared<s7studio::observation::ObservationSource>(8);
+            source->channel("map/in");
+            for (int n = 1; n <= 512; ++n)
+                require(source->append({0, n, n / rate, std::cos(2 * std::numbers::pi * n / 8)}), "Low-rate capture");
+            require(source->finish(), "Low-rate capture finish");
+            s7studio::viewers::TimeFrequencyWindow window("low-rate");
+            window.show();
+            window.attachSource(source, {{"in", 0}});
+            while (window.refreshSource()) {}
+            QElapsedTimer timer;
+            timer.start();
+            while (!window.hasResult() && window.error().isEmpty() && timer.elapsed() < 10000) {
+                window.poll(); QApplication::processEvents(); QThread::msleep(5);
+            }
+            require(window.hasResult(), "Low-rate initial STFT");
+            window.setWavelet(true);
+            timer.restart();
+            while (!window.result()->metadata["method"].toString().startsWith("Morlet") &&
+                   window.error().isEmpty() && timer.elapsed() < 10000) {
+                window.poll(); QApplication::processEvents(); QThread::msleep(5);
+            }
+            require(window.error().isEmpty() && window.result()->metadata["method"].toString().startsWith("Morlet"),
+                    "Untouched CWT defaults must fit the captured Nyquist band");
+            require(window.result()->y.front() > 0 && window.result()->y.back() < rate / 2,
+                    "CWT defaults outside captured frequency band");
+            auto *maximum = window.findChild<QDoubleSpinBox *>("timeFrequency.cwtMaximum");
+            require(maximum, "Named CWT frequency control");
+            maximum->setValue(rate / 2);
+            window.poll();
+            require(!window.error().isEmpty() && maximum->value() == rate / 2,
+                    "Explicit invalid CWT range must remain visible, without silent clamping");
+            maximum->setValue(rate * .4);
+            timer.restart();
+            while ((!window.error().isEmpty() || std::abs(window.result()->y.back() - rate * .4) > rate * 1e-8) && timer.elapsed() < 10000) {
+                window.poll(); QApplication::processEvents(); QThread::msleep(5);
+            }
+            require(window.error().isEmpty() && std::abs(window.result()->y.back() - rate * .4) <= rate * 1e-8,
+                    "Valid explicit CWT range must be honored");
+        }
         for (int kind = 0; kind < 5; ++kind) {
             const bool wavelet = kind == 1 || kind == 3, impulse = kind == 2;
             const int rate = kind == 2 || kind == 3 ? 1024 : 256,
@@ -210,6 +252,8 @@ int main(int argc, char **argv) {
                         "Switching transform must retain cursor frequency rather than row number");
                 require(!window.findChild<QComboBox *>("timeFrequency.fftSize")->isEnabled(),
                         "CWT must disable irrelevant FFT control");
+                require(!window.findChild<QSpinBox *>("timeFrequency.hopSize")->isEnabled(),
+                        "CWT must disable irrelevant STFT hop control");
             }
             saved.csv(directory.filePath("map.csv"));
             require(QFile::exists(directory.filePath("map.csv")), "CSV export");
@@ -311,6 +355,8 @@ int main(int argc, char **argv) {
                     "Retired work must not overwrite an imported result after hiding/showing");
             require(!button->isEnabled() && !window.findChild<QComboBox *>("timeFrequency.method")->isEnabled(),
                     "Imported results without input must disable reanalysis controls");
+            require(!window.findChild<QSpinBox *>("timeFrequency.hopSize")->isEnabled(),
+                    "Read-only imports must disable STFT hop changes");
         }
         std::cout << "Time-frequency capture, workers, save/open and rollback passed\n";
     } catch (const std::exception &e) {

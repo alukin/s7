@@ -548,6 +548,13 @@ void ResponseWindow::applyDisplay() {
             LinePlotView::setPoints(line, points);
         }
         (void)plots_[p]->fitAll();
+        // An ideal constant gain (especially 0 dB) can contain tiny FFT
+        // roundoff. Auto-fitting that noise suggests a physical gain ripple.
+        // This is a dB display policy; retain every measured curve value.
+        if ((p == 0 || p == 3) && plots_[p]->yMax() - plots_[p]->yMin() < 1e-10) {
+            const double center = (plots_[p]->yMin() + plots_[p]->yMax()) / 2;
+            plots_[p]->setYRange(center - 0.5, center + 0.5);
+        }
     }
     displayWork_->displayedSource = frame.source;
     phases_ = frame.phases;

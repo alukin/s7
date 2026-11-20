@@ -69,6 +69,8 @@ class SurfacePlotView final : public QWidget {
     void selectCell(int row, int column);
     SurfaceBridge *bridge() const { return bridge_; }
     bool isPreparing() const;
+    // Last applied renderer grid, including display validity, not pending work.
+    std::shared_ptr<const analysis::SurfaceGrid> displayedGrid() const;
   signals:
     void inspected(const QString &text);
     void cellPicked(int row, int column);

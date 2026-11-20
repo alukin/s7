@@ -24,8 +24,13 @@ with peak amplitude 1. Choose the AM signal channel to see the carrier and
 modulation sidebands; increasing acquisition retention permits longer FFTs.
 The existing 10 kHz example rate also works, with a noncoherent 100 Hz tone.
 
-FFT size is independent of acquisition retention. N can be a power of two from
-64 to 65536; fewer than N retained positions reports **Filling**. No zero padding
+FFT size is independent of acquisition retention. The selector offers powers
+of two from **2 to 65536**; Scope snapshots also use the exact selected length,
+including non-powers of two. Short records are useful for finite-sequence
+lessons; they have correspondingly coarse frequency spacing. One sample is
+insufficient. Fewer than N retained positions reports **Filling** while the
+run is active. A finished run instead reports that the result is unavailable
+and asks for a smaller N or a longer interval/run. No zero padding
 or implicit interpolation/resampling is used to manufacture resolution. The
 frequency spacing is the rational model sample rate divided by N. Zoom and
 frequency-axis offset affect presentation, not the FFT or sample rate.
@@ -54,6 +59,11 @@ For `X[k]=sum(w[n]*x[n]*exp(-i*2*pi*k*n/N))`, `S1=sum(w)`, `S2=sum(w*w)`:
 - Peak amplitude: `abs(X)/S1`, in supplied units U.
 - Mean-square power per bin: `abs(X)^2/(N*S2)`, in U².
 - PSD: `abs(X)^2/(Fs*S2)`, in U²/Hz.
+
+The axis and plotted-trace legends use the selected quantity's units (for
+example V, V² or V²/Hz). The source selector retains the supplied input unit.
+In dB mode, the legend unit identifies the linear quantity used by the explicit
+reference; the vertical axis states that the displayed values are dB.
 
 Real one-sided bins are doubled except DC and Nyquist. I/Q bins are not doubled.
 Summing power bins, or integrating PSD with bin spacing, gives the

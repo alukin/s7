@@ -1,0 +1,440 @@
+{
+  "id": "fn05_integration_rules",
+  "dt": 0.5,
+  "description": "Original S7 lesson FN05; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 6,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 325
+  },
+  "schema": {
+    "name": "FN05 \u2014 Three rules for the same decay",
+    "dt": 0.5,
+    "elements": [
+      {
+        "id": "forward",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "forward_pole",
+        "type": "Gain",
+        "params": {
+          "factor": 0.5
+        }
+      },
+      {
+        "id": "backward",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "backward_pole",
+        "type": "Gain",
+        "params": {
+          "factor": 0.6666666666666666
+        }
+      },
+      {
+        "id": "trapezoid",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "trapezoid_pole",
+        "type": "Gain",
+        "params": {
+          "factor": 0.6
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "forward",
+        "from_port": 0,
+        "to_element": "forward_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "forward_pole",
+        "from_port": 0,
+        "to_element": "forward",
+        "to_port": 0
+      },
+      {
+        "from_element": "backward",
+        "from_port": 0,
+        "to_element": "backward_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "backward_pole",
+        "from_port": 0,
+        "to_element": "backward",
+        "to_port": 0
+      },
+      {
+        "from_element": "trapezoid",
+        "from_port": 0,
+        "to_element": "trapezoid_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "trapezoid_pole",
+        "from_port": 0,
+        "to_element": "trapezoid",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "forward",
+        "position": [
+          7,
+          17
+        ],
+        "title": "Forward state: starts at 1 V"
+      },
+      {
+        "id": "forward_pole",
+        "position": [
+          21,
+          22
+        ],
+        "title": "Next = 0.5 \u00d7 state"
+      },
+      {
+        "id": "backward",
+        "position": [
+          7,
+          31
+        ],
+        "title": "Backward state: starts at 1 V"
+      },
+      {
+        "id": "backward_pole",
+        "position": [
+          21,
+          36
+        ],
+        "title": "Next = 0.6667 \u00d7 state"
+      },
+      {
+        "id": "trapezoid",
+        "position": [
+          7,
+          45
+        ],
+        "title": "Trapezoid state: starts at 1 V"
+      },
+      {
+        "id": "trapezoid_pole",
+        "position": [
+          21,
+          50
+        ],
+        "title": "Next = 0.6 \u00d7 state"
+      },
+      {
+        "id": "scope",
+        "position": [
+          49,
+          31
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "forward",
+            "backward",
+            "trapezoid"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "forward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "forward_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            19
+          ],
+          [
+            18,
+            24
+          ]
+        ]
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "forward_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "forward",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            24
+          ],
+          [
+            32,
+            27
+          ],
+          [
+            5,
+            27
+          ],
+          [
+            5,
+            19
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "backward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "backward_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            33
+          ],
+          [
+            18,
+            38
+          ]
+        ]
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "backward_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "backward",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            38
+          ],
+          [
+            32,
+            41
+          ],
+          [
+            5,
+            41
+          ],
+          [
+            5,
+            33
+          ]
+        ]
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "trapezoid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "trapezoid_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            47
+          ],
+          [
+            18,
+            52
+          ]
+        ]
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "trapezoid_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "trapezoid",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            52
+          ],
+          [
+            32,
+            55
+          ],
+          [
+            5,
+            55
+          ],
+          [
+            5,
+            47
+          ]
+        ]
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "forward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "backward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "trapezoid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**FN05 \u2014 Three rules for the same decay**  \n**Which approximation follows exp(\u2212t) most closely?** Run **6 s at 2 Hz**, then open Scope.  \nAfter one update: forward 0.5, backward 2/3, trapezoid 0.6 V; exact \u2248 0.60653 V.  \nAt the saved rate, change forward_pole factor 0.5 \u2192 0.75. Why is this no longer the stated method?  \n[Open FN05 student lab](qrc:/s7studio/help/education/labs/FN05-integration-rules/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1241,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

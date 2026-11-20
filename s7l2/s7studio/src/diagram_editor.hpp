@@ -6,6 +6,7 @@
 #include "diagram_document.hpp"
 
 #include <QWidget>
+#include <QUrl>
 #include <boost/json.hpp>
 #include <functional>
 #include <memory>
@@ -73,6 +74,7 @@ signals:
     void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
     void elementPropertiesRequested(const QString& elementId);
     void libraryElementAdded(const QString& elementId);
+    void helpLinkActivated(const QUrl& link);
 
 private:
     void scheduleInitialPageFit();
@@ -81,6 +83,7 @@ private:
     void updateRulerLayout();
     void updateRulers();
     void zoomBy(double factor);
+    [[nodiscard]] auto textLinkAt(QPoint viewportPosition) const -> QUrl;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -98,6 +101,10 @@ private:
     DiagramRuler* horizontalRuler_ = nullptr;
     DiagramRuler* verticalRuler_ = nullptr;
     QWidget* rulerCorner_ = nullptr;
+    QUrl pressedTextLink_;
+    QPoint textLinkPressPosition_;
+    bool textLinkMoved_ = false;
+    bool hoveringTextLink_ = false;
 };
 
 } // namespace s7studio::diagram

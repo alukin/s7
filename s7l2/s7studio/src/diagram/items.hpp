@@ -15,6 +15,8 @@
 #include <QPointF>
 #include <QSize>
 #include <QString>
+#include <QTextDocument>
+#include <QUrl>
 #include <QVector>
 
 #include <algorithm>
@@ -180,6 +182,8 @@ public:
     [[nodiscard]] const boost::json::object& params() const { return params_; }
     void setParams(const boost::json::object& params);
 
+    [[nodiscard]] auto linkAt(QPointF localPosition) const -> QUrl;
+
     [[nodiscard]] static auto defaultParams() -> boost::json::object;
 
     std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
@@ -188,6 +192,7 @@ public:
 private:
     std::string id_;
     boost::json::object params_;
+    QTextDocument textDocument_;
 };
 
 class SignalWire;

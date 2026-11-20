@@ -11,6 +11,7 @@
 #include <qschematic/view.hpp>
 
 #include <QEvent>
+#include <QApplication>
 #include <QGraphicsRectItem>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -35,6 +36,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace s7studio::diagram {
 
@@ -356,8 +358,58 @@ void DiagramEditor::scheduleInitialPageFit()
     });
 }
 
+auto DiagramEditor::textLinkAt(const QPoint viewportPosition) const -> QUrl
+{
+    if (!_scene || _scene->mode() != QSchematic::Scene::NormalMode) return {};
+    const auto scenePosition = _view->mapToScene(viewportPosition);
+    for (auto* item = _scene->itemAt(scenePosition, QTransform()); item; item = item->parentItem()) {
+        if (const auto* frame = dynamic_cast<TextFrameNode*>(item)) {
+            const auto url = frame->linkAt(frame->mapFromScene(scenePosition));
+            if (url.scheme() == "http" || url.scheme() == "https" || url.scheme() == "qrc") return url;
+            return {};
+        }
+    }
+    return {};
+}
+
 bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
 {
+    if (_view && watched == _view->viewport() && event) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            const auto* mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::LeftButton) {
+                pressedTextLink_ = textLinkAt(mouse->position().toPoint());
+                if (!pressedTextLink_.isEmpty()) {
+                    textLinkPressPosition_ = mouse->position().toPoint();
+                    textLinkMoved_ = false;
+                    return true;
+                }
+            }
+        } else if (event->type() == QEvent::MouseMove) {
+            const auto position = static_cast<QMouseEvent*>(event)->position().toPoint();
+            if (!pressedTextLink_.isEmpty()) {
+                textLinkMoved_ |= (position-textLinkPressPosition_).manhattanLength() >= QApplication::startDragDistance();
+                return true;
+            }
+            if (!textLinkAt(position).isEmpty()) {
+                _view->viewport()->setCursor(Qt::PointingHandCursor);
+                hoveringTextLink_ = true;
+            } else if (hoveringTextLink_) {
+                _view->viewport()->unsetCursor(); hoveringTextLink_ = false;
+            }
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            const auto* mouse = static_cast<QMouseEvent*>(event);
+            if (mouse->button() == Qt::LeftButton && !pressedTextLink_.isEmpty()) {
+                const auto link = std::exchange(pressedTextLink_, {});
+                if (!textLinkMoved_ && textLinkAt(mouse->position().toPoint()) == link) Q_EMIT helpLinkActivated(link);
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseButtonDblClick) {
+            if (!textLinkAt(static_cast<QMouseEvent*>(event)->position().toPoint()).isEmpty()) return true;
+        } else if (event->type() == QEvent::Leave && hoveringTextLink_) {
+            _view->viewport()->unsetCursor(); hoveringTextLink_ = false;
+        }
+    }
     if (_view && watched == _view->viewport() && event && event->type() == QEvent::Resize) {
         updateRulerLayout();
         updateRulers();

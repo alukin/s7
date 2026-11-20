@@ -68,6 +68,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     bool requestActive_ = false;
     bool currentCaptureRequested_ = false;
     bool automaticAttempted_ = false;
+    bool waveletRangeEdited_ = false;
     std::weak_ptr<const observation::ObservationSource> automaticSource_;
     QString error_, unit_;
     QLabel *status_;
@@ -77,6 +78,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     QComboBox *method_;
     QComboBox *quantity_;
     QComboBox *window_;
+    QSpinBox *hop_;
     QSpinBox *scales_;
     QDoubleSpinBox *minimum_;
     QDoubleSpinBox *maximum_;

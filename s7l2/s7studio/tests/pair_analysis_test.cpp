@@ -113,6 +113,11 @@ private slots:
     void invalidIntervalsAndCancellation() {
         PairAnalyzer analyzer; PairSettings s; s.size = 64; s.maxLag = 16;
         QCOMPARE(analyzer.analyze(PairKind::Correlation, frame(63), s).state, PairResult::State::Filling);
+        auto shortFinished=frame(63);shortFinished.finished=true;
+        const auto unavailable=analyzer.analyze(PairKind::Correlation,shortFinished,s);
+        QCOMPARE(unavailable.state,PairResult::State::Unavailable);QVERIFY(unavailable.message.contains("Run finished"));
+        auto complete=frame(64);complete.finished=true;
+        QCOMPARE(analyzer.analyze(PairKind::Correlation,complete,s).state,PairResult::State::Ready);
         auto input = frame(64); ++input.steps[32];
         QCOMPARE(analyzer.analyze(PairKind::Correlation, input, s).state, PairResult::State::Unavailable);
         input = frame(64); input.values[10] = std::numeric_limits<double>::infinity();

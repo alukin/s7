@@ -88,7 +88,11 @@ PairResult PairAnalyzer::analyze(PairKind kind, const observation::LiveFrame& fr
     const auto n = s.size;
     if (n < 64 || n > 65536 || s.maxLag >= n)
         return fail(PairResult::State::Unavailable, "Correlation needs N=64–65536 and max lag < N.");
-    if (frame.steps.size() < n) return fail(PairResult::State::Filling, QStringLiteral("Filling: %1/%2 consecutive samples.").arg(frame.steps.size()).arg(n));
+    if (frame.steps.size() < n) {
+        if (frame.finished)
+            return fail(PairResult::State::Unavailable, QStringLiteral("Run finished with %1/%2 retained samples. Select a smaller N or a longer interval/run.").arg(frame.steps.size()).arg(n));
+        return fail(PairResult::State::Filling, QStringLiteral("Filling: %1/%2 consecutive samples.").arg(frame.steps.size()).arg(n));
+    }
     const auto offset = frame.steps.size()-n;
     r.firstStep = frame.steps[offset];
     double scaleA = 0, scaleB = 0;

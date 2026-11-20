@@ -22,6 +22,17 @@
 
 namespace s7studio::viewers {
 using namespace analysis;
+namespace {
+QString quantityUnitFor(const QString& unit, SpectrumQuantity quantity)
+{
+    switch (quantity) {
+    case SpectrumQuantity::Amplitude: return unit;
+    case SpectrumQuantity::Power: return unit + "²";
+    case SpectrumQuantity::Psd: return unit + "²/Hz";
+    }
+    return {};
+}
+} // namespace
 SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(parent)
 {
     setObjectName("live.spectrum");
@@ -56,7 +67,7 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     allChannels_->hide();
     fields = group("Transform", "spectrum.transform", true);
     size_ = combo("spectrum.size", {});
-    for (int n = 64; n <= 65536; n *= 2) size_->addItem(QString::number(n), n);
+    for (int n = 2; n <= 65536; n *= 2) size_->addItem(QString::number(n), n);
     size_->setCurrentIndex(size_->findData(4096));
     window_ = combo("spectrum.window", {"Rectangular", "Periodic Hann", "Periodic Hamming", "Periodic Blackman", "Periodic Blackman-Harris"}); window_->setCurrentIndex(1);
     removeMean_ = new QCheckBox("Remove mean", box); removeMean_->setObjectName("spectrum.removeMean");
@@ -137,7 +148,7 @@ void SpectrumView::setSnapshotMode(bool snapshot)
 }
 void SpectrumView::setAnalysisSize(int samples)
 {
-    if (samples < 64 || samples > 65536) return;
+    if (samples < 2 || samples > 65536) return;
     auto index = size_->findData(samples);
     if (index < 0) {
         size_->addItem(QStringLiteral("Full interval (%1)").arg(samples), samples);
@@ -178,7 +189,8 @@ void SpectrumView::reconfigure()
 void SpectrumView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 {
     if (!frame) return; // The host supplies its pinned display frame while frozen.
-    const bool same = frame_ && frame_->runId == frame->runId && frame_->generation == frame->generation && frame_->received == frame->received;
+    const bool same = frame_ && frame_->runId == frame->runId && frame_->generation == frame->generation &&
+        frame_->received == frame->received && frame_->finished == frame->finished;
     const bool newRun = frame_ && (frame_->runId != frame->runId || frame_->generation != frame->generation);
     QStringList names;
     for (const auto& channel : frame->channels) names.push_back(channel.name + " [" + (channel.unit.isEmpty() ? "unit unspecified" : channel.unit) + "]");
@@ -245,12 +257,7 @@ QString SpectrumView::quantityUnit() const
         if (units.size() > 1) return QStringLiteral("[mixed units]");
     }
     const auto unit = !result_ || result_->unit.isEmpty() ? QStringLiteral("[unit unspecified]") : result_->unit;
-    switch (settings().quantity) {
-    case SpectrumQuantity::Amplitude: return unit;
-    case SpectrumQuantity::Power: return unit + "²";
-    case SpectrumQuantity::Psd: return unit + "²/Hz";
-    }
-    return {};
+    return quantityUnitFor(unit, settings().quantity);
 }
 QString SpectrumView::binText(std::size_t i) const
 {
@@ -340,7 +347,10 @@ void SpectrumView::render(bool fit)
         if (result.traces.empty()) {
             LinePlotView::setPoints(plot_->series()[0], points(result.values));
             LinePlotView::setPoints(plot_->series()[1], points(result.peakHold));
-            plot_->setSeriesName(plot_->series()[0], channel_->currentText() + (result.settings.iq ? " + iQ" : ""));
+            const auto name = frame_->channels[static_cast<qsizetype>(result.settings.channel)].name
+                + (result.settings.iq ? " + iQ" : "") + " ["
+                + quantityUnitFor(result.unit.isEmpty() ? QStringLiteral("unit unspecified") : result.unit, result.settings.quantity) + ']';
+            plot_->setSeriesName(plot_->series()[0], name);
             plot_->series()[1]->setOpacity(1);
         } else {
             const QList<QColor> colors{QColor("#1f77b4"), QColor("#d62728"), QColor("#2ca02c"),
@@ -349,7 +359,8 @@ void SpectrumView::render(bool fit)
                 const auto& trace = result.traces[j];
                 const auto color = colors[static_cast<qsizetype>(j % static_cast<std::size_t>(colors.size()))];
                 const auto name = frame_->channels[static_cast<qsizetype>(trace.channel)].name
-                    + QStringLiteral(" [") + (trace.unit.isEmpty() ? QStringLiteral("unit unspecified") : trace.unit) + QLatin1Char(']');
+                    + QStringLiteral(" [") + quantityUnitFor(trace.unit.isEmpty() ? QStringLiteral("unit unspecified") : trace.unit,
+                                                             result.settings.quantity) + QLatin1Char(']');
                 if (j > 0 && additionalLines_.size() < static_cast<qsizetype>(j)) {
                     additionalLines_.push_back(plot_->addSeries(name, {color, 1.6, false}));
                     additionalHolds_.push_back(plot_->addSeries(name + QStringLiteral(" hold"), {color, 1.2, true}));

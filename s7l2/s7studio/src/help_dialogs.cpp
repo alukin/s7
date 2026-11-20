@@ -6,11 +6,14 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QPushButton>
 #include <QSplitter>
 #include <QSysInfo>
@@ -18,6 +21,7 @@
 #include <QTextBrowser>
 #include <QTextDocument>
 #include <QVBoxLayout>
+#include <memory>
 
 namespace s7studio {
 namespace {
@@ -37,6 +41,32 @@ constexpr Topic topics[] = {
     {"Live cursors, measurements and export", "qrc:/s7studio/help/docs/STUDIO_WINDOW_INSPECTION.md"},
     {"Live edge-trigger synchronization", "qrc:/s7studio/help/docs/STUDIO_TRIGGERING.md"},
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
+    {"Education: start here", "qrc:/s7studio/help/examples/education/README.md"},
+    {"Education: FN01 one sample of memory", "qrc:/s7studio/help/education/labs/FN01-unit-delay/README.md"},
+    {"Education: FN02 natural and forced response", "qrc:/s7studio/help/education/labs/FN02-natural-forced/README.md"},
+    {"Education: FN03 initial conditions", "qrc:/s7studio/help/education/labs/FN03-initial-conditions/README.md"},
+    {"Education: FN04 impulse transfer", "qrc:/s7studio/help/education/labs/FN04-impulse-transfer/README.md"},
+    {"Education: FN05 integration rules", "qrc:/s7studio/help/education/labs/FN05-integration-rules/README.md"},
+    {"Education: FN06 pole maps", "qrc:/s7studio/help/education/labs/FN06-pole-maps/README.md"},
+    {"Education: CT01 first order", "qrc:/s7studio/help/education/labs/CT01-first-order/README.md"},
+    {"Education: CT02 damped modes", "qrc:/s7studio/help/education/labs/CT02-damped-modes/README.md"},
+    {"Education: CT03 sample time", "qrc:/s7studio/help/education/labs/CT03-sample-time/README.md"},
+    {"Education: CT04 controller comparison", "qrc:/s7studio/help/education/labs/CT04-controller-comparison/README.md"},
+    {"Education: CT05 actuator windup", "qrc:/s7studio/help/education/labs/CT05-actuator-windup/README.md"},
+    {"Education: CT06 closed-loop poles", "qrc:/s7studio/help/education/labs/CT06-closed-loop-poles/README.md"},
+    {"Education: CT08 lead/lag compensation", "qrc:/s7studio/help/education/labs/CT08-lead-lag/README.md"},
+    {"Education: CT07 stability margins", "qrc:/s7studio/help/education/labs/CT07-stability-margins/README.md"},
+    {"Education: SP01 Fourier synthesis", "qrc:/s7studio/help/education/labs/SP01-fourier-synthesis/README.md"},
+    {"Education: SP03 sampling and aliasing", "qrc:/s7studio/help/education/labs/SP03-aliasing/README.md"},
+    {"Education: SP05 shifted impulse responses", "qrc:/s7studio/help/education/labs/SP05-convolution/README.md"},
+    {"Education: SP10 circular versus linear convolution", "qrc:/s7studio/help/education/labs/SP10-circular-convolution/README.md"},
+    {"Education: SP14 AM and coherent detection", "qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md"},
+    {"Education: SP11 short-time Fourier transform", "qrc:/s7studio/help/education/labs/SP11-short-time-fourier/README.md"},
+    {"FIR and FFT convolution implementation", "qrc:/s7studio/help/docs/CONVOLUTION.md"},
+    {"Education: SP07 filter transfer functions", "qrc:/s7studio/help/education/labs/SP07-filter-transfer/README.md"},
+    {"Education: SP08 DFT leakage", "qrc:/s7studio/help/education/labs/SP08-dft-leakage/README.md"},
+    {"Education: SP09 window normalization", "qrc:/s7studio/help/education/labs/SP09-window-normalization/README.md"},
+    {"Education: SP06 three-tap FIR", "qrc:/s7studio/help/education/labs/SP06-three-tap-fir/README.md"},
     {"Saving and comparing results", "qrc:/s7studio/help/docs/SCOPE_RESULTS.md"},
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},
     {"Observers dock", "qrc:/s7studio/help/docs/STUDIO_OBSERVERS_DOCK.md"},
@@ -66,6 +96,29 @@ QString resourceText(const QString& url)
     return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()) : QString{};
 }
 
+bool isWebLink(const QUrl& url)
+{
+    return url.isValid() && !url.host().isEmpty() &&
+        (url.scheme() == QStringLiteral("https") || url.scheme() == QStringLiteral("http"));
+}
+
+bool isHelpArticle(const QUrl& url)
+{
+    return url.scheme() == QStringLiteral("qrc") && url.path().endsWith(QStringLiteral(".md")) &&
+        (url.path().startsWith(QStringLiteral("/s7studio/help/")) ||
+         url.path().startsWith(QStringLiteral("/s7studio/legal/"))) &&
+        QFile::exists(QStringLiteral(":") + url.path());
+}
+
+QString helpExamplePath(const QUrl& url)
+{
+    const auto prefix = QStringLiteral("/s7studio/help/examples/");
+    if (url.scheme() != QStringLiteral("qrc") || !url.authority().isEmpty() ||
+        url.hasQuery() || url.hasFragment() || !url.path().startsWith(prefix) ||
+        !url.path().endsWith(QStringLiteral(".s7diagram"))) return {};
+    return url.path().mid(prefix.size());
+}
+
 void showWindow(QDialog* dialog)
 {
     dialog->show();
@@ -81,7 +134,20 @@ void addCloseButton(QDialog* dialog, QVBoxLayout* layout)
 }
 }
 
-void showHelp(QWidget* parent)
+QString resolveHelpExample(const QString& directory, const QString& relativePath)
+{
+    const auto root = QFileInfo(directory).canonicalFilePath();
+    if (root.isEmpty() || !QDir::isRelativePath(relativePath)) return {};
+    const QFileInfo target(QDir(root).filePath(relativePath));
+    const auto canonical = target.canonicalFilePath();
+    const auto withinRoot = QDir(root).relativeFilePath(canonical);
+    if (canonical.isEmpty() || !target.isFile() || !QDir::isRelativePath(withinRoot) ||
+        withinRoot == QStringLiteral("..") || withinRoot.startsWith(QStringLiteral("../")) ||
+        !canonical.endsWith(QStringLiteral(".s7diagram"))) return {};
+    return canonical;
+}
+
+void showHelp(QWidget* parent, const OpenHelpExample& openExample)
 {
     if (auto* existing = parent->findChild<QDialog*>(QStringLiteral("dialog.help"))) {
         showWindow(existing);
@@ -111,6 +177,10 @@ void showHelp(QWidget* parent)
     browser->setAccessibleName(QStringLiteral("Help article"));
     browser->setOpenLinks(false);
     browser->setOpenExternalLinks(false);
+    auto* linkStatus = new QLabel(dialog);
+    linkStatus->setObjectName(QStringLiteral("help.linkStatus"));
+    linkStatus->setWordWrap(true);
+    linkStatus->hide();
     splitter->setStretchFactor(1, 1);
     splitter->setSizes({240, 720});
     auto* navigation = new QHBoxLayout;
@@ -123,6 +193,7 @@ void showHelp(QWidget* parent)
     navigation->addStretch();
     layout->addLayout(navigation);
     layout->addWidget(splitter);
+    layout->addWidget(linkStatus);
     addCloseButton(dialog, layout);
     for (const auto& topic : topics) {
         auto* item = new QListWidgetItem(QString::fromUtf8(topic.title), contents);
@@ -145,18 +216,50 @@ void showHelp(QWidget* parent)
         contents->setCurrentItem(first);
         noResults->setVisible(first == nullptr);
     });
-    QObject::connect(browser, &QTextBrowser::anchorClicked, browser, [browser](const QUrl& link) {
-        const auto resolved = browser->source().resolved(link);
-        if (resolved.scheme() == QStringLiteral("https")) {
-            QDesktopServices::openUrl(resolved);
+    const auto openExternal = [linkStatus](const QUrl& url) {
+        const bool opened = QDesktopServices::openUrl(url);
+        linkStatus->setText(opened ? QString{} : QStringLiteral("Could not open the external browser for %1").arg(url.toDisplayString()));
+        linkStatus->setVisible(!opened);
+    };
+    QObject::connect(browser, &QTextBrowser::anchorClicked, browser, [dialog, browser, linkStatus, openExternal, openExample](const QUrl& link) {
+        const auto resolved = browser->source().resolved(link).adjusted(QUrl::NormalizePathSegments);
+        if (isWebLink(resolved)) {
+            openExternal(resolved);
             return;
         }
-        for (const auto& topic : topics) {
-            if (resolved.adjusted(QUrl::RemoveFragment) == QUrl(QString::fromUtf8(topic.path))) {
-                browser->setSource(resolved, QTextDocument::MarkdownResource);
+        const auto example = helpExamplePath(resolved);
+        if (!example.isEmpty() && openExample) {
+            // Let the main window's normal replacement prompt take focus.
+            dialog->hide();
+            if (openExample(example)) {
+                linkStatus->hide();
                 return;
             }
+            linkStatus->setText(QStringLiteral("Example was not opened: %1. Opening was canceled or the example is unavailable.").arg(example));
+            linkStatus->show();
+            showWindow(dialog);
+            return;
         }
+        if (isHelpArticle(resolved)) {
+            linkStatus->hide();
+            browser->setSource(resolved, QTextDocument::MarkdownResource);
+        } else {
+            linkStatus->setText(QStringLiteral("This link is not available in bundled help: %1").arg(link.toDisplayString()));
+            linkStatus->show();
+        }
+    });
+    browser->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(browser, &QWidget::customContextMenuRequested, browser, [browser, openExternal](const QPoint& position) {
+        const auto anchor = browser->anchorAt(position);
+        const auto url = browser->source().resolved(QUrl(anchor));
+        std::unique_ptr<QMenu> menu(browser->createStandardContextMenu(position));
+        if (!anchor.isEmpty() && isWebLink(url)) {
+            menu->addSeparator();
+            auto* action = menu->addAction(QStringLiteral("Open Link in External Browser"));
+            action->setObjectName(QStringLiteral("help.openExternalLink"));
+            QObject::connect(action, &QAction::triggered, browser, [url, openExternal] { openExternal(url); });
+        }
+        menu->exec(browser->viewport()->mapToGlobal(position));
     });
     QObject::connect(back, &QPushButton::clicked, browser, &QTextBrowser::backward);
     QObject::connect(forward, &QPushButton::clicked, browser, &QTextBrowser::forward);
@@ -172,6 +275,25 @@ void showHelp(QWidget* parent)
     contents->setCurrentRow(0);
     showWindow(dialog);
     search->setFocus();
+}
+
+void openHelpLink(QWidget* parent, const QUrl& link, const OpenHelpExample& openExample)
+{
+    const auto normalized = link.adjusted(QUrl::NormalizePathSegments);
+    if (!isHelpArticle(normalized) && !isWebLink(normalized) && helpExamplePath(normalized).isEmpty()) return;
+    if (isWebLink(normalized)) {
+        if (QDesktopServices::openUrl(normalized)) return;
+        showHelp(parent, openExample);
+        auto* status = parent->findChild<QLabel*>(QStringLiteral("help.linkStatus"));
+        status->setText(QStringLiteral("Could not open the external browser for %1").arg(normalized.toDisplayString()));
+        status->show();
+        return;
+    }
+    showHelp(parent, openExample);
+    auto* dialog = parent->findChild<QDialog*>(QStringLiteral("dialog.help"));
+    auto* browser = dialog->findChild<QTextBrowser*>(QStringLiteral("help.browser"));
+    // Share normal help navigation, including browser-launch failure feedback.
+    Q_EMIT browser->anchorClicked(normalized);
 }
 
 void showAbout(QWidget* parent)
@@ -197,7 +319,8 @@ void showAbout(QWidget* parent)
         "<h2>Acknowledgements</h2>"
         "<p>In memory of Serhiy Kondratiuk, my friend and collaborator on the first S7 implementation "
         "30 years ago, whose ideas continue to guide its development.</p>"
-        "<p>Developed with help from Claude, GitHub Copilot and Codex.</p>"
+        "<p>Thanks to ChatGPT and Codex (OpenAI), Claude Code (Anthropic), and GitHub Copilot "
+        "for assistance with design, implementation, testing and documentation.</p>"
         "<p>Thanks to the Qt, QSchematic, GPDS and Tabler Icons projects and the other libraries used by S7.</p>"
         "<p><a href='https://github.com/alukin/s7'>Project and issue tracker</a></p>"));
     credits->setOpenExternalLinks(true);

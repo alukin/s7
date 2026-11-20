@@ -1,0 +1,581 @@
+{
+  "id": "fn06_pole_maps",
+  "dt": 3,
+  "description": "Original S7 lesson FN06; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 30,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 370,
+    "height_mm": 325
+  },
+  "schema": {
+    "name": "FN06 \u2014 Stable does not mean accurate",
+    "dt": 3,
+    "elements": [
+      {
+        "id": "forward",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "forward_pole",
+        "type": "Gain",
+        "params": {
+          "factor": -2
+        }
+      },
+      {
+        "id": "backward",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "backward_pole",
+        "type": "Gain",
+        "params": {
+          "factor": 0.25
+        }
+      },
+      {
+        "id": "trapezoid",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "trapezoid_pole",
+        "type": "Gain",
+        "params": {
+          "factor": -0.2
+        }
+      },
+      {
+        "id": "exact",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "exact_pole",
+        "type": "Gain",
+        "params": {
+          "factor": 0.049787068367863944
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "forward",
+        "from_port": 0,
+        "to_element": "forward_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "forward_pole",
+        "from_port": 0,
+        "to_element": "forward",
+        "to_port": 0
+      },
+      {
+        "from_element": "backward",
+        "from_port": 0,
+        "to_element": "backward_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "backward_pole",
+        "from_port": 0,
+        "to_element": "backward",
+        "to_port": 0
+      },
+      {
+        "from_element": "trapezoid",
+        "from_port": 0,
+        "to_element": "trapezoid_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "trapezoid_pole",
+        "from_port": 0,
+        "to_element": "trapezoid",
+        "to_port": 0
+      },
+      {
+        "from_element": "exact",
+        "from_port": 0,
+        "to_element": "exact_pole",
+        "to_port": 0
+      },
+      {
+        "from_element": "exact_pole",
+        "from_port": 0,
+        "to_element": "exact",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "forward",
+        "position": [
+          7,
+          17
+        ],
+        "title": "Forward state: starts at 1 V"
+      },
+      {
+        "id": "forward_pole",
+        "position": [
+          21,
+          22
+        ],
+        "title": "Next = -2 \u00d7 state"
+      },
+      {
+        "id": "backward",
+        "position": [
+          7,
+          31
+        ],
+        "title": "Backward state: starts at 1 V"
+      },
+      {
+        "id": "backward_pole",
+        "position": [
+          21,
+          36
+        ],
+        "title": "Next = 0.25 \u00d7 state"
+      },
+      {
+        "id": "trapezoid",
+        "position": [
+          7,
+          45
+        ],
+        "title": "Trapezoid state: starts at 1 V"
+      },
+      {
+        "id": "trapezoid_pole",
+        "position": [
+          21,
+          50
+        ],
+        "title": "Next = -0.2 \u00d7 state"
+      },
+      {
+        "id": "exact",
+        "position": [
+          36,
+          45
+        ],
+        "title": "Exact sampled mode: exp(\u22123)"
+      },
+      {
+        "id": "exact_pole",
+        "position": [
+          50,
+          50
+        ],
+        "title": "Next = 0.04979 \u00d7 state"
+      },
+      {
+        "id": "scope",
+        "position": [
+          49,
+          17
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Forward Euler: growing error",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "forward"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "stable_scope",
+        "position": [
+          53,
+          31
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Stable methods: inspect first 12 s",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "backward",
+            "trapezoid",
+            "exact"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "forward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "forward_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            19
+          ],
+          [
+            18,
+            24
+          ]
+        ]
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "forward_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "forward",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            24
+          ],
+          [
+            32,
+            27
+          ],
+          [
+            5,
+            27
+          ],
+          [
+            5,
+            19
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "backward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "backward_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            33
+          ],
+          [
+            18,
+            38
+          ]
+        ]
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "backward_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "backward",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            38
+          ],
+          [
+            32,
+            41
+          ],
+          [
+            5,
+            41
+          ],
+          [
+            5,
+            33
+          ]
+        ]
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "trapezoid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "trapezoid_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            18,
+            47
+          ],
+          [
+            18,
+            52
+          ]
+        ]
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "trapezoid_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "trapezoid",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            32,
+            52
+          ],
+          [
+            32,
+            55
+          ],
+          [
+            5,
+            55
+          ],
+          [
+            5,
+            47
+          ]
+        ]
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "exact",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "exact_pole",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            47,
+            47
+          ],
+          [
+            47,
+            52
+          ]
+        ]
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "exact_pole",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "exact",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            61,
+            52
+          ],
+          [
+            61,
+            55
+          ],
+          [
+            34,
+            55
+          ],
+          [
+            34,
+            47
+          ]
+        ]
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "forward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "backward",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "stable_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "trapezoid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "stable_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "exact",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "stable_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**FN06 \u2014 Stable does not mean accurate**  \n**Does a stable discrete pole guarantee a faithful transient?** Run **30 s at 0.333333 Hz**, then open Scope.  \nPoles: forward \u22122, backward 0.25, trapezoid \u22120.2, exact exp(\u22123). Separate plots prevent hidden curves.  \nChange backward initial_value 1 \u2192 2. Does the pole change, or only the amplitude?  \n[Open FN06 student lab](qrc:/s7studio/help/education/labs/FN06-pole-maps/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1298,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,566 @@
+{
+  "id": "ct06_closed_loop_poles",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.1,
+  "studio_run": {
+    "runtime_seconds": 32,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 515,
+    "height_mm": 355
+  },
+  "schema": {
+    "name": "CT06 \u2014 Can increasing feedback gain move stable poles outside the unit circle?",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "gain",
+        "type": "Constant",
+        "params": {
+          "value": 4
+        }
+      },
+      {
+        "id": "reference",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "command",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "x",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "x_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "y",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "y_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 0
+      },
+      {
+        "from_element": "y",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 1
+      },
+      {
+        "from_element": "error",
+        "from_port": 0,
+        "to_element": "command",
+        "to_port": 0
+      },
+      {
+        "from_element": "gain",
+        "from_port": 0,
+        "to_element": "command",
+        "to_port": 1
+      },
+      {
+        "from_element": "command",
+        "from_port": 0,
+        "to_element": "x_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "x",
+        "from_port": 0,
+        "to_element": "x_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "x_rate",
+        "from_port": 0,
+        "to_element": "x",
+        "to_port": 0
+      },
+      {
+        "from_element": "x",
+        "from_port": 0,
+        "to_element": "y_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "y",
+        "from_port": 0,
+        "to_element": "y_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "y_rate",
+        "from_port": 0,
+        "to_element": "y",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "gain",
+        "position": [
+          2.6,
+          45.300000000000004
+        ],
+        "title": "Loop gain K: edit 4 \u2192 16"
+      },
+      {
+        "id": "reference",
+        "position": [
+          2.6,
+          28.400000000000002
+        ],
+        "title": "Step reference at source time 1 s"
+      },
+      {
+        "id": "error",
+        "position": [
+          14.3,
+          28.400000000000002
+        ],
+        "title": "Negative feedback: r \u2212 y"
+      },
+      {
+        "id": "command",
+        "position": [
+          25.35,
+          28.400000000000002
+        ],
+        "title": "Ideal command K \u00d7 error; no limiter"
+      },
+      {
+        "id": "x",
+        "position": [
+          46.800000000000004,
+          28.400000000000002
+        ],
+        "title": "First lag state x"
+      },
+      {
+        "id": "x_rate",
+        "position": [
+          36.4,
+          28.400000000000002
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "y",
+        "position": [
+          68.25,
+          28.400000000000002
+        ],
+        "title": "Output y; both lags \u03c4=1 s"
+      },
+      {
+        "id": "y_rate",
+        "position": [
+          57.85,
+          28.400000000000002
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "scope",
+        "position": [
+          79.3,
+          28.400000000000002
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Step and both causal states",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "reference",
+            "first_state",
+            "output"
+          ],
+          "channel_units": [
+            "1",
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "command_scope",
+        "position": [
+          46.800000000000004,
+          46.6
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Ideal command and tracking error",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "command",
+            "error"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            77.35000000000001,
+            39.45
+          ],
+          [
+            12.35,
+            39.45
+          ],
+          [
+            12.35,
+            31.0
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "command",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "x_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "x_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "x_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "y_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "y_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "y_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "command",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT06 \u2014 Can increasing feedback gain move stable poles outside the unit circle?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change gain.** Run 32 s at 10 Hz. Open both Scopes. The two forward-Euler lag states supply causal memory; command has no actuator limiter.  \nClosed poles z=0.9 \u00b1 0.1i\u221aK. K=4 is stable; K=16 rings longer; K=19 is marginal, K=25 grows. Stability is |z|<1, not Re(z)<0.  \nSelect gain, F4: value 4 \u2192 16; save/reopen/rerun. All signals use normalized unit 1.  \nSource/state sample n is observed at Scope time (n+1)/10 s. Each lag updates from the same old states; do not add a feedback delay.  \n[Open CT06 student lab](qrc:/s7studio/help/education/labs/CT06-closed-loop-poles/README.md) \u00b7 [MIT root locus](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_11/) \u00b7 [MIT stability margins](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_23/)",
+          "text_format": "markdown",
+          "width": 1700,
+          "height": 440,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

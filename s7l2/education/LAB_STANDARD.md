@@ -192,7 +192,9 @@ device qualification from an otherwise local deterministic lab.
 
 ## 6. Implementation and tests organization
 
-Prefer the existing S7 generators, diagrams and test harnesses.
+Use new purpose-built educational diagrams (maintainer decision, 2026-11-19).
+Prefer existing S7 primitives and test harnesses; inspect earlier generators
+and diagrams as implementation references without copying their graphs.
 Codex should first survey
 [`../examples/`](../examples/README.md),
 [`../docs/NUMERICAL_VALIDATION_MATRIX.md`](../docs/NUMERICAL_VALIDATION_MATRIX.md)
