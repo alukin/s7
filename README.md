@@ -29,6 +29,14 @@ Studio provides a visual workbench for drawing these networks and observing
 their behavior. The runtime also works headlessly for scripted experiments,
 automated checks and execution on other machines.
 
+For students, the current source includes [24 original educational examples
+with guided labs](s7l2/examples/education/README.md), covering signals and
+systems, convolution, Fourier analysis, numerical modeling and feedback control.
+Each lab pairs a purpose-built diagram with an offline student guide, MIT
+online readings and independent numerical checks. Predict the result, run the
+model, inspect the named signals, then change a parameter and explain what
+happens. Start with [FN01: one sample of memory](s7l2/education/labs/FN01-unit-delay/README.md).
+
 [![The Lorenz system in S7 Studio: its causal block diagram, a three-dimensional butterfly attractor and a Scope showing the x, y and z state signals.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
 
 *Exploring the Lorenz system in S7: an explicit causal model, its
