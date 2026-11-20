@@ -191,8 +191,10 @@ Do not fix a physics-vs-code discrepancy by weakening the reference.
 5. Qualify the installed Linux course and independently review Studio
    rendering/axes/viewers. Do not advertise Windows SDR capability if
    that platform profile disables `S7_BUILD_SDR`.
-6. Release independently of the MIT-EE 0.2.0 obligations, on approval
-   by the maintainer.
+6. Qualify **all SDR01–SDR24 as mandatory 0.3.0 release targets**
+   under the [0.3.0 work plan](../../docs/RELEASE_0.3.0_WORKPLAN.md),
+   while keeping the 0.2.0 MIT-EE gates independent. Hardware-required
+   modes must have actual opt-in evidence rather than simulated substitutes.
 
 ## Ordered first handoff for Codex
 
