@@ -13,6 +13,8 @@
 #include <QSettings>
 #include <QTabWidget>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
+#include <QRadioButton>
 #include <QLineEdit>
 #include <QTimer>
 #include <QMessageBox>
@@ -98,6 +100,32 @@ int main(int argc,char** argv) {
         auto* root=qobject_cast<s7studio::diagram::DiagramEditor*>(tabs->widget(0));
         auto* picker=window.findChild<s7studio::ui::ElementPickerPanel*>();
         auto* tree=picker->findChild<QTreeWidget*>();
+        const auto groupFor = [tree](const QString& type) {
+            for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+                if ((*it)->data(0, Qt::UserRole).toString() == type) return (*it)->parent()->text(0);
+            }
+            return QString{};
+        };
+        require(groupFor("AudioSource") == "Sound and Video" && groupFor("AudioSink") == "Sound and Video",
+                "Studio discovers the build-tree audio plugin before opening a diagram");
+#if defined(S7_TEST_SDR_PICKER)
+        require(groupFor("SdrSource") == "Radio" && groupFor("SdrSink") == "Radio" &&
+                groupFor("FmDiscriminator") == "Radio" && groupFor("AmModulator") == "Radio" &&
+                groupFor("FmModulator") == "Radio", "Studio discovers SDR and Radio plugins on startup");
+        require(groupFor("FirFilter") == "Signal Processing" && groupFor("Resampler") == "Signal Processing",
+                "Generic filtering and resampling remain in Signal Processing");
+        auto* library = window.findChild<QRadioButton*>("elements.byLibrary");
+        auto* category = window.findChild<QRadioButton*>("elements.byCategory");
+        require(library && category, "Picker title bar has grouping controls");
+        library->click();
+        require(groupFor("SdrSource") == "S7 SDR" && groupFor("FmDiscriminator") == "S7 Radio" &&
+                groupFor("AudioSink") == "S7 Audio", "Library groups identify hardware and radio providers");
+        category->click();
+        Window fm;
+        fm.openPath(QString::fromUtf8(S7_FM_EXAMPLE));
+        require(fm.currentDocument().as_object().at("schema").as_object().at("elements").as_array().size() == 5,
+                "Studio opens all five elements in the FM receiver diagram");
+#endif
         int schema_count=0,primitive_count=0;
         for(int i=0;i<tree->topLevelItemCount();++i) {
             const auto* category=tree->topLevelItem(i);

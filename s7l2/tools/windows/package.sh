@@ -52,7 +52,7 @@ done
 cp "$BUILD/s7audio/libs7audio-elements.dll" "$OUT/plugins/"
 if grep -q '^S7_BUILD_SDR:BOOL=ON$' "$BUILD/CMakeCache.txt"; then
     cp "$BUILD/s7sdr/libs7sdr.dll" "$OUT/"
-    cp "$BUILD/s7sdr/libs7sdr-elements.dll" "$OUT/plugins/"
+    cp "$BUILD/s7sdr/libs7sdr-elements.dll" "$BUILD/s7radio/libs7radio-elements.dll" "$OUT/plugins/"
 fi
 cp "$BUILD/s7noise/libs7noise.dll" "$OUT/plugins/"
 for module in s7spectral s7wavelet; do
@@ -93,9 +93,6 @@ python3 -B "$SOURCE/tools/teaching_assets.py" copy "$SOURCE" "$OUT/share/s7"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/share/s7/"
 cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/share/s7/"
 cp "$SOURCE/tools/windows/BUNDLE_README.md" "$OUT/README.md"
-if grep -q '^S7_BUILD_SDR:BOOL=OFF$' "$BUILD/CMakeCache.txt"; then
-    rm -f "$OUT/share/s7/examples/hardware/sdr_receive.json"
-fi
 # These Linux-specific examples explicitly select PipeWire; Windows uses PortAudio.
 rm -f "$OUT/share/s7/examples/hardware/audio_capture.json" "$OUT/share/s7/examples/hardware/audio_playback.json"
 

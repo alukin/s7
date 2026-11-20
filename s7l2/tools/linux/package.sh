@@ -63,7 +63,7 @@ done
 
 declare -a LIBRARIES=()
 [ -f "$BUILD/s7noise/libs7noise.so" ] && LIBRARIES+=(--library "$BUILD/s7noise/libs7noise.so")
-for module in s7audio s7sdr; do
+for module in s7audio s7sdr s7radio; do
     plugin="$BUILD/$module/lib$module-elements.so"
     [ ! -f "$plugin" ] || LIBRARIES+=(--library "$plugin")
 done
@@ -123,7 +123,7 @@ while IFS= read -r -d '' binary; do
 done < <(find "$OUT" -type f \( -name '*.so*' -o -perm -u+x \) -print0)
 
 # Project plugins are executable-relative, separate from Qt's own plugins.
-for module in s7spectral s7wavelet s7audio-elements s7sdr-elements; do
+for module in s7spectral s7wavelet s7audio-elements s7sdr-elements s7radio-elements; do
     if [ -f "$OUT/usr/lib/lib$module.so" ]; then
         mkdir -p "$OUT/usr/lib/s7/plugins"
         cp "$OUT/usr/lib/lib$module.so" "$OUT/usr/lib/s7/plugins/"

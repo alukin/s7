@@ -54,7 +54,7 @@ def check(args):
                 raise RuntimeError(f'Unresolved libraries for {program}')
         run('control-help', '/usr/bin/s7ctl', '--help')
         output = run('runtime-default', '/usr/bin/s7runtime', '--state-dir', cwd / 'default-state', '--serve-seconds', '1')
-        expected_plugins = 1 + (2 if args.hardware else 0) + (2 if args.analysis else 0)
+        expected_plugins = 1 + (3 if args.hardware else 0) + (2 if args.analysis else 0)
         if '/usr/bin/../share/s7/runtime/examples/schema_minimal.json' not in output:
             raise RuntimeError('The runtime did not select its installed default schema')
         if f'runtime.plugin_count={expected_plugins}\n' not in output:
@@ -67,9 +67,10 @@ def check(args):
             '--state-dir', cwd / 'noise-state', '--serve-seconds', '1')
         if args.hardware:
             run('hardware-help', '/usr/bin/s7hw', '--help')
-            for example in ('audio_capture', 'audio_playback', 'sdr_receive'):
-                run('hardware-' + example, '/usr/bin/s7hw', '--check',
-                    f'/usr/share/s7/examples/hardware/{example}.json')
+            for example in ('hardware/audio_capture.json', 'hardware/audio_playback.json',
+                            'sdr/sdr_receive.json', 'sdr/fm_receiver.s7diagram'):
+                run('hardware-' + Path(example).stem, '/usr/bin/s7hw', '--check',
+                    f'/usr/share/s7/examples/{example}')
         if args.analysis:
             for example in ('fourier', 'wavelet'):
                 run('analysis-' + example, '/usr/bin/s7runtime', '--schema',

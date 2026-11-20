@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <s7/sdr.hpp>
+#include <s7/io.hpp>
+#include "radio.hpp"
+#include <chrono>
+#include <fstream>
+#include <numbers>
 #include <SoapySDR/Device.hpp>
 #include <SoapySDR/Registry.hpp>
 #include <SoapySDR/Formats.hpp>
@@ -12,7 +17,7 @@
 using namespace s7;
 using namespace s7::hardware;
 namespace {
-struct Trace { int alive{},starts{},closes{},rx_error{},tx_error{}; double fullscale=2048; bool wrong_rate{}; std::vector<std::int16_t> tx; } trace;
+struct Trace { int alive{},starts{},closes{},rx_error{},tx_error{}; double fullscale=2048; bool wrong_rate{}, fm{}; std::vector<std::int16_t> tx; } trace;
 class Fake final : public SoapySDR::Device {
 public:
     Fake(){++trace.alive;} ~Fake() override{--trace.alive;}
@@ -22,7 +27,8 @@ public:
     std::string getNativeStreamFormat(int,std::size_t,double& scale) const override {scale=trace.fullscale;return SOAPY_SDR_CS16;}
     void setSampleRate(int,std::size_t,double value) override {rate=value;}
     double getSampleRate(int,std::size_t) const override {return rate+(trace.wrong_rate?1:0);}
-    double getFrequency(int,std::size_t) const override {return 1000000000;}
+    void setFrequency(int, std::size_t, double value, const SoapySDR::Kwargs&) override { frequency = value; }
+    double getFrequency(int, std::size_t) const override { return frequency; }
     SoapySDR::Stream* setupStream(int,const std::string&,const std::vector<std::size_t>& selected,const SoapySDR::Kwargs&) override {
         channels=selected.size();return reinterpret_cast<SoapySDR::Stream*>(this);
     }
@@ -31,6 +37,17 @@ public:
     int deactivateStream(SoapySDR::Stream*,int,long long) override {return 0;}
     int readStream(SoapySDR::Stream*,void* const* buffers,std::size_t count,int& flags,long long& time,long) override {
         if(trace.rx_error)return trace.rx_error;
+        if (trace.fm) {
+            constexpr double omega = 2 * std::numbers::pi * 1000 / 1200000;
+            auto* output = static_cast<float*>(buffers[0]);
+            for (std::size_t i = 0; i < count; ++i) {
+                const double phase = 30 * std::sin(omega * static_cast<double>(position++));
+                output[2*i] = static_cast<float>(std::cos(phase));
+                output[2*i+1] = static_cast<float>(std::sin(phase));
+            }
+            flags = 0;
+            return static_cast<int>(count);
+        }
         const auto n=std::min<std::size_t>(count,3);flags=SOAPY_SDR_HAS_TIME;time=static_cast<long long>(position)*1000;
         for(std::size_t c=0;c<channels;++c) for(std::size_t i=0;i<n;++i) {
             std::int16_t values[]={static_cast<std::int16_t>((position+i)*10+c),static_cast<std::int16_t>(-static_cast<int>((position+i)*10+c))};
@@ -47,12 +64,64 @@ public:
         return static_cast<int>(n);
     }
     int readStreamStatus(SoapySDR::Stream*,std::size_t&,int&,long long&,long) override {return trace.tx_error?trace.tx_error:SOAPY_SDR_NOT_SUPPORTED;}
-private: double rate=0;std::size_t channels=0,position=0;
+private: double rate=0, frequency=1000000000;std::size_t channels=0,position=0;
 };
 SoapySDR::KwargsList find(const SoapySDR::Kwargs&) {return {{{"driver","s7test"},{"serial","mock"}}};}
 SoapySDR::Device* make(const SoapySDR::Kwargs&) {return new Fake;}
 template<class F>void rejects(F f){bool bad=false;try{f();}catch(const std::exception&){bad=true;}assert(bad);}
 Request request(Direction d) {Request r;r.backend="soapy";r.device="driver=s7test,serial=mock";r.type=SignalType::CI12;r.direction=d;r.channels={"0","1"};r.block_frames=7;r.queue_frames=16;return r;}
+void test_fm_receiver() {
+    auto& registry = ElementRegistry::instance();
+    register_builtin_elements(registry);
+    register_io_elements(registry);
+    radio::register_elements(registry);
+    sdr::register_elements(registry);
+
+    std::ifstream diagram(S7_FM_EXAMPLE);
+    const std::string json((std::istreambuf_iterator<char>(diagram)), {});
+    auto document = boost::json::parse(json);
+    auto& schema = document.as_object().at("schema");
+    auto& elements = schema.as_object().at("elements").as_array();
+    elements.front().as_object().at("params").as_object()["device"] = "driver=s7test,serial=mock";
+    const auto path = std::filesystem::temp_directory_path() /
+        ("s7-fm-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".s7b");
+    const struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() { std::error_code ec; std::filesystem::remove(path, ec); }
+    } cleanup{path};
+    elements.back().as_object().at("params").as_object()["file_path"] = path.string();
+
+    constexpr std::size_t frames = 13200;
+    trace.fm = true;
+    {
+        auto graph = Compiler::compile(SchemaLibraryLoader::build_schema(schema, registry));
+        Run run(std::move(graph), [](std::string_view name) { return sdr::provider(name); });
+        const auto result = run.execute(frames, std::chrono::milliseconds(1000));
+        if (result.status != Status::Ok || result.graph_frames != frames) {
+            throw std::runtime_error("FM receiver did not complete synthetic Soapy capture");
+        }
+    }
+    trace.fm = false;
+    std::ifstream recording(path, std::ios::binary);
+    io::CompactBinaryFileFormat<double> format;
+    format.read_header(recording);
+    constexpr double omega = 2 * std::numbers::pi * 1000 / 1200000;
+    std::complex<double> tone{};
+    for (std::size_t i = 0; i < frames; ++i) {
+        std::uint64_t index;
+        double value;
+        if (!format.read_sample(recording, index, value) || index != i) {
+            throw std::runtime_error("FM receiver recording lost samples");
+        }
+        if (i >= 1200) tone += value * std::polar(1.0, -omega * static_cast<double>(i));
+    }
+    // 30-radian phase sine at 1 kHz gives 30 kHz peak deviation. Include
+    // the FIR's 48-sample delay and the half-step of the phase difference.
+    const auto expected = std::polar(0.4, -omega * 48.5);
+    if (std::abs(tone / 6000.0 - expected) > 0.005) {
+        throw std::runtime_error("FM capture did not recover the expected 1 kHz tone");
+    }
+}
 }
 int main(){
     SoapySDR::Registry registration("s7test",find,make,SOAPY_SDR_ABI_VERSION);
@@ -84,5 +153,6 @@ int main(){
         auto r=request(Direction::Capture);auto stream=provider->prepare(r);stream->start();stream->cancel();Buffer b(7*r.frame_bytes());
         assert(stream->read(b.bytes(),7,Deadline::max()).status==Status::Cancelled);
     }
+    test_fm_receiver();
     std::cout<<"actual SoapySDR adapter passed fake-driver planar I/O, timing, partial writes, format evidence and fault tests\n";
 }

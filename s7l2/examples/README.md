@@ -278,3 +278,10 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 The [runtime example guide](../s7runtime/examples/README.md) covers all nine
 JSON schemas and libraries, including two-node network pairs, gnuplot output,
 nested schemas and optional in-graph analysis plugins.
+
+## Software-defined radio
+
+See the [SDR examples](sdr/README.md).
+
+- [SoapySDR mono FM receiver diagram](sdr/fm_receiver.s7diagram) and
+  [capture and audio guide](sdr/FM_RECEIVER.md).

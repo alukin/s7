@@ -152,25 +152,23 @@ auto nextTextFrameId(const diagram::DiagramScene& scene) -> std::string
 
 auto developmentPluginCandidates() -> std::vector<std::string>
 {
-    const QString appDir = QCoreApplication::applicationDirPath();
-#if defined(_WIN32)
-    const QString suffix = QStringLiteral(".dll");
-    const QString noiseFile = QStringLiteral("s7noise") + suffix;
-#elif defined(__APPLE__)
-    const QString suffix = QStringLiteral(".dylib");
-    const QString noiseFile = QStringLiteral("libs7noise") + suffix;
-#else
-    const QString suffix = QStringLiteral(".so");
-    const QString noiseFile = QStringLiteral("libs7noise") + suffix;
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    const QStringList modules{
+        QStringLiteral("s7noise/" S7_STUDIO_NOISE_PLUGIN),
+        QStringLiteral("s7audio/" S7_STUDIO_AUDIO_PLUGIN),
+#if defined(S7_STUDIO_SDR_PLUGIN)
+        QStringLiteral("s7sdr/" S7_STUDIO_SDR_PLUGIN),
+        QStringLiteral("s7radio/" S7_STUDIO_RADIO_PLUGIN),
 #endif
-
-    const QString candidateA = QFileInfo(appDir + QStringLiteral("/../s7noise/") + noiseFile).absoluteFilePath();
-    const QString candidateB = QFileInfo(appDir + QStringLiteral("/../../s7noise/") + noiseFile).absoluteFilePath();
-
-    return {
-        candidateA.toStdString(),
-        candidateB.toStdString(),
     };
+    std::vector<std::string> candidates;
+    for (const auto& module : modules) {
+        for (const auto& prefix : {QStringLiteral("../"), QStringLiteral("../../")}) {
+            const QFileInfo file(appDir.filePath(prefix + module));
+            if (file.isFile()) candidates.push_back(file.absoluteFilePath().toStdString());
+        }
+    }
+    return candidates;
 }
 
 auto isDiagramDocument(const boost::json::value& json) -> bool
@@ -791,18 +789,8 @@ void MainWindow::buildUi()
     static const auto processPluginLoader = std::make_shared<s7::PluginLoader>();
     pluginLoader_ = processPluginLoader;
     pluginLoader_->load_plugins(registry);
-    if (pluginLoader_ && !registry.find("WhiteNoiseGenerator")) {
-        for (const auto& candidate : developmentPluginCandidates()) {
-            QFileInfo info(QString::fromStdString(candidate));
-            if (!info.exists() || !info.isFile()) {
-                continue;
-            }
-            pluginLoader_->load_plugin(candidate, registry);
-            if (registry.find("WhiteNoiseGenerator")) {
-                appendLog(QStringLiteral("[studio] loaded noise plugin from build tree: %1").arg(info.absoluteFilePath()));
-                break;
-            }
-        }
+    for (const auto& candidate : developmentPluginCandidates()) {
+        pluginLoader_->load_plugin(candidate, registry);
     }
 
     elementPickerPanel_ = new ui::ElementPickerPanel(registry, this);

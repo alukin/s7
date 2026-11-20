@@ -30,10 +30,10 @@ std::unique_ptr<hardware::Provider> provider(std::string_view name) {
 void register_elements(ElementRegistry& r) {
     hardware::register_elements(r,"s7audio","AudioSource","AudioSink",{SignalType::F32,SignalType::I16,SignalType::I32},
 #if defined(__linux__)
-        "pipewire"
+        "pipewire",
 #else
-        "portaudio"
+        "portaudio",
 #endif
-    );
+        "sound_video");
 }
 } // namespace s7::audio

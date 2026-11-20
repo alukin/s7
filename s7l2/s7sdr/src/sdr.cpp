@@ -19,6 +19,6 @@ std::unique_ptr<hardware::Provider> provider(std::string_view name) {
     throw std::invalid_argument("SDR backend unavailable: "+std::string(name));
 }
 void register_elements(ElementRegistry& r) {
-    hardware::register_elements(r,"s7sdr","SdrSource","SdrSink",{SignalType::C32,SignalType::CI12,SignalType::CI16},"soapy");
+    hardware::register_elements(r,"s7sdr","SdrSource","SdrSink",{SignalType::C32,SignalType::CI12,SignalType::CI16},"soapy","radio");
 }
 } // namespace s7::sdr

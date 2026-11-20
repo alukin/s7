@@ -177,5 +177,8 @@ private:
 void register_elements(ElementRegistry&, std::string_view library, std::string_view source_name,
                        std::string_view sink_name, std::vector<SignalType> types,
                        std::string_view default_backend);
+void register_elements(ElementRegistry&, std::string_view library, std::string_view source_name,
+                       std::string_view sink_name, std::vector<SignalType> types,
+                       std::string_view default_backend, std::string_view category);
 Request request_from_context(const ElementCreationContext&, Direction);
 } // namespace s7::hardware

@@ -232,6 +232,16 @@ add_library(s7studio_app OBJECT
 )
 
 add_dependencies(s7studio_app s7studio_build_identity)
+add_dependencies(s7studio_app s7noise s7audio_plugin)
+target_compile_definitions(s7studio_app PRIVATE
+    S7_STUDIO_NOISE_PLUGIN="$<TARGET_FILE_NAME:s7noise>"
+    S7_STUDIO_AUDIO_PLUGIN="$<TARGET_FILE_NAME:s7audio_plugin>")
+if(TARGET s7sdr_plugin)
+    add_dependencies(s7studio_app s7sdr_plugin s7radio_plugin)
+    target_compile_definitions(s7studio_app PRIVATE
+        S7_STUDIO_SDR_PLUGIN="$<TARGET_FILE_NAME:s7sdr_plugin>"
+        S7_STUDIO_RADIO_PLUGIN="$<TARGET_FILE_NAME:s7radio_plugin>")
+endif()
 target_compile_definitions(s7studio_app PRIVATE S7STUDIO_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
 target_include_directories(s7studio_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(GLOB_RECURSE S7STUDIO_EXAMPLE_HELP CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/examples/*.md)
@@ -455,6 +465,10 @@ set_tests_properties(s7studio_element_picker PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 
 s7_add_test_executable(s7studio_schema_elements_test tests/schema_elements_test.cpp)
 target_link_libraries(s7studio_schema_elements_test PRIVATE s7studio_app)
+if(TARGET s7sdr_plugin)
+    target_compile_definitions(s7studio_schema_elements_test PRIVATE S7_TEST_SDR_PICKER=1
+        S7_FM_EXAMPLE="${PROJECT_SOURCE_DIR}/examples/sdr/fm_receiver.s7diagram")
+endif()
 add_test(NAME s7studio_schema_elements COMMAND s7studio_schema_elements_test)
 set_tests_properties(s7studio_schema_elements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
 

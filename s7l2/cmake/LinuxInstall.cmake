@@ -63,7 +63,7 @@ if(S7_NATIVE_PACKAGES)
         endforeach()
     endif()
     # Native packages use the distribution loader paths and do not bundle libraries.
-    foreach(target s7core s7hardware s7audio s7sdr s7audio_plugin s7sdr_plugin
+    foreach(target s7core s7hardware s7audio s7sdr s7audio_plugin s7sdr_plugin s7radio_plugin
             s7noise s7runtime s7ctl s7hw s7analysis_lab s7studio)
         if(TARGET ${target})
             set_target_properties(${target} PROPERTIES INSTALL_RPATH "")

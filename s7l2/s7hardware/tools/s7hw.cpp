@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include <s7/audio.hpp>
+#include <s7/io.hpp>
 #if defined(S7_WITH_SDR)
 #include <s7/sdr.hpp>
+#include "radio.hpp"
 #endif
 #include <s7/hardware_plugin.hpp>
 #include <s7/builtin_element_registry.hpp>
@@ -49,8 +51,10 @@ int main(int argc,char** argv) {
         if (mode.empty() || (mode=="--run" && !frames) || (mode!="--run" && frames)) throw std::invalid_argument("see s7hw --help");
         auto& registry=s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry); s7::audio::register_elements(registry);
+        s7::register_io_elements(registry);
 #if defined(S7_WITH_SDR)
         s7::sdr::register_elements(registry);
+        s7::radio::register_elements(registry);
 #endif
         std::optional<s7::ExecutableGraph> graph;
         if (mode!="--devices") {
@@ -61,7 +65,10 @@ int main(int argc,char** argv) {
             if (input.bad()) throw std::runtime_error("schema read failed");
             if (size>4*1024*1024) throw std::invalid_argument("hardware schema exceeds 4 MiB");
             json.resize(size);
-            auto schema=s7::SchemaLibraryLoader::build_schema(boost::json::parse(json),registry);
+            const auto document = boost::json::parse(json);
+            const auto* kind = document.is_object() ? document.as_object().if_contains("document_kind") : nullptr;
+            const auto& payload = kind && *kind == "s7.diagram" ? document.as_object().at("schema") : document;
+            auto schema = s7::SchemaLibraryLoader::build_schema(payload, registry);
             graph=s7::Compiler::compile(schema);
             s7::hardware::validate_graph(*graph);
             if (mode=="--check") { std::cout<<"Graph and hardware execution profile valid; no hardware activated.\n"; return 0; }

@@ -47,12 +47,22 @@ Element plugins `libs7audio-elements.so` and `libs7sdr-elements.so` install unde
 Load them through the usual runtime/Studio plugin discovery for editing and
 validation. Their `step()` refuses execution without an explicit hardware owner.
 
+Studio discovers these plugins at startup in a development build or an
+installation. The Element Library places audio boundaries under **Sound and
+Video** and SDR boundaries under **Radio**. The Radio library also provides
+complex baseband FM and AM modulators and an FM discriminator. Filters and
+resamplers are under **Signal Processing**.
+
+The [mono FM receiver diagram](../examples/sdr/fm_receiver.s7diagram)
+can be edited in Studio and executed with `s7hw`. Follow the
+[capture and audio guide](../examples/sdr/FM_RECEIVER.md) to save a WAV.
+
 ## Explicit activation and pacing
 
 ```sh
 build-hardware/s7hw --check examples/hardware/audio_capture.json
 build-hardware/s7hw --check examples/hardware/audio_playback.json
-build-hardware/s7hw --check examples/hardware/sdr_receive.json
+build-hardware/s7hw --check examples/sdr/sdr_receive.json
 
 # Opt-in hardware operations:
 build-hardware/s7hw --devices portaudio

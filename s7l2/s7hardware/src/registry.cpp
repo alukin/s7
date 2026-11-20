@@ -30,13 +30,18 @@ Request request_from_context(const ElementCreationContext& c, Direction directio
 }
 void register_elements(ElementRegistry& registry, std::string_view library, std::string_view source,
                        std::string_view sink, std::vector<SignalType> types, std::string_view backend) {
+    register_elements(registry, library, source, sink, std::move(types), backend, "io");
+}
+void register_elements(ElementRegistry& registry, std::string_view library, std::string_view source,
+                       std::string_view sink, std::vector<SignalType> types, std::string_view backend,
+                       std::string_view category) {
     // Names passed here are static plugin literals, as required by Element's
     // non-owning type_name. Factories/metadata contain no live device resources.
     for (const auto name:{source,sink}) {
         if (registry.find(std::string(name))) continue;
         const bool capture=name==source;
         ElementMetadata m;
-        m.type_name=name; m.display_name=name; m.library=library; m.category="io"; m.version="0.1.0";
+        m.type_name=name; m.display_name=name; m.library=library; m.category=category; m.version="0.1.0";
         m.description="Explicitly activated hardware boundary. One simultaneous frame per graph step; use hardware::Run. Strict loss policy, no fallback or implicit rate conversion.";
         m.tags={"hardware",capture?"source":"sink","stateful"};
         auto param=[&](std::string n,std::string t,boost::json::value v,std::string d) {

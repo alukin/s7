@@ -8,8 +8,8 @@ the graph and initial execution profile without device I/O; `--run <file>
 - `audio_capture.json`: stereo native PipeWire capture, discarded after graph
   evaluation; verifies transfer counts. Add downstream DSP through channel ports.
 - `audio_playback.json`: stereo 440 Hz tone, normalized amplitude 0.02.
-- `sdr_receive.json`: receive through an installed SoapySDR driver; replace
-  the device selector before activation. C32 explicitly chooses driver conversion.
+
+See the [SDR examples](../sdr/README.md) for radio capture.
 
 For PortAudio, change `backend` to `portaudio`; `device` may be `default` or an
 index reported by `s7hw --devices portaudio`. For PipeWire it may be `default`,

@@ -52,7 +52,7 @@ QString categoryName(const QString& id)
         {"memory_integration", "Memory & Integration"},
         {"signal_processing", "Signal Processing"}, {"control", "Control & Plants"},
         {"types_complex", "Types & Complex Signals"},
-        {"io", "Files & Network"}, {"network", "Files & Network"}, {"observers", "Observers"}};
+        {"io", "Files & Network"}, {"network", "Files & Network"}, {"sound_video", "Sound and Video"}, {"radio", "Radio"}, {"observers", "Observers"}};
     const auto it = names.find(id);
     return it != names.end() ? it->second : id.isEmpty() ? QStringLiteral("Uncategorized") : id;
 }
@@ -63,7 +63,7 @@ QString libraryName(const QString& id)
         {"s7core", "S7 Core"}, {"s7_standard_schema_elements", "S7 Schema Library"},
         {"s7io", "S7 File I/O"}, {"s7net", "S7 Network"}, {"s7noise", "S7 Noise"},
         {"s7spectral", "S7 Spectral"}, {"s7wavelet", "S7 Wavelet"},
-        {"s7audio", "S7 Audio"}, {"s7sdr", "S7 SDR"}, {"s7studio", "S7 Studio"}};
+        {"s7audio", "S7 Audio"}, {"s7sdr", "S7 SDR"}, {"s7radio", "S7 Radio"}, {"s7studio", "S7 Studio"}};
     const auto it = names.find(id);
     return it != names.end() ? it->second : id.isEmpty() ? QStringLiteral("Unspecified library") : id;
 }
@@ -288,7 +288,7 @@ void ElementPickerPanel::rebuildTree()
         const auto aName = groupName(aKey), bName = groupName(bKey);
         if (!byLibrary && aName != bName) {
             static const QStringList order{"Sources", "Math & Functions", "Memory & Integration",
-                "Signal Processing", "Control & Plants", "Types & Complex Signals", "Files & Network", "Observers"};
+                "Signal Processing", "Control & Plants", "Types & Complex Signals", "Files & Network", "Sound and Video", "Radio", "Observers"};
             const auto rank = [&](const QString& name) { const auto i = order.indexOf(name); return i < 0 ? order.size() : i; };
             if (rank(aName) != rank(bName)) return rank(aName) < rank(bName);
         }
