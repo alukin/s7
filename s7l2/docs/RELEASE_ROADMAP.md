@@ -1,7 +1,8 @@
-# S7 release roadmap — 0.3.0 through 1.0.0
+# S7 product and release roadmap — 0.2.0 through 1.0.0
 
-**Maintainer direction: 2026-11-20.** Planning, not an assertion of
-implemented features or passed release gates.
+**Maintainer direction, updated 2026-11-20.** Planning, not an assertion
+of implemented features, completed qualification or tagged releases.
+The 0.2.0 printing requirement supersedes its earlier deferral.
 
 **Product vision:** S7 is a design and verification environment where the
 saved diagram is the authoritative specification. S7's dynamic reference
@@ -12,11 +13,53 @@ of the execution backend.
 
 | Version | Purpose | Principal outcome | Status |
 | --- | --- | --- | --- |
+| **0.2.0** | **Verify and document** | Numerical/educational validation, useful two-host causal execution, reliable Studio, **mandatory diagram and viewer output printing (G4/P)** to PDF and physical printers; reproducible packages | G1–G4, including G4/P, are mandatory and qualification remains open |
 | **0.3.0** | **Bridge to reality** | 24 SDR labs, 12 audio labs, four video smoke tests, mandatory GStreamer audio/video, device pacing, and H8 provider/model/host separation plus deterministic capture/replay | Agreed H0–H8 gates; final qualification open |
 | **0.4.0** | **Compile the model** | Local diagram -> validated/typed causal IR -> efficient C++ source and native executable; differential verification against S7 reference runtime | Preliminary |
 | **0.5.0** | **Distributed coherence** | Explicit physical clock/coherence relationships, timing uncertainty, multi-domain signal processing and distributed sensing experiments | Preliminary |
 | **0.6.0** | **Pre-GA integration beta** | Compile, build, deploy and run a real S7 DSP model on named ARM Linux hardware with microphone or SDR input | Preliminary |
 | **1.0.0** | **General Availability** | Documented supported profiles, compatibility policy, reproducible artifacts and evidence-backed reliability/security/performance qualification | Future GA decision |
+
+## Delivery milestones and acceptance ownership
+
+**0.2.0 — Reliable engineering workbench.** Establish reproducible
+numerical/causal simulation, 24 MIT-aligned core educational labs,
+a practical two-host engineering experiment and installed Studio.
+Printing is part of Studio's deliverable: print diagrams, Scope and
+other recorded/live visual observer output using coherent snapshots,
+good page layout and testable PDF output. See the
+[release contract](RELEASE_0.2.0.md),
+[live plan](RELEASE_0.2.0_WORKPLAN.md) and
+[printing specification](STUDIO_PRINTING_0.2.0.md).
+
+**0.3.0 — Hardware-connected processing.** Qualify the committed
+24 SDR, 12 audio, four preliminary video, low-latency and production
+GStreamer audio/video targets. H8 separates device adapters,
+causal processing and host lifecycles, and verifies capture/replay
+before the native compiler exists. See [H0–H8](RELEASE_0.3.0_WORKPLAN.md).
+
+**0.4.0 — S7 native compiler.** A supported local diagram is the
+source specification; compile into optimized C++ and native binaries,
+then independently compare numerical traces and state transitions
+to the reference `NodeRuntime`. See
+[compiler notes](RELEASE_0.4.0.md).
+
+**0.5.0 — Distributed coherence.** Explicit physical time and clock
+relationships, uncertainty, drifting streams and distributed
+acoustic/SDR sensing experiments. See
+[coherence notes](RELEASE_0.5.0.md).
+
+**0.6.0 — Deployment beta.** Deploy compiled, verified DSP on at
+least one real ARM Linux device, preferably Raspberry Pi with
+microphones; separately qualify Linux LibreSDR/Zynq as a desired
+additional profile. Measure memory, processing load, latency,
+actual sample loss and recovery. See
+[beta notes](RELEASE_0.6.0.md).
+
+**1.0.0 — General Availability.** Only after supported-platform,
+compatibility, documented limitations, reproducible release, stress,
+security and reliability evidence supports an explicit GA decision.
+Further pre-1.0 stabilization releases are allowed.
 
 ## Architectural dependencies
 
@@ -63,7 +106,9 @@ optional `v0.6.0-beta.N` preview tags). `v1.0.0` is GA only after
 supported-platform, reproducible-build, API/format, security, stability
 and documentation gates have passed. No 1.0 date is promised.
 
-See the [0.3.0 work plan](RELEASE_0.3.0_WORKPLAN.md),
+See the [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md),
+[printing contract](STUDIO_PRINTING_0.2.0.md),
+[0.3.0 work plan](RELEASE_0.3.0_WORKPLAN.md),
 [0.4.0 preliminary notes](RELEASE_0.4.0.md),
 [0.5.0 preliminary notes](RELEASE_0.5.0.md), and
 [0.6.0 preliminary notes](RELEASE_0.6.0.md).

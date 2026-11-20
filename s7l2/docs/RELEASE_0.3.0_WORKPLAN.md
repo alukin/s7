@@ -257,12 +257,16 @@ H8 is the limited interface and replay groundwork, not their implementation.
 ## Not selected as 0.3.0 blockers
 
 The earlier 0.3.0 candidate backlog includes remote node administration,
-PKI/Trusted Networks UX, printing, signal generator UI, development-test
+PKI/Trusted Networks UX, signal generator UI, development-test
 labels, general-purpose parallel graph scheduling and universal distributed
 clock synchronization. They remain valid research/backlog items but do not
 block the hardware-education 0.3.0 scope **unless needed to make a named
 lab or mandatory video gate work**. In particular, **FPGA programming
 is explicitly outside this course release**.
+
+0.2.0 now owns diagram and viewer printing as mandatory G4/P; retain
+its qualified PDF/print pathways in 0.3.0 regressions. It is not a
+new 0.3.0 feature.
 
 ## First handoff for implementation agents
 

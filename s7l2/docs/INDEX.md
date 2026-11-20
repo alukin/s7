@@ -92,9 +92,11 @@ guides and original MIT online teaching materials.
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) remains the single
 [status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
 with the delivered N0–N4 research, existing runtime baseline,
-owners and remaining qualification tasks. Older remote administration,
-certificate GUI, printing, signal generator and production video tasks
-moved to the [0.3.0 candidate backlog](RELEASE_0.3.0.md).
+owners and remaining qualification tasks. **Diagram and viewer printing
+is mandatory 0.2.0 G4/P**, specified by
+[STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md). Remote
+administration, certificate GUI, signal generator and production
+video remain in the [0.3.0 candidate backlog](RELEASE_0.3.0.md).
 Those historical assignments remain in Git history.
 Within-node parallel scheduling and its unresolved design choices are recorded
 for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
@@ -152,6 +154,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 |---|---|
 | [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
 | [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
+| [STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md) | Mandatory 0.2.0 printing of diagrams and viewer outputs, PDF/printer acceptance matrix |
 | [RELEASE_ROADMAP.md](RELEASE_ROADMAP.md) | Hardware, native compilation, coherence, ARM deployment beta, GA |
 | [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Mandatory hardware, SDR/audio/video labs, GStreamer and H8 capture/replay |
 | [RELEASE_0.3.0_WORKPLAN.md](RELEASE_0.3.0_WORKPLAN.md) | H0–H8 qualification and work phases |

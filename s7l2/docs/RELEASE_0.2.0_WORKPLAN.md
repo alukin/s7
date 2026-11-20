@@ -1,6 +1,6 @@
 # S7 0.2.0 work plan — qualification and remaining delivery
 
-**Scope revised 2026-11-18.** The [release contract](RELEASE_0.2.0.md)
+**Scope revised 2026-11-18; printing added to G4 by the maintainer on 2026-11-20.** The [release contract](RELEASE_0.2.0.md)
 supersedes older feature assignments. The primary acceptance example is a
 **useful two-host engineering workflow** — source, processing/model,
 independent numeric validation and observation — not a cross-host feedback
@@ -44,10 +44,11 @@ must not be reported as final-candidate tests.
 | **G3 / D2 — Multi-node lifecycle** | Partial | Local mixed-language chain and reconnect checks | Headless forward chain, fan-out, slow consumers, gaps, restart/redeploy/reconnect, controlled recovery and revisions; no obligatory multi-host feedback loop | teren_ukr |
 | **G3 — Failure and authorization boundary** | Partial | Existing [wire/stream contract](../../doc/S7_Network_Wire_Protocol_v1.md), control authorization and [schedule limits](DISTRIBUTED_CAUSAL_SCHEDULE.md) | Assert unauthorized, wrong-pin, profile mismatch, missing values, non-atomic network sends and explicit faults; document limits and operator recovery | Maintainer/Codex + teren_ukr |
 | **G4 — Studio and packaged candidate** | Tooling present; final gate open | [Studio testing](STUDIO_GUI_TESTING.md), [Linux packages](NATIVE_LINUX_PACKAGES.md), [Windows checks](WINDOWS_BUILD.md) | Complete configured Linux/Studio/Wine regressions; candidate artifact rebuilding, relocation, notices, hashes and accurate native-vs-Wine qualification | Maintainer/Codex |
+| **G4/P — Studio diagram/viewer printing** | **New mandatory gate; qualification open** | [Printing contract](STUDIO_PRINTING_0.2.0.md), existing Studio viewer architecture | Diagram and supported viewer output PDF/printer paths; correct page scale, labels, snapshot, error/cancel, package and supported-platform evidence | Maintainer/Codex |
 | **G4 — Reproducible engineering demonstration** | Open | [Distributed schedule smoke cases](DISTRIBUTED_CAUSAL_SCHEDULE.md) and research lab reports | Public practical diagram, independent reference, headless setup, observation/recording workflow, resource metrics and failure/recovery results | Maintainer/Codex + teren_ukr |
 
 **Not on the 0.2.0 critical path:** D3 runtime administration and restart
-protocol, D4 full credential tooling and remote provisioning UX, U2 printing,
+protocol, D4 full credential tooling and remote provisioning UX,
 U3 signal generator, U4 certificate viewer, U5 Trusted Networks UI, video
 providers V0–V5, general test-label taxonomy T1, within-node parallelism,
 automatic coherence/hardware clock alignment and multi-rate distributed
@@ -203,7 +204,11 @@ failure semantics, not continuous operation through every fault.
    guides and supported Studio interaction evidence.
 3. Run Studio diagram/edit, viewer/analysis, lifecycle and distributed
    preflight regressions. Retain screenshots or recorded UI artifacts where
-   a visual property matters. No new printing/instrument UI is required.
+   a visual property matters. **Implement G4/P printing** of diagrams,
+   recorded viewers and coherent snapshots from live viewers, to PDF and
+   system printers, with layout/cancel/error tests and package checks.
+   Verify the [required matrix](STUDIO_PRINTING_0.2.0.md). The separate
+   signal generator instrument UI is not required.
 4. Build the final source/version into Linux portable x86-64, Fedora 45 RPM,
    Ubuntu 26.04 DEB and Windows portable ZIP artifacts in their documented
    profiles. Check installed/relocated operation, dependencies, notices,
@@ -222,6 +227,15 @@ failure semantics, not continuous operation through every fault.
 **Exit:** all G1–G4 acceptance records refer to one identifiable candidate,
 or a documented maintainer-approved revision of the release contract.
 
+## G4/P — mandatory printing acceptance
+
+The 2026-11-20 scope amendment restores diagram and viewer-output
+printing as a **0.2.0 release blocker**. Follow
+[STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md) for supported
+diagram/Scope/Phase Portrait/3D/live/analysis presentations, PDF output,
+physical printing, coherent snapshot semantics, quality, cancellation,
+platform and package evidence. This does not change G1–G3.
+
 ## Acceptance artifacts
 
 Before tagging 0.2.0, gather:
@@ -234,6 +248,8 @@ Before tagging 0.2.0, gather:
 | Failure/recovery report | Scenario, injected fault, active revision, expected/actual stream status, output prefix, gap/recovery behavior and limits |
 | Interoperability matrix | Supported C++/Python combinations, control/data profiles, fixtures and negative security cases; Java boundary explicit |
 | Performance record | Rate, traffic, packet/batch settings, latency/lag, CPU, RSS, queue/log occupancy and reproducible host identifiers |
+| Printing qualification matrix | Supported diagram/viewer inventory, PDF and printer results, checked page geometry/symbols/legends/axes, snapshot consistency, failure/cancel cases, candidate SHA and platform |
+
 | Release/package manifest | Version/SHA, artifact checksums, packaging and relocation checks, notices, CI/local results and platform exclusions |
 
 A headline test count without the exact candidate and test selection is not
@@ -271,7 +287,7 @@ documents. This condensed work plan intentionally keeps **only** active
 
 Stop accepting unrelated new capabilities into 0.2.0. Fix regressions or
 inconsistencies revealed by G1–G4; do not require new video, PKI, remote
-administration, printing, signal-generator or general parallel/multi-rate
-features to close a gate. Multi-host feedback stress tests are optional
+administration, signal-generator or general parallel/multi-rate
+features to close a gate. **G4/P printing explicitly remains required.** Multi-host feedback stress tests are optional
 additional evidence, not the pre-MVP showcase. Any substantive gate change needs an explicit
 maintainer decision, an updated contract and a visible release-note exclusion.

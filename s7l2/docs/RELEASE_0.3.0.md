@@ -107,9 +107,9 @@ Acceptance evidence and individual profiles are in the
 
 The remaining historic sections record research and candidates that
 were deferred from 0.2.0 or independently discussed for future versions.
-Only requirements specifically promoted into H0–H7 above are mandatory.
+Only requirements specifically promoted into H0–H8 above are mandatory.
 For example, the larger two-host Full HD video showcase, node
-administration, PKI UX, printing and general parallel scheduler are
+administration, PKI UX and general parallel scheduler are
 **not** silently required by this narrower hardware-education contract.
 The explicitly promoted **H6 GStreamer** gate requires qualified S7 audio
 **and** video adapters, not an external test-tool invocation. The historical
@@ -124,7 +124,7 @@ where its scope is narrower than [H6](RELEASE_0.3.0_GSTREAMER.md).
 | GStreamer audio + video | **Mandatory 0.3.0 H6 gate** | Implement and qualify bounded production S7 appsrc/appsink adapters for both media paths; compare with native PortAudio/PipeWire and FFmpeg |
 | Headless remote node administration | Deferred 0.2.0 goal; design review required | Versioned node-settings API, atomic persistence, authorization, revisions and supervisor-owned restart |
 | Credential tooling and Studio trust UX | Deferred 0.2.0 goal; depends on administration/provisioning decisions | Headless cert/CSR/signing tools first; viewer and Trusted Networks UI consume independently reviewed services |
-| Studio printing and software instrument | Deferred 0.2.0 goals; separable | Explicit PDF/print viewer matrix; independent two-channel schema-backed generator with headless tests |
+| Studio software instrument | Deferred candidate | Independent two-channel schema-backed generator with headless tests; printing is 0.2.0 G4/P |
 | Developer test selection | Deferred optimization, not a release correctness substitute | CTest area/cost labels and documented focused selections; full release suite retained |
 | Within-node runtime parallelism | Research decision only | Resolve execution regions, plugin safety, cost and determinism before selecting any scheduler |
 | Broader distributed timing/coherence | Research candidates | Define multi-rate, hardware-clock alignment and failure semantics independently of the static single-rate profile |
@@ -259,18 +259,15 @@ from display-only parsing.
 
 <a id="studio-instruments-printing-and-ui"></a>
 
-## Studio instruments, printing and UI
+## Studio instruments and UI
 
-These are separable user-facing candidates, **not** core distributed-runtime
-release gates.
+**Diagram and viewer printing is a mandatory 0.2.0 G4/P deliverable**
+following the maintainer's 2026-11-20 revision. The canonical
+[printing requirements](STUDIO_PRINTING_0.2.0.md) belong to 0.2.0;
+0.3.0 merely preserves those capabilities through regression tests.
 
-**Diagram and viewer printing:** choose the supported diagram scope, PDF and
-physical-printer workflow, fit/tiling and page settings, and the Scope/live
-and 3D viewer matrix. Preserve mathematical symbols, saved element geometry,
-legible wires and coherent live-data snapshots. Printing must not pause or
-advance the simulation. Test vector/PDF output, failure/cancellation and
-relocated package dependencies. Physical-printer evidence differs from
-automated PDF verification.
+These remaining user-facing items are candidates, not automatic
+0.3.0 release gates.
 
 **Schema-backed two-channel signal generator:** use the UTG932E as an
 interaction reference, not as a required full-hardware emulation. Candidate

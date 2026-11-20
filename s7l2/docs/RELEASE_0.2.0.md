@@ -1,6 +1,9 @@
 # S7 0.2.0 — reproducible causal execution
 
-Scope revision agreed by the maintainer on **2026-11-18**. This replaces the
+Scope initially revised **2026-11-18**; on **2026-11-20**, the maintainer
+explicitly promoted diagram and viewer-output printing into **mandatory
+0.2.0 G4**. This change records a requirement, not completed implementation.
+The original scope revision was agreed on **2026-11-18**. This replaces the
 earlier feature-accumulation plan for 0.2.0; the historical assignments and
 decisions remain available in Git history and in their linked design/research
 documents. The source version is still 0.1.2 until an actual release candidate
@@ -97,6 +100,12 @@ implicitly become 0.2.0 feature gates.
 S7 is an independent MIT-aligned resource, **not** an official MIT course
 resource or MIT-endorsed product. Avoid reproducing copyrighted textbook
 problems, diagrams and solution keys.
+
+**Documenting results:** 0.2.0 includes print-ready diagrams and visual
+observer outputs (PDF and physical printer). The
+[Studio printing specification](STUDIO_PRINTING_0.2.0.md) defines exact
+viewer/page coverage and negative tests; printing is part of G4, not a
+deferred 0.3.0 feature.
 
 ## Acceptance gates
 
@@ -213,6 +222,16 @@ behavior, not completed acceptance.
 4. Verify educational diagrams, guides and course navigation in
    supported installed/relocated artifacts. Record Studio evidence
    separately from headless numerical passes.
+5. **G4/P — diagram and viewer-output printing:** print diagrams and
+   supported recorded/live visualizations to PDF and through the system
+   print dialog. Preserve document geometry, labels, mathematical symbols,
+   axes, legends and a coherent live-data snapshot. Verify page setup,
+   fit/scale or multi-page selection, print-preview and cancel/error
+   behavior. Rendering must not advance, pause or alter a running model.
+   Run automated PDF checks and documented opt-in physical-printer tests,
+   including packaged Studio. Follow
+   [STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md).
+
 5. Publish release notes with supported operating systems, tested graph and
    rate envelopes, known regressions, unsupported features and reproducible
    test/benchmark provenance, including the qualified education index.
@@ -261,7 +280,7 @@ deferral does not promise delivery of every item in 0.3.0.
 | Production VideoSource/VideoSink, screen/window capture, codecs and native Windows video | Current [whole-frame FFmpeg experiments](VIDEO_IO_FULL_HD.md) remain evidence, not shipping providers |
 | Remote node-settings read/stage/commit, supervisor restart and Trusted Networks UI | Existing secure deployment/control remains in scope; new administration APIs do not |
 | Certificate viewer, full node/Studio certificate-creation program and renewal UX | Existing independently provisioned mTLS credentials are enough for the release demo |
-| Diagram/viewer printing and instrument-style software signal generator | Existing Studio editing/observing stays in scope |
+| Instrument-style software signal generator | Studio printing is now mandatory G4/P; the signal generator remains deferred |
 | Test area/cost-label taxonomy and developer selection tooling | Full release regressions remain mandatory |
 | Intra-node/nested-schema parallelism; general multi-rate distributed scheduling | Remain research/architecture decisions, not hidden release requirements |
 | Coherence-domain alignment, automatic hardware-clock correction, remote observation APIs and crash-durable stream journals | Not promised by this release |
