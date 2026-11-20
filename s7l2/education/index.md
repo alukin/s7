@@ -1,6 +1,6 @@
 # S7 teaching labs
 
-**Course tracks:** [MIT-EE: signals, DSP and control](mit-ee/README.md) (the 24 existing core diagrams listed below) · [MIT-SDR: SDR and digital communications](mit-sdr/README.md) (24 planned original labs; not yet implemented). Both use the shared [lab verification standard](LAB_STANDARD.md).
+**Course tracks:** [MIT-EE: signals, DSP and control](mit-ee/README.md) (the 24 existing core diagrams listed below) · [MIT-SDR: SDR and digital communications](mit-sdr/README.md) (24 planned original labs; not yet implemented) · [MIT-Audio: low-latency audio DSP and effects](mit-audio/README.md) (12 proposed labs; not yet implemented). All three use the shared [lab verification standard](LAB_STANDARD.md).
 
 These graphs are created specifically for S7 teaching laboratories. Earlier
 examples under `examples/` are implementation references. Open a diagram
