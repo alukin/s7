@@ -10,8 +10,9 @@ The maintainer has explicitly selected **all 24 original MIT-SDR labs**
 S7's causal numerical execution, hardware-facing I/O, buffering, sample
 rates, clock provenance and real-time-like behavior. Include four named
 preliminary whole-frame video tests **VID01–VID04**, rather than a complete
-video education track. A bounded GStreamer appsrc/appsink integration,
-already assigned to 0.3.0, is part of that video verification.
+video education track. **Production GStreamer integration for both audio and
+video is an independent mandatory release gate (H6)**, not merely a video
+smoke test or external testing utility.
 
 The [0.3.0 qualification work plan](RELEASE_0.3.0_WORKPLAN.md) is the
 authoritative **live gate matrix**, engineering phases, tests, required
@@ -39,8 +40,13 @@ in [MIT-SDR](../education/mit-sdr/COURSE_MAP.md) and
    named qualified profile, not a claim of existing capability.
 5. **H5 — Preliminary video:** VID01 frame fidelity/stride/colors,
    VID02 frame lifecycle/backpressure, VID03 opt-in webcam whole-frame
-   capture/output, VID04 selected GStreamer/FFmpeg media-adapter checks.
-6. **H6 — Final integrated candidate:** same source revision, real saved
+   capture/output, VID04 selected media-adapter frame tests.
+6. **H6 — Production GStreamer audio AND video:** actual S7 processing graphs
+   connected through bounded GStreamer appsrc/appsink paths, with independent
+   reference outputs, caps/clock/ownership tests, latency measurements,
+   failures and opt-in live audio/camera checks. Follow the
+   [mandatory GStreamer contract](RELEASE_0.3.0_GSTREAMER.md).
+7. **H7 — Final integrated candidate:** same source revision, real saved
    diagrams, independent references, Studio workflow, installed package,
    Linux and named platform checks, real-device logs and explicit faults.
 
@@ -62,19 +68,21 @@ reference unless an independently reviewed runtime improvement is proven.
 
 The remaining historic sections record research and candidates that
 were deferred from 0.2.0 or independently discussed for future versions.
-Only requirements specifically promoted into H0–H6 above are mandatory.
+Only requirements specifically promoted into H0–H7 above are mandatory.
 For example, the larger two-host Full HD video showcase, node
 administration, PKI UX, printing and general parallel scheduler are
 **not** silently required by this narrower hardware-education contract.
-The previously assigned GStreamer goal is satisfied only by a qualified
-bounded production adapter, not by an external test-tool invocation.
+The explicitly promoted **H6 GStreamer** gate requires qualified S7 audio
+**and** video adapters, not an external test-tool invocation. The historical
+GStreamer subsection below initially focused on video and is superseded
+where its scope is narrower than [H6](RELEASE_0.3.0_GSTREAMER.md).
 
 ## Candidate priorities and sequencing
 
 | Area | Planning status | Prerequisites and first useful increment |
 | --- | --- | --- |
 | Production whole-frame video | Candidate, currently researched | Review frame/ownership/media-session contracts; deliver a real webcam-to-remote-viewer pipeline and frame-to-numeric bridge without changing scalar step semantics |
-| GStreamer adapters | **Assigned 0.3.0 goal** | Implement and qualify a bounded opt-in adapter profile alongside the FFmpeg video path |
+| GStreamer audio + video | **Mandatory 0.3.0 H6 gate** | Implement and qualify bounded production S7 appsrc/appsink adapters for both media paths; compare with native PortAudio/PipeWire and FFmpeg |
 | Headless remote node administration | Deferred 0.2.0 goal; design review required | Versioned node-settings API, atomic persistence, authorization, revisions and supervisor-owned restart |
 | Credential tooling and Studio trust UX | Deferred 0.2.0 goal; depends on administration/provisioning decisions | Headless cert/CSR/signing tools first; viewer and Trusted Networks UI consume independently reviewed services |
 | Studio printing and software instrument | Deferred 0.2.0 goals; separable | Explicit PDF/print viewer matrix; independent two-channel schema-backed generator with headless tests |
@@ -123,8 +131,11 @@ Do not infer native camera capabilities from the synthetic FFmpeg tests.
 
 ## GStreamer adapters
 
-**Assigned to 0.3.0 by the maintainer on 2026-11-18.** Add practical
-GStreamer adapters alongside the FFmpeg-oriented video path. They were not
+**Originally assigned for video on 2026-11-18; expanded to mandatory
+production audio AND video on 2026-11-20.** Follow the
+[H6 GStreamer contract](RELEASE_0.3.0_GSTREAMER.md). Add practical
+GStreamer adapters alongside the native PortAudio/PipeWire audio and
+FFmpeg-oriented video paths. They were not
 a prerequisite for the 0.2.0 Full HD experiment and are not a new 0.2.0
 runtime/package dependency.
 
