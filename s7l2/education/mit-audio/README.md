@@ -97,4 +97,6 @@ The [verification matrix](VERIFICATION_MATRIX.md) states both requirements.
 **Boundaries:** No physical acoustics, microphone-array source localization or
 music analysis in this track. These can become separate research curricula
 later. This course is distinct from `mit-ee` and `mit-sdr` and does not
-silently enlarge the 0.2.0 release commitments.
+alter the separate 0.2.0 release commitments. By the maintainer's
+2026-11-20 decision, **all AU01–AU12 are mandatory 0.3.0 targets**;
+see the [release work plan](../../docs/RELEASE_0.3.0_WORKPLAN.md).
