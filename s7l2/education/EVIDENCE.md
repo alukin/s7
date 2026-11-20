@@ -1,5 +1,10 @@
 # Education development evidence
 
+**Layout update, 2026-11-20:** canonical diagrams now live beside their guides
+in `education/labs/<ID>-<slug>/`; generators live in `education/generators/`.
+Historical commands and hashes below retain the paths used at the time.
+The [current lab navigator](labs/README.md) links to the relocated files.
+
 This file records executed development checks, separately from the final
 release acceptance matrix. Earlier batches used baseline `96fe7b438ceeb9a206d404b4ae2a05943c89b21d`.
 SP01/SP03, SP05/SP07, SP08/SP09, SP10 and SP11 were developed from
@@ -809,7 +814,7 @@ final-candidate qualification remain open. Lab status remains
 
 ## SP10 — convolution implementation verification, 2026-11-19
 
-The new [scalar graph](../examples/education/sp10_circular_convolution.s7diagram)
+The new [scalar graph](labs/SP10-circular-convolution/sp10_circular_convolution.s7diagram)
 and [student guide](labs/SP10-circular-convolution/README.md) bring the
 collection to **17 developed core labs**. The saved profile is **2 s / 8 Hz**,
 16 ticks, seven Scope channels and 112 journal values. All Delay states start
@@ -989,7 +994,7 @@ Status remains **diagram-ready with passing development checks**.
 
 ## SP11 — STFT implementation and viewer checks, 2026-11-19
 
-The original [burst/chirp graph](../examples/education/sp11_short_time_fourier.s7diagram)
+The original [burst/chirp graph](labs/SP11-short-time-fourier/sp11_short_time_fourier.s7diagram)
 and [student guide](labs/SP11-short-time-fourier/README.md) bring the
 collection to **18 developed core labs**. The saved profile is **4 s at
 128 Hz**, 512 ticks, three Scope channels and two single-input TimeFrequency

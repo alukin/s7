@@ -10,7 +10,7 @@ amplitude and explain why a weak-tone bin can contain strong-tone leakage.
 
 ## A calibration and a demanding mixture
 
-Open **File → Example Diagrams… → education → sp09_window_normalization.s7diagram**.
+Open **Help → Education: start here → sp09_window_normalization.s7diagram**.
 The original graph contains three cosine sources and a summer:
 
 ```text
@@ -128,7 +128,7 @@ not zero padding. Keep the interval and FFT size explicit when comparing.
 ## Independent verification and limits
 
 The [headless test](../../../s7tests/education_spectral_smoke.cpp) executes the
-[actual saved graph](../../../examples/education/sp09_window_normalization.s7diagram)
+[actual saved graph](sp09_window_normalization.s7diagram)
 with production loading, validation, compilation and observation. It checks
 every sample and fresh-repeat equality. Independent sine-squared window
 weights, direct complex DFTs and finite sums verify CG, window energy, ENBW,
@@ -163,4 +163,4 @@ Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [SP08](../SP08-dft-leakage/README.md).
 Next planned: SP10 (linear/circular convolution), then SP11 (time-frequency).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

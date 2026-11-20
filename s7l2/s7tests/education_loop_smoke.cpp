@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include "education_loop_reference.hpp"
 #include <s7/schema_library.hpp>
 #include <s7spectral/analysis.hpp>
@@ -9,7 +10,7 @@ namespace {
 using namespace s7tests::education;
 void require(bool ok,const std::string& why) {if(!ok) throw std::runtime_error(why);}
 ControlTrace run(bool margins,double gain) {
-    auto doc=s7tests::read_json_object(std::filesystem::path(S7_LOOP_LABS_DIR)/(margins ? "ct07_stability_margins.s7diagram":"ct06_closed_loop_poles.s7diagram"));
+    auto doc=s7tests::read_json_object(s7tests::education_diagram_path(S7_LOOP_LABS_DIR, margins ? "ct07_stability_margins.s7diagram":"ct06_closed_loop_poles.s7diagram"));
     require(doc.at("dt").to_number<double>()==.1 && doc.at("studio_run").at("runtime_seconds").to_number<double>()==(margins ? 64:32),"saved loop profile");
     std::vector<s7::ProbePoint> probes;
     for(auto& e:doc.at("schema").at("elements").as_array()) {

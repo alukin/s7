@@ -2581,9 +2581,9 @@ QString MainWindow::examplesDirectory() const
 
 bool MainWindow::openHelpExample(const QString& relativePath)
 {
-    const auto canonical = resolveHelpExample(examplesDirectory(), relativePath);
+    const auto canonical = resolveHelpExample(QDir(examplesDirectory()).absoluteFilePath(QStringLiteral("..")), relativePath);
     if (canonical.isEmpty()) {
-        appendLog(QStringLiteral("[studio] bundled example is missing or outside the examples directory: %1").arg(relativePath));
+        appendLog(QStringLiteral("[studio] bundled example is missing or outside the teaching asset directory: %1").arg(relativePath));
         return false;
     }
     return openExampleDiagram(canonical);

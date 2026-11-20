@@ -43,8 +43,8 @@ it does not automatically bound or reset integral memory.
 
 ## Run and inspect four different views
 
-Open [ct05_actuator_windup.s7diagram](../../../examples/education/ct05_actuator_windup.s7diagram)
-through **File → Example Diagrams… → education**. Run with the saved settings.
+Open [ct05_actuator_windup.s7diagram](ct05_actuator_windup.s7diagram)
+through **Help → Education: start here**. Run with the saved settings.
 Open:
 
 1. **Tracking** (`scope`): reference and both outputs. Both remain at or below
@@ -143,4 +143,4 @@ provides the underlying proportional/integral context.
 This is original S7 topic alignment, not an MIT assignment, worked solution
 or endorsement. No MIT PDF or figure is bundled. Diagram/generator:
 CC0-1.0; guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

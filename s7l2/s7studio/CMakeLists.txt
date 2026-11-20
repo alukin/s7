@@ -489,7 +489,9 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
     s7_add_test_executable(s7studio_gui_workflows_test tests/gui/workflows_test.cpp)
     target_include_directories(s7studio_gui_workflows_test PRIVATE "${PROJECT_SOURCE_DIR}/s7tests")
     target_link_libraries(s7studio_gui_workflows_test PRIVATE s7studio_app Qt6::Test)
-    target_compile_definitions(s7studio_gui_workflows_test PRIVATE S7_GUI_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
+    target_compile_definitions(s7studio_gui_workflows_test PRIVATE
+        S7_GUI_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples"
+        S7_GUI_EDUCATION_DIR="${PROJECT_SOURCE_DIR}/education/labs")
     set_target_properties(s7studio_gui_workflows_test PROPERTIES AUTOMOC ON)
     s7_add_test_executable(s7studio_gui_quick_test tests/gui/quick_test.cpp)
     target_link_libraries(s7studio_gui_quick_test PRIVATE s7studio_viewers Qt6::Test Qt6::QuickTest)

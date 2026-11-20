@@ -44,8 +44,8 @@ zeros through that N-point transform. Extra padding does not add information.
 
 ## Construct and run
 
-1. Open [the new SP10 diagram](../../../examples/education/sp10_circular_convolution.s7diagram)
-   through **File → Example Diagrams… → education → sp10_circular_convolution**.
+1. Open [the new SP10 diagram](sp10_circular_convolution.s7diagram)
+   through **Help → Education: start here → sp10_circular_convolution**.
    The yellow frame links this offline guide and the online MIT reading.
 2. Inspect the three rows; zoom into a row to read the element titles.
    The left-hand word builders sum a pulse and three delayed copies with

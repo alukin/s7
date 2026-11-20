@@ -70,8 +70,8 @@ property; it does not postpone the first output or add a transport delay.
 
 ## Construct and run
 
-Open the new [SP06 diagram](../../../examples/education/sp06_three_tap_fir.s7diagram)
-with **File → Example Diagrams… → education**, or **File → Open…**.
+Open the new [SP06 diagram](sp06_three_tap_fir.s7diagram)
+with **Help → Education: start here**, or **File → Open…**.
 The source adder combines DC and the two independent oscillators. Follow its
 three branches: direct to `tap0`, one delay to `tap1`, two delays to `tap2`.
 The `filtered` adder combines those branches. The Scope is an observer.

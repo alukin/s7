@@ -22,10 +22,15 @@ def check(root):
     ids = [guide.parent.name.split('-', 1)[0] for guide in guides]
     if set(ids) != CORE_IDS or len(ids) != len(CORE_IDS):
         raise ValueError(f'Expected the 24 named core guides; found {ids}')
-    diagrams = sorted((root / 'examples/education').glob('*.s7diagram'))
+    diagrams = sorted((root / 'education/labs').glob('*/*.s7diagram'))
     diagram_ids = [path.name.split('_', 1)[0].upper() for path in diagrams]
     if set(diagram_ids) != CORE_IDS or len(diagram_ids) != len(CORE_IDS):
         raise ValueError(f'Expected the 24 named core diagrams; found {diagram_ids}')
+    for diagram in diagrams:
+        if not (diagram.parent / 'README.md').is_file():
+            raise ValueError(f'Missing guide beside educational diagram: {diagram}')
+        if diagram.name.split('_', 1)[0].upper() != diagram.parent.name.split('-', 1)[0]:
+            raise ValueError(f'Educational diagram is in the wrong lab: {diagram}')
     for tree in TREES:
         if not (root / tree).is_dir():
             raise ValueError(f'Missing teaching tree: {tree}')
@@ -34,7 +39,7 @@ def check(root):
             raise ValueError(f'Python cache included in teaching tree: {tree}')
     checked = 0
     development_links = 0
-    for page in [root / 'examples/education/README.md', *guides]:
+    for page in [root / 'education/labs/README.md', *guides]:
         for href in re.findall(r'\[[^\]]*\]\(([^)]+)\)', page.read_text(encoding='utf-8')):
             url = urlsplit(href)
             if url.scheme == 'qrc' and url.path.startswith('/s7studio/help/'):

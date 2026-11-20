@@ -48,8 +48,8 @@ sharpen frequency resolution or create independent observations.
 
 ## Construct, run and inspect
 
-1. Open [the new SP11 diagram](../../../examples/education/sp11_short_time_fourier.s7diagram)
-   through **File → Example Diagrams… → education → sp11_short_time_fourier**.
+1. Open [the new SP11 diagram](sp11_short_time_fourier.s7diagram)
+   through **Help → Education: start here → sp11_short_time_fourier**.
    The yellow frame links this guide, MIT's STFT lecture and S7's map guide.
 2. Follow the gate: **start** minus **stop** multiplies the carrier. The
    mixture adds the chirp. These are causal scalar sources and arithmetic

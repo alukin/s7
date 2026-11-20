@@ -4,7 +4,7 @@
 """Reproduce SP06's explicit three-tap FIR diagram (standard Python only)."""
 
 import json
-from pathlib import Path
+from generate_foundations import diagram_path
 
 
 def make():
@@ -68,5 +68,5 @@ def make():
 
 
 if __name__ == '__main__':
-    path = Path(__file__).with_name('sp06_three_tap_fir.s7diagram')
+    path = diagram_path('sp06_three_tap_fir.s7diagram')
     path.write_text(json.dumps(make(), indent=2) + '\n')

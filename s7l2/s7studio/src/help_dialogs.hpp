@@ -8,7 +8,7 @@ class QUrl;
 class QString;
 
 namespace s7studio {
-// Receives a path relative to the bundled examples directory.
+// Receives a path relative to the bundled share/s7 root (examples/ or education/labs/).
 using OpenHelpExample = std::function<bool(const QString&)>;
 // Resolve an existing diagram inside this directory; reject escapes/symlinks out.
 QString resolveHelpExample(const QString& directory, const QString& relativePath);

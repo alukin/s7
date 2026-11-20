@@ -52,8 +52,8 @@ much worse transient as K approaches 19.
 
 ## Run and measure
 
-Open [ct06_closed_loop_poles.s7diagram](../../../examples/education/ct06_closed_loop_poles.s7diagram)
-through **File → Example Diagrams… → education**. Keep **32 s at 10 Hz**.
+Open [ct06_closed_loop_poles.s7diagram](ct06_closed_loop_poles.s7diagram)
+through **Help → Education: start here**. Keep **32 s at 10 Hz**.
 
 1. Follow error → command → first lag x → second lag y → error. Each lag
    is an explicit rate/integrator network with zero initial state.
@@ -114,4 +114,4 @@ uses the z-plane/unit-circle criterion. No lecture figure, worked problem
 or solution is copied. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Next: [CT07 — stability margins](../CT07-stability-margins/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

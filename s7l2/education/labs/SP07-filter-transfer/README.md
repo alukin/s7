@@ -12,7 +12,7 @@ change damping and distinguish numerical instability from physical resonance.
 
 ## Two physical models, explicit local states
 
-Open **File → Example Diagrams… → education → sp07_filter_transfer.s7diagram**.
+Open **Help → Education: start here → sp07_filter_transfer.s7diagram**.
 The new graph builds two models from Gain/Adder/EulerIntegrator networks:
 
 ```text
@@ -138,7 +138,7 @@ continuous signal, and these software sources do not model an ADC.
 ## Independent runtime and viewer checks
 
 The [headless test](../../../s7tests/education_lti_smoke.cpp) production-loads
-this [saved graph](../../../examples/education/sp07_filter_transfer.s7diagram),
+this [saved graph](sp07_filter_transfer.s7diagram),
 checks every input/state against independent geometric/complex-mode powers,
 a fresh repeat, damping edit, rate refinement and unstable contrast.
 Separate direct complex sums Y/X at selected frequencies are compared with
@@ -173,4 +173,4 @@ Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 Previous: [SP06](../SP06-three-tap-fir/README.md).
 Continue to [SP08 — DFT leakage](../SP08-dft-leakage/README.md) and
 [SP09 — window normalization](../SP09-window-normalization/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

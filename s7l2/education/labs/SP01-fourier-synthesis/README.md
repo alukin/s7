@@ -11,7 +11,7 @@ mean-square value and explain a deliberate missing-harmonic experiment.
 
 ## Read the new graph
 
-Open **File → Example Diagrams… → education → sp01_fourier_synthesis.s7diagram**.
+Open **Help → Education: start here → sp01_fourier_synthesis.s7diagram**.
 Five unit-amplitude sine sources have frequencies **2, 6, 10, 14 and 18 Hz**.
 Each passes through an explicit Gain, `4/(mπ)` for odd harmonic m.
 Adders expose the first three and first five odd harmonics (the latter is
@@ -96,7 +96,7 @@ rate cannot recover their original frequencies; SP03 investigates this further.
 ## Independent checks and limits
 
 The [headless test](../../../s7tests/education_signals_smoke.cpp) production-loads
-this [saved graph](../../../examples/education/sp01_fourier_synthesis.s7diagram),
+this [saved graph](sp01_fourier_synthesis.s7diagram),
 checks every sample, a fresh repeat, the missing ninth term and the 32 Hz
 alias case. Independent long-double sine sums and a direct complex DFT
 check the Fourier coefficients, signs, empty bins, mean square and Parseval.
@@ -130,4 +130,4 @@ Its peak-amplitude spectrum alone loses that sign; inspect the time trace
 or a complex coefficient. That extension has no separate qualification claim.
 
 Next: [SP03 — sampling and aliasing](../SP03-aliasing/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

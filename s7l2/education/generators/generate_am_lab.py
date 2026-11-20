@@ -4,8 +4,7 @@
 """Original SP14 AM/coherent detector graph; no recorded external media."""
 import copy
 import json
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 from generate_control_labs import COMPONENTS, wire
 
 
@@ -55,4 +54,4 @@ def make():
         diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,
             text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1680,height=420,font_size=20))]))
 
-if __name__=='__main__':Path(__file__).with_name('sp14_coherent_am.s7diagram').write_text(json.dumps(make(),indent=2)+'\n')
+if __name__=='__main__':diagram_path('sp14_coherent_am.s7diagram').write_text(json.dumps(make(),indent=2)+'\n')

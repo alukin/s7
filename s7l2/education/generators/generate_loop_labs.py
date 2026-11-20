@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: CC0-1.0
 """Original CT06/CT07 sampled-loop graphs, no numerical solver."""
 import json
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 from generate_control_labs import wire, scope
 MIT='https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_{}/'
 LABS={'CT06':('ct06_closed_loop_poles','CT06-closed-loop-poles',32),
@@ -60,4 +59,4 @@ def make(lab):
                      text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1700,height=440,font_size=20))]))
 
 if __name__=='__main__':
-    for lab,(name,*_) in LABS.items():Path(__file__).with_name(name+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')
+    for lab,(name,*_) in LABS.items():diagram_path(name+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')

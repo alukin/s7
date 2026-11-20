@@ -4,8 +4,7 @@
 """Original SP08/SP09 source graphs; windows belong to observation, not runtime."""
 import json
 import math
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 LABS={
  'SP08':('sp08_dft_leakage','SP08-dft-leakage','Where did the tone amplitude go?'),
@@ -56,4 +55,4 @@ def make(lab):
 
 
 if __name__=='__main__':
-    for lab,(ident,*_) in LABS.items():Path(__file__).with_name(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')
+    for lab,(ident,*_) in LABS.items():diagram_path(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')

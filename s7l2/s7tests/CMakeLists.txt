@@ -12,49 +12,49 @@
 s7_add_test_executable(s7tests_education_sp06 education_sp06_smoke.cpp)
 target_link_libraries(s7tests_education_sp06 PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_sp06 PRIVATE
-    S7_SP06_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp06_three_tap_fir.s7diagram")
+    S7_SP06_DIAGRAM="${PROJECT_SOURCE_DIR}/education/labs/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram")
 add_test(NAME s7tests_education_sp06 COMMAND s7tests_education_sp06)
 set_tests_properties(s7tests_education_sp06 PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_foundations education_foundations_smoke.cpp)
 target_link_libraries(s7tests_education_foundations PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_foundations PRIVATE
-    S7_FOUNDATIONS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+    S7_FOUNDATIONS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_foundations COMMAND s7tests_education_foundations)
 set_tests_properties(s7tests_education_foundations PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_linear education_linear_smoke.cpp)
 target_link_libraries(s7tests_education_linear PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_linear PRIVATE
-    S7_LINEAR_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+    S7_LINEAR_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_linear COMMAND s7tests_education_linear)
 set_tests_properties(s7tests_education_linear PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_signals education_signals_smoke.cpp)
 target_link_libraries(s7tests_education_signals PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_signals PRIVATE
-    S7_SIGNAL_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+    S7_SIGNAL_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_signals COMMAND s7tests_education_signals)
 set_tests_properties(s7tests_education_signals PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_lti education_lti_smoke.cpp)
 target_link_libraries(s7tests_education_lti PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_lti PRIVATE
-    S7_LTI_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+    S7_LTI_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_lti COMMAND s7tests_education_lti)
 set_tests_properties(s7tests_education_lti PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_spectral education_spectral_smoke.cpp)
 target_link_libraries(s7tests_education_spectral PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_spectral PRIVATE
-    S7_SPECTRAL_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+    S7_SPECTRAL_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_spectral COMMAND s7tests_education_spectral)
 set_tests_properties(s7tests_education_spectral PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_convolution education_convolution_smoke.cpp)
 target_link_libraries(s7tests_education_convolution PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_education_convolution PRIVATE
-    S7_SP10_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp10_circular_convolution.s7diagram")
+    S7_SP10_DIAGRAM="${PROJECT_SOURCE_DIR}/education/labs/SP10-circular-convolution/sp10_circular_convolution.s7diagram")
 add_test(NAME s7tests_education_convolution COMMAND s7tests_education_convolution)
 set_tests_properties(s7tests_education_convolution PROPERTIES TIMEOUT 30)
 
@@ -62,34 +62,34 @@ s7_add_test_executable(s7tests_education_stft education_stft_smoke.cpp)
 target_link_libraries(s7tests_education_stft PRIVATE s7core s7observe)
 target_include_directories(s7tests_education_stft PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
 target_compile_definitions(s7tests_education_stft PRIVATE
-    S7_SP11_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp11_short_time_fourier.s7diagram")
+    S7_SP11_DIAGRAM="${PROJECT_SOURCE_DIR}/education/labs/SP11-short-time-fourier/sp11_short_time_fourier.s7diagram")
 add_test(NAME s7tests_education_stft COMMAND s7tests_education_stft)
 set_tests_properties(s7tests_education_stft PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_control education_control_smoke.cpp)
 target_link_libraries(s7tests_education_control PRIVATE s7core s7observe)
-target_compile_definitions(s7tests_education_control PRIVATE S7_CONTROL_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+target_compile_definitions(s7tests_education_control PRIVATE S7_CONTROL_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_control COMMAND s7tests_education_control)
 set_tests_properties(s7tests_education_control PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_loop education_loop_smoke.cpp)
 target_link_libraries(s7tests_education_loop PRIVATE s7core s7observe)
 target_include_directories(s7tests_education_loop PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
-target_compile_definitions(s7tests_education_loop PRIVATE S7_LOOP_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+target_compile_definitions(s7tests_education_loop PRIVATE S7_LOOP_LABS_DIR="${PROJECT_SOURCE_DIR}/education/labs")
 add_test(NAME s7tests_education_loop COMMAND s7tests_education_loop)
 set_tests_properties(s7tests_education_loop PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_compensator education_compensator_smoke.cpp)
 target_link_libraries(s7tests_education_compensator PRIVATE s7core s7observe)
 target_include_directories(s7tests_education_compensator PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
-target_compile_definitions(s7tests_education_compensator PRIVATE S7_CT08_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/ct08_lead_lag.s7diagram")
+target_compile_definitions(s7tests_education_compensator PRIVATE S7_CT08_DIAGRAM="${PROJECT_SOURCE_DIR}/education/labs/CT08-lead-lag/ct08_lead_lag.s7diagram")
 add_test(NAME s7tests_education_compensator COMMAND s7tests_education_compensator)
 set_tests_properties(s7tests_education_compensator PROPERTIES TIMEOUT 30)
 
 s7_add_test_executable(s7tests_education_am education_am_smoke.cpp)
 target_link_libraries(s7tests_education_am PRIVATE s7core s7observe)
 target_include_directories(s7tests_education_am PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
-target_compile_definitions(s7tests_education_am PRIVATE S7_SP14_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp14_coherent_am.s7diagram")
+target_compile_definitions(s7tests_education_am PRIVATE S7_SP14_DIAGRAM="${PROJECT_SOURCE_DIR}/education/labs/SP14-coherent-am/sp14_coherent_am.s7diagram")
 add_test(NAME s7tests_education_am COMMAND s7tests_education_am)
 set_tests_properties(s7tests_education_am PROPERTIES TIMEOUT 30)
 

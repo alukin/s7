@@ -17,7 +17,7 @@ official lab numbers, problem solutions or MIT endorsement. See
 **2026-11-19 maintainer revision:** build new educational diagrams for
 every delivered lab. The R/A/N inventory below describes reference material
 and estimated conceptual overlap only; it no longer selects existing files
-for delivery. Canonical education diagrams live in `examples/education/`;
+for delivery. Canonical education diagrams live in `education/labs/`;
 the [core manifest](CORE_MANIFEST.md) tracks actual implementation and gaps.
 
 - **R — reuse/audit:** one or more suitable existing example diagrams;

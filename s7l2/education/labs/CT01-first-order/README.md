@@ -8,7 +8,7 @@ For a 1 V supply charging a capacitor through a resistor, let τ=RC=1 s:
 
 ## Read the units through the graph
 
-Open **education → ct01_first_order.s7diagram**. Trace the new network:
+Open **Help → Education: start here → ct01_first_order.s7diagram**. Trace the new network:
 Constant supply (V) → subtract voltage (V) → divide by τ (s) →
 derivative (V/s) → EulerIntegrator → voltage (V). The feedback returns
 voltage to the subtraction. The integrator is the causal memory; no algebraic
@@ -61,7 +61,7 @@ keep a duration long enough to see several updates when exploring it.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/ct01_first_order.s7diagram)
+needed. The [saved graph](ct01_first_order.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -99,4 +99,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN06](../FN06-pole-maps/README.md).
 Next: [CT02](../CT02-damped-modes/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

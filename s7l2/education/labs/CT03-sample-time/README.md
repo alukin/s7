@@ -9,7 +9,7 @@ decay exp(−t). A new explicit Gain/Integrator network represents it.
 
 ## Predict the saved run
 
-Open **education → ct03_sample_time.s7diagram**, click **Run**, retain
+Open **Help → Education: start here → ct03_sample_time.s7diagram**, click **Run**, retain
 **10 s at 2 Hz**, then open **Compare the named signals**. At h=0.5 s,
 forward Euler has pole p=1−h=0.5 and `x[n]=0.5^n V`.
 
@@ -62,7 +62,7 @@ Run Configuration, saves, reopens, reruns and checks recorded values.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/ct03_sample_time.s7diagram)
+needed. The [saved graph](ct03_sample_time.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -100,4 +100,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [CT02](../CT02-damped-modes/README.md).
 Next: [SP06](../SP06-three-tap-fir/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

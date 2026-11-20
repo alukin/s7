@@ -47,7 +47,7 @@ implementation begins, not as empty placeholders) should contain:
 5. **Prediction:** explicit formula/table or estimated range **before
    running**. Include units and expected failure/limitation.
 6. **Construction:** link to a canonical runnable diagram under
-   `s7l2/examples/`; explain essential elements, any nested schemas
+   `s7l2/education/labs/<ID>-<slug>/`; explain essential elements, any nested schemas
    and what students should change. Don't create duplicate diagrams
    for separate course labels.
 7. **Run instructions:** exact S7 or Studio menu path, effective sample
@@ -213,6 +213,7 @@ s7l2/education/
   labs/
     SP06-three-tap-fir/
       README.md
+      sp06_three_tap_fir.s7diagram
       reference.py           # only if an independent oracle is needed
     CT03-discretization/
       README.md

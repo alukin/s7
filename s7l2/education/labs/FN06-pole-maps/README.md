@@ -19,7 +19,7 @@ Here s=−1 per second:
 | Trapezoidal | −0.2 | 1, −0.2, 0.04 | Decays with invented sign changes |
 | Exact | exp(−3) | 1, 0.049787, 0.002479 | Positive physical decay |
 
-Open **education → fn06_pole_maps.s7diagram**. Click **Run**, keep
+Open **Help → Education: start here → fn06_pole_maps.s7diagram**. Click **Run**, keep
 **30 s at 0.333333… Hz**, and confirm the intentional 10-sample run.
 Open **Forward Euler: growing error** and **Stable methods: inspect first 12 s**.
 Use **0–12 s** on the second Scope to compare early samples. Separate plots
@@ -64,7 +64,7 @@ The exact sampled mode is an analytic benchmark, not a runtime ODE solver.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/fn06_pole_maps.s7diagram)
+needed. The [saved graph](fn06_pole_maps.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -102,4 +102,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN05](../FN05-integration-rules/README.md).
 Next: [CT01](../CT01-first-order/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

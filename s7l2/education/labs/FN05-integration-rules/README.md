@@ -22,7 +22,7 @@ these solved scalar formulas as **three independent Delay/Gain loops**.
 It does not solve an arbitrary implicit feedback graph. Each Delay contains
 x[0]=1 V and each Gain calculates the next value. There is no new solver.
 
-Open **education → fn05_integration_rules.s7diagram** through Example Diagrams.
+Open **Help → Education: start here → fn05_integration_rules.s7diagram** from its guide in Studio Help.
 Predict x[2] for each rule. Click **Run**, retain **6 s at 2 Hz**, and
 confirm the intentional 12-sample run. Open **Compare the named signals**.
 First you see the shared initial value 1 V, then the values in the table.
@@ -68,7 +68,7 @@ the first two and 3.8–4.5 for trapezoidal. These envelopes apply only here.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/fn05_integration_rules.s7diagram)
+needed. The [saved graph](fn05_integration_rules.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -106,4 +106,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN04](../FN04-impulse-transfer/README.md).
 Next: [FN06](../FN06-pole-maps/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

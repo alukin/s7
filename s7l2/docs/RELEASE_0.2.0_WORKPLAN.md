@@ -87,7 +87,7 @@ parallel with the D0–D2 distributed workstream:
 
 1. Audit the actual diagrams, generators and tests as implementation
    references. Per the maintainer's 2026-11-19 decision, create new
-   purpose-built educational diagrams in `examples/education/`; do not
+   purpose-built educational diagrams in `education/labs/`; do not
    deliver the older examples as labs. Track gaps in the
    [core manifest](../education/CORE_MANIFEST.md).
 2. Verify primary-source topic alignment and any exact book references;

@@ -20,34 +20,34 @@ that 48 MIT examples are implemented, verified or officially endorsed.
 ## Education laboratories
 
 New diagrams designed specifically for teaching; see the
-[education diagram guide](education/README.md) and per-lab evidence.
+[education diagram guide](../education/labs/README.md) and per-lab evidence.
 
 | Lab | Diagram |
 | --- | --- |
-| FN01 — One sample of memory | [Unit-delay feedback](education/fn01_unit_delay.s7diagram) |
-| FN02 — Natural and forced response | [Three input/state experiments](education/fn02_natural_forced.s7diagram) |
-| FN03 — Initial conditions | [Separate input and stored past](education/fn03_initial_conditions.s7diagram) |
-| FN04 — From one pulse to a transfer function | [New teaching graph](education/fn04_impulse_transfer.s7diagram) |
-| FN05 — Three rules for the same decay | [New teaching graph](education/fn05_integration_rules.s7diagram) |
-| FN06 — Stable does not mean accurate | [New teaching graph](education/fn06_pole_maps.s7diagram) |
-| CT01 — A capacitor takes time to charge | [New teaching graph](education/ct01_first_order.s7diagram) |
-| CT02 — How damping changes a spring | [New teaching graph](education/ct02_damped_modes.s7diagram) |
-| CT03 — Can a slow sample rate invent growth? | [New teaching graph](education/ct03_sample_time.s7diagram) |
-| CT04 — Does integral action remove the load error? | [New teaching graph](education/ct04_controller_comparison.s7diagram) |
-| CT05 — Why does a clipped actuator keep pushing? | [New teaching graph](education/ct05_actuator_windup.s7diagram) |
-| CT06 — Closed-loop poles | [New teaching graph](education/ct06_closed_loop_poles.s7diagram) |
-| CT07 — Stability margins | [New teaching graph](education/ct07_stability_margins.s7diagram) |
-| CT08 — Lead/lag and control effort | [New teaching graph](education/ct08_lead_lag.s7diagram) |
-| SP01 — Build a square wave from smooth tones | [New teaching graph](education/sp01_fourier_synthesis.s7diagram) |
-| SP03 — Three tones, one sampled sequence | [New teaching graph](education/sp03_aliasing.s7diagram) |
-| SP05 — Add shifted impulse responses | [New teaching graph](education/sp05_convolution.s7diagram) |
-| SP07 — Which filter resonates? | [New teaching graph](education/sp07_filter_transfer.s7diagram) |
-| SP08 — Where did the tone amplitude go? | [New teaching graph](education/sp08_dft_leakage.s7diagram) |
-| SP09 — Change the window, preserve the units | [New teaching graph](education/sp09_window_normalization.s7diagram) |
-| SP10 — Where does the tail go? | [New teaching graph](education/sp10_circular_convolution.s7diagram) |
-| SP11 — When did that frequency happen? | [New teaching graph](education/sp11_short_time_fourier.s7diagram) |
-| SP14 — AM and coherent detection | [New teaching graph](education/sp14_coherent_am.s7diagram) |
-| SP06 — Three-tap FIR | [Three-tap moving average](education/sp06_three_tap_fir.s7diagram) |
+| FN01 — One sample of memory | [Unit-delay feedback](../education/labs/FN01-unit-delay/fn01_unit_delay.s7diagram) |
+| FN02 — Natural and forced response | [Three input/state experiments](../education/labs/FN02-natural-forced/fn02_natural_forced.s7diagram) |
+| FN03 — Initial conditions | [Separate input and stored past](../education/labs/FN03-initial-conditions/fn03_initial_conditions.s7diagram) |
+| FN04 — From one pulse to a transfer function | [New teaching graph](../education/labs/FN04-impulse-transfer/fn04_impulse_transfer.s7diagram) |
+| FN05 — Three rules for the same decay | [New teaching graph](../education/labs/FN05-integration-rules/fn05_integration_rules.s7diagram) |
+| FN06 — Stable does not mean accurate | [New teaching graph](../education/labs/FN06-pole-maps/fn06_pole_maps.s7diagram) |
+| CT01 — A capacitor takes time to charge | [New teaching graph](../education/labs/CT01-first-order/ct01_first_order.s7diagram) |
+| CT02 — How damping changes a spring | [New teaching graph](../education/labs/CT02-damped-modes/ct02_damped_modes.s7diagram) |
+| CT03 — Can a slow sample rate invent growth? | [New teaching graph](../education/labs/CT03-sample-time/ct03_sample_time.s7diagram) |
+| CT04 — Does integral action remove the load error? | [New teaching graph](../education/labs/CT04-controller-comparison/ct04_controller_comparison.s7diagram) |
+| CT05 — Why does a clipped actuator keep pushing? | [New teaching graph](../education/labs/CT05-actuator-windup/ct05_actuator_windup.s7diagram) |
+| CT06 — Closed-loop poles | [New teaching graph](../education/labs/CT06-closed-loop-poles/ct06_closed_loop_poles.s7diagram) |
+| CT07 — Stability margins | [New teaching graph](../education/labs/CT07-stability-margins/ct07_stability_margins.s7diagram) |
+| CT08 — Lead/lag and control effort | [New teaching graph](../education/labs/CT08-lead-lag/ct08_lead_lag.s7diagram) |
+| SP01 — Build a square wave from smooth tones | [New teaching graph](../education/labs/SP01-fourier-synthesis/sp01_fourier_synthesis.s7diagram) |
+| SP03 — Three tones, one sampled sequence | [New teaching graph](../education/labs/SP03-aliasing/sp03_aliasing.s7diagram) |
+| SP05 — Add shifted impulse responses | [New teaching graph](../education/labs/SP05-convolution/sp05_convolution.s7diagram) |
+| SP07 — Which filter resonates? | [New teaching graph](../education/labs/SP07-filter-transfer/sp07_filter_transfer.s7diagram) |
+| SP08 — Where did the tone amplitude go? | [New teaching graph](../education/labs/SP08-dft-leakage/sp08_dft_leakage.s7diagram) |
+| SP09 — Change the window, preserve the units | [New teaching graph](../education/labs/SP09-window-normalization/sp09_window_normalization.s7diagram) |
+| SP10 — Where does the tail go? | [New teaching graph](../education/labs/SP10-circular-convolution/sp10_circular_convolution.s7diagram) |
+| SP11 — When did that frequency happen? | [New teaching graph](../education/labs/SP11-short-time-fourier/sp11_short_time_fourier.s7diagram) |
+| SP14 — AM and coherent detection | [New teaching graph](../education/labs/SP14-coherent-am/sp14_coherent_am.s7diagram) |
+| SP06 — Three-tap FIR | [Three-tap moving average](../education/labs/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram) |
 
 ## Starter and standalone experiments
 

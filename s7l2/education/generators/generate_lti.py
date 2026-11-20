@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: CC0-1.0
 """Original SP05/SP07 teaching graphs; construction only, no solver."""
 import json
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 LABS={
  'SP05':('sp05_convolution','SP05-convolution','Add shifted impulse responses',20,2),
@@ -91,4 +90,4 @@ def make(lab):
 
 if __name__=='__main__':
     for lab,(ident,*_) in LABS.items():
-        Path(__file__).with_name(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')
+        diagram_path(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')

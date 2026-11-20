@@ -4,6 +4,7 @@
 """Check saved example geometry and index coverage without starting Studio."""
 
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +21,7 @@ def check(path, index):
     doc = json.loads(path.read_text())
     diagram = doc["diagram"]
     issues = []
-    relative = path.relative_to(EXAMPLES).as_posix()
+    relative = Path(os.path.relpath(path, EXAMPLES)).as_posix()
     if f"({relative})" not in index:
         issues.append("missing index link")
     sheet = doc.get("sheet")
@@ -72,7 +73,7 @@ def check(path, index):
 
 def main():
     index = (EXAMPLES / "README.md").read_text()
-    paths = sorted(EXAMPLES.rglob("*.s7diagram"))
+    paths = sorted([*EXAMPLES.rglob("*.s7diagram"), *(ROOT / "education/labs").glob("*/*.s7diagram")])
     failures = [(path, problem) for path in paths for problem in check(path, index)]
     for path, problem in failures:
         print(f"{path.relative_to(ROOT)}: {problem}")

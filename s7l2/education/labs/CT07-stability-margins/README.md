@@ -39,8 +39,8 @@ These formulas assume the stated stable open-loop plant and positive gain.
 
 ## Capture the complete pulse response
 
-Open [ct07_stability_margins.s7diagram](../../../examples/education/ct07_stability_margins.s7diagram)
-from **File → Example Diagrams… → education** and keep **64 s at 10 Hz**.
+Open [ct07_stability_margins.s7diagram](ct07_stability_margins.s7diagram)
+from **Help → Education: start here** and keep **64 s at 10 Hz**.
 
 - Open **Open-loop pulse and complete tail** (`pulse_scope`). The unit-height
   pulse is at n=8 (source time 0.8 s, Scope time **0.9 s**); it has area
@@ -123,4 +123,4 @@ Its continuous-time examples differ from this declared sampled loop.
 This is topic alignment; the model, data, equations and graph are original.
 No assignment, figure or solution is copied. Diagram/generator: CC0-1.0;
 guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

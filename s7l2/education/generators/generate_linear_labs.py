@@ -4,8 +4,7 @@
 """New linear-systems lessons. Drawing helpers only; no numerical solver."""
 import json
 import math
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 MIT = 'https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec{}/'
 LABS = {
@@ -129,4 +128,4 @@ def make(lab):
 
 if __name__ == '__main__':
     for lab, (ident, *_) in LABS.items():
-        Path(__file__).with_name(ident+'.s7diagram').write_text(json.dumps(make(lab), indent=2)+'\n')
+        diagram_path(ident+'.s7diagram').write_text(json.dumps(make(lab), indent=2)+'\n')

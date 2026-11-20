@@ -9,6 +9,16 @@ Each lab has its own saved graph, initial-state contract and student experiment.
 import json
 from pathlib import Path
 
+def diagram_path(filename):
+    """Write each canonical graph beside its lab guide."""
+    labs = Path(__file__).resolve().parents[1] / 'labs'
+    lab_id = filename.split('_', 1)[0].upper()
+    folders = sorted(labs.glob(lab_id + '-*'))
+    if len(folders) != 1 or not (folders[0] / 'README.md').is_file():
+        raise ValueError(f'Expected one student guide for {lab_id}')
+    return folders[0] / filename
+
+
 MIT = 'https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/'
 LABS = {
     'FN01': ('fn01_unit_delay', 'FN01-unit-delay', 'One sample of memory'),
@@ -126,4 +136,4 @@ def make(lab):
 
 if __name__ == '__main__':
     for lab, (ident, _, _) in LABS.items():
-        Path(__file__).with_name(ident+'.s7diagram').write_text(json.dumps(make(lab), indent=2)+'\n')
+        diagram_path(ident+'.s7diagram').write_text(json.dumps(make(lab), indent=2)+'\n')

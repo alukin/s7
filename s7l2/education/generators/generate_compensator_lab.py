@@ -4,8 +4,7 @@
 """Original CT08 lead/lag experiment, using reusable schema elements."""
 import copy
 import json
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 from generate_control_labs import COMPONENTS, wire, scope
 MIT='https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_{}/'
 
@@ -66,4 +65,4 @@ def make():
             text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1640,height=390,font_size=20))]))
 
 if __name__=='__main__':
-    Path(__file__).with_name('ct08_lead_lag.s7diagram').write_text(json.dumps(make(),indent=2)+'\n')
+    diagram_path('ct08_lead_lag.s7diagram').write_text(json.dumps(make(),indent=2)+'\n')

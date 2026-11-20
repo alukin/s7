@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include "education_spectral_reference.hpp"
 #include <s7/schema_library.hpp>
 #include <iostream>
@@ -10,7 +11,7 @@ using namespace s7tests::education;
 using Document=boost::json::object;
 using Trace=std::vector<std::vector<double>>;
 void require(bool ok,const std::string& text) {if (!ok) throw std::runtime_error(text);}
-Document load(const std::string& lab) {return s7tests::read_json_object(std::filesystem::path(S7_SPECTRAL_LABS_DIR)/(lab=="SP08" ? "sp08_dft_leakage.s7diagram" : "sp09_window_normalization.s7diagram"));}
+Document load(const std::string& lab) {return s7tests::read_json_object(s7tests::education_diagram_path(S7_SPECTRAL_LABS_DIR, lab=="SP08" ? "sp08_dft_leakage.s7diagram" : "sp09_window_normalization.s7diagram"));}
 Trace run(const std::string& lab,bool edited=false) {
     auto doc=load(lab);
     if (edited) for (auto& e:doc.at("schema").at("elements").as_array())

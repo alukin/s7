@@ -4,8 +4,7 @@
 """Original SP01/SP03 graphs; reuse drawing helpers, never existing diagrams."""
 import json
 import math
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 LABS = {
     'SP01': ('sp01_fourier_synthesis', 'SP01-fourier-synthesis', 'Build a square wave from smooth tones', 128),
@@ -66,4 +65,4 @@ def make(lab):
 
 if __name__ == '__main__':
     for lab,(ident,*_) in LABS.items():
-        Path(__file__).with_name(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')
+        diagram_path(ident+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')

@@ -4,8 +4,7 @@
 """Original SP11 burst/chirp graph; analysis remains read-only."""
 import json
 import math
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 MIT = 'https://sigproc.mit.edu/_static/fall25/lectures/Short-Time_Fourier_Transform.pdf'
 
@@ -60,4 +59,4 @@ def make():
 
 
 if __name__ == '__main__':
-    Path(__file__).with_name('sp11_short_time_fourier.s7diagram').write_text(json.dumps(make(), indent=2)+'\n')
+    diagram_path('sp11_short_time_fourier.s7diagram').write_text(json.dumps(make(), indent=2)+'\n')

@@ -11,7 +11,7 @@ recognize a one-sample delay and explain when this system stops settling.
 
 ## Start here
 
-1. **File → Example Diagrams… → education → fn01_unit_delay.s7diagram**.
+1. **Help → Education: start here → fn01_unit_delay.s7diagram**.
 2. Read the rule in **Predict four samples** below. Calculate the first four
    outputs before checking the table's last column.
 3. Click **Run**. The saved settings are **2 seconds, 10 Hz**. Keep them and
@@ -46,7 +46,7 @@ approach? If it settles at L, then `L=1+0.5L`, so L=2 V.
 
 ## Follow the blocks and measure
 
-The [new graph](../../../examples/education/fn01_unit_delay.s7diagram) contains
+The [new graph](fn01_unit_delay.s7diagram) contains
 one Constant, one Adder, one Delay and one Gain. Follow the loop:
 **output → Delay → Gain → Adder → output**. The gain 0.5 has no units.
 Only the Delay supplies previous-sample memory; the Adder uses the current input.
@@ -123,4 +123,4 @@ browser; this guide is available offline. No MIT handout is bundled.
 S7 diagrams/generators: CC0-1.0; this guide: CC-BY-4.0.
 
 Continue to [FN02 — Three ways to excite a system](../FN02-natural-forced/README.md),
-or return to the [learning route](../../../examples/education/README.md).
+or return to the [learning route](../README.md).

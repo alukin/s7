@@ -78,7 +78,7 @@ define the syllabus and execution requirements.
 The initial **0.2.0 qualification target is 24 specifically named core
 labs** in foundations, signal processing and control. The other 24
 proposed labs are later/stretch candidates. Per the maintainer's 2026-11-19
-revision, create new purpose-built diagrams under `examples/education/`;
+revision, create new purpose-built diagrams under `education/labs/`;
 existing examples are implementation references. No listed lab is
 automatically qualified by its existence in the repository.
 

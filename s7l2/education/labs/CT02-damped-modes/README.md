@@ -15,7 +15,7 @@ Each integrator owns its own initial state. Both stage their next value
 from the current pair; this is forward Euler, not sequential Euler–Cromer.
 
 Predict the first update at h=0.01 s: **x[1]=1 m, v[1]=−0.04 m/s**.
-Open **education → ct02_damped_modes.s7diagram**, click **Run**, keep
+Open **Help → Education: start here → ct02_damped_modes.s7diagram**, click **Run**, keep
 **8 s at 100 Hz**, then open **Displacement (m)** and **Velocity (m/s)**.
 Separate plots preserve the units instead of implying that metres and
 metres/second share a scale. Expect damped oscillation about zero.
@@ -63,7 +63,7 @@ Contrast with CT03, which retains a stable physical model and changes h.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/ct02_damped_modes.s7diagram)
+needed. The [saved graph](ct02_damped_modes.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -101,4 +101,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [CT01](../CT01-first-order/README.md).
 Next: [CT03](../CT03-sample-time/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

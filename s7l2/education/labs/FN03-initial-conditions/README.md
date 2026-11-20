@@ -12,7 +12,7 @@ one initial value.
 
 ## Three runs inside one diagram
 
-Open **File → Example Diagrams… → education → fn03_initial_conditions.s7diagram**.
+Open **Help → Education: start here → fn03_initial_conditions.s7diagram**.
 This new graph contains three independent copies of the same explicit
 Delay/Gain/Adder rule, `y[n]=u[n]+0.5 y[n−1]`:
 
@@ -94,7 +94,7 @@ residual[n] = total[n] − natural[n] − forced[n]
 ```
 
 The [headless test](../../../s7tests/education_foundations_smoke.cpp) loads
-the [actual saved graph](../../../examples/education/fn03_initial_conditions.s7diagram)
+the [actual saved graph](fn03_initial_conditions.s7diagram)
 through the production loader and checks all channels, the unobserved sum,
 source values, startup and final samples against independent finite sums.
 It checks fresh-run equality, the missing-state experiment and the extra
@@ -130,4 +130,4 @@ Previous: [FN02](../FN02-natural-forced/README.md).
 Continue to [FN04 — impulse and transfer](../FN04-impulse-transfer/README.md).
 For a signal-processing application using delays, try
 [SP06 — Three-tap FIR](../SP06-three-tap-fir/README.md), or return to the
-[learning route](../../../examples/education/README.md).
+[learning route](../README.md).

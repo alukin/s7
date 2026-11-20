@@ -74,7 +74,7 @@ def check(package, artifacts):
         run('reopen-check', package / 's7studio', '--normalize', saved, reopened)
         if json.loads(saved.read_text()) != json.loads(reopened.read_text()):
             raise RuntimeError('Saved/reopened diagram changed')
-        for model in sorted((package / 'usr/share/s7/examples/education').glob('*.s7diagram')):
+        for model in sorted((package / 'usr/share/s7/education/labs').glob('*/*.s7diagram')):
             saved = cwd / (model.stem + '-saved.s7diagram')
             reopened = cwd / (model.stem + '-reopened.s7diagram')
             run(model.stem + '-save', package / 's7studio', '--normalize', model, saved)

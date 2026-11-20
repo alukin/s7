@@ -5,7 +5,7 @@
 import copy
 import json
 from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENTS = {e['type_name']: e['schema'] for e in json.loads(
@@ -127,4 +127,4 @@ def make(lab):
 
 if __name__=='__main__':
     for lab,(name,*_) in LABS.items():
-        Path(__file__).with_name(name+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')
+        diagram_path(name+'.s7diagram').write_text(json.dumps(make(lab),indent=2)+'\n')

@@ -20,8 +20,7 @@ It is a unit *discrete sample*, not a unit-area continuous impulse.
 | 5 | 0.30 | 0 | 0.25 |
 | 6 | 0.35 | 0 | 0.125 |
 
-Before running, calculate the next output. Open **File → Example Diagrams… →
-education → fn04_impulse_transfer.s7diagram**. Click **Run**, keep the saved
+Before running, calculate the next output. Open **Help → Education: start here → fn04_impulse_transfer.s7diagram**. Click **Run**, keep the saved
 **10 s at 20 Hz**, then double-click **Compare the named signals**.
 Zoom the Scope time axis to **0–1 s** to see the pulse and its tail; the
 full 10 s capture gives the frequency calculation a nearly complete decay.
@@ -83,7 +82,7 @@ No FFT library supplies that reference. The common sample checks are below.
 ## Run the independent checks
 
 Use a current Linux S7/Studio development build; no hardware or plugin is
-needed. The [saved graph](../../../examples/education/fn04_impulse_transfer.s7diagram)
+needed. The [saved graph](fn04_impulse_transfer.s7diagram)
 is loaded by the production schema loader, validated, compiled and sampled
 through the read-only observation API in the
 [headless test](../../../s7tests/education_linear_smoke.cpp).
@@ -121,4 +120,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN03](../FN03-initial-conditions/README.md).
 Next: [FN05](../FN05-integration-rules/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

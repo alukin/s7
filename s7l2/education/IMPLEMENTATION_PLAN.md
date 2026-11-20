@@ -11,7 +11,7 @@ Related: [curriculum map](COURSE_MAP.md),
 [0.2.0 work-plan acceptance matrix](../docs/RELEASE_0.2.0_WORKPLAN.md).
 
 **2026-11-19 maintainer revision:** all education deliverables use new,
-purpose-built diagrams in `examples/education/`. Earlier instructions below
+purpose-built diagrams in `education/labs/`. Earlier instructions below
 to reuse or adapt existing runnable diagrams are superseded: inspect those
 examples and their tests as engineering references, then design the teaching
 graph afresh. Continue using existing primitives, loaders and test tools.

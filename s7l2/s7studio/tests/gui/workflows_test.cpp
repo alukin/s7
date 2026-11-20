@@ -4,6 +4,7 @@
 #include "main_window.hpp"
 #include "help_dialogs.hpp"
 #include "education_linear_reference.hpp"
+#include "education_assets.hpp"
 #include "education_signals_reference.hpp"
 #include "education_lti_reference.hpp"
 #include "education_spectral_reference.hpp"
@@ -2258,10 +2259,10 @@ private slots:
         QCOMPARE(browser->source(), source);
         // A bundled page need not be a top-level topic to be navigable.
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
-            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/examples/education/README.md"))));
+            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/education/labs/README.md"))));
         QVERIFY(browser->toPlainText().contains("New education diagrams"));
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
-            Q_ARG(QUrl, QUrl("../../education/labs/SP06-three-tap-fir/README.md#predict"))));
+            Q_ARG(QUrl, QUrl("SP06-three-tap-fir/README.md#predict"))));
         QVERIFY(browser->toPlainText().contains("Build and test a three-tap FIR filter"));
         capture(help, "education-sp06-help", true);
         const auto internal = browser->source();
@@ -2271,7 +2272,7 @@ private slots:
         QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
     }
     void helpExampleLinks() {
-        const auto input = QString(S7_GUI_EXAMPLES_DIR) + "/education/sp14_coherent_am.s7diagram";
+        const auto input = QString(S7_GUI_EDUCATION_DIR)+"/SP14-coherent-am/sp14_coherent_am.s7diagram";
         QFile original(input); QVERIFY(original.open(QIODevice::ReadOnly));
         const auto bytes = original.readAll(); original.close();
         action("action.help")->trigger();
@@ -2315,10 +2316,10 @@ private slots:
         const auto restore = qScopeGuard([] { QDesktopServices::unsetUrlHandler("file"); });
         for (const auto& link : {"file:///tmp/other.s7diagram",
                  "qrc:/s7studio/help/examples/../../other.s7diagram",
-                 "qrc://other/s7studio/help/examples/education/sp14_coherent_am.s7diagram",
-                 "../../../examples/education/sp14_coherent_am.s7diagram?run=1",
-                 "../../../examples/education/sp14_coherent_am.s7diagram#run",
-                 "../../../examples/education/missing.s7diagram"}) {
+                 "qrc://other/s7studio/help/education/labs/SP14-coherent-am/sp14_coherent_am.s7diagram",
+                 "sp14_coherent_am.s7diagram?run=1",
+                 "sp14_coherent_am.s7diagram#run",
+                 "missing.s7diagram"}) {
             Q_EMIT browser->anchorClicked(QUrl(link));
             QCOMPARE(window_->currentDocument(), pending); QVERIFY(runner->isPaused());
             QVERIFY(help->isVisible()); QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
@@ -2336,12 +2337,15 @@ private slots:
         QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes);
         original.close();
         // Every core row in the real navigator must open its working copy.
-        const QDir examples(QString(S7_GUI_EXAMPLES_DIR) + "/education");
-        const auto diagrams = examples.entryList({"*.s7diagram"}, QDir::Files);
+        QDirIterator labs(QString(S7_GUI_EDUCATION_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
+        QStringList diagrams;
+        while (labs.hasNext()) diagrams << labs.next();
+        diagrams.sort();
         QCOMPARE(diagrams.size(), 24);
-        for (const auto& name : diagrams) {
+        for (const auto& path : diagrams) {
+            const auto name = QFileInfo(path).fileName();
             action("action.help")->trigger();
-            browser->setSource(QUrl("qrc:/s7studio/help/examples/education/README.md"), QTextDocument::MarkdownResource);
+            browser->setSource(QUrl("qrc:/s7studio/help/education/labs/README.md"), QTextDocument::MarkdownResource);
             auto cursor = browser->document()->find(name); QVERIFY2(!cursor.isNull(), qPrintable(name));
             cursor.setPosition(cursor.selectionStart() + 3);
             browser->setTextCursor(cursor); browser->ensureCursorVisible();
@@ -2350,7 +2354,7 @@ private slots:
             QVERIFY(browser->anchorAt(point).endsWith(name));
             QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point);
             QVERIFY2(!help->isVisible(), qPrintable(name));
-            QFile diagram(examples.filePath(name)); QVERIFY(diagram.open(QIODevice::ReadOnly));
+            QFile diagram(path); QVERIFY(diagram.open(QIODevice::ReadOnly));
             const auto expected = QJsonDocument::fromJson(diagram.readAll()).object().value("schema").toObject().value("elements").toArray();
             QVERIFY(!expected.isEmpty());
             for (const auto element : expected)
@@ -2428,7 +2432,7 @@ private slots:
         QCOMPARE(reopened.front()->params().at("text").as_string(), "Read https://ocw.mit.edu/ today.");
     }
     void educationFirEditAndRerun() {
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/education/sp06_three_tap_fir.s7diagram"));
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EDUCATION_DIR)+"/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram"));
         const auto notes = scene()->textFrames(); QCOMPARE(notes.size(), std::size_t(1));
         QSet<QString> visibleLinks;
         for (int y = 8; y < notes.front()->height()-8; y += 3)
@@ -2543,7 +2547,7 @@ private slots:
     void educationFoundations() {
         QFETCH(QString, lab); QFETCH(QString, file); QFETCH(QString, slug);
         QFETCH(QString, editedId); QFETCH(QString, parameter); QFETCH(QString, newValue);
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open", QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
         const auto notes = scene()->textFrames(); QCOMPARE(notes.size(), std::size_t(1));
         const auto frame = notes.front();
@@ -2673,7 +2677,7 @@ private slots:
         QFETCH(int, index);
         const auto& lab = s7tests::education::linear_labs.at(index);
         const auto id = QString::fromStdString(lab.id), file = QString::fromStdString(lab.file);
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open", QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
         const auto frames = scene()->textFrames(); QCOMPARE(frames.size(), std::size_t(1));
         const auto frame = frames.front();
@@ -2832,7 +2836,7 @@ private slots:
         const auto file=synthesis ? QString("sp01_fourier_synthesis") : QString("sp03_aliasing");
         const auto slug=synthesis ? QString("SP01-fourier-synthesis") : QString("SP03-aliasing");
         const double savedRate=synthesis ? 128 : 64;
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open",QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* view=editor()->findChild<QGraphicsView*>(); QVERIFY(view);
         const auto frames=scene()->textFrames(); QCOMPARE(frames.size(),std::size_t(1));
         const auto frame=frames.front(); QPoint guidePoint(-1,-1); QSet<QString> links;
@@ -3025,7 +3029,7 @@ private slots:
         const auto slug=convolution ? QString("SP05-convolution") : QString("SP07-filter-transfer");
         const double rate=convolution ? 20 : 64,seconds=convolution ? 2 : 64;
         const int count=int(rate*seconds);
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open",QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
         const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
         const auto frame=frames.front();QSet<QString> links;QPoint guidePoint(-1,-1);
@@ -3232,7 +3236,7 @@ private slots:
     }
     void educationAm() {
         using namespace s7tests::education;
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp14_coherent_am.s7diagram"));openTeachingGuide("SP14","SP14-coherent-am");QVERIFY(!QTest::currentTestFailed());
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EDUCATION_DIR)+"/SP14-coherent-am/sp14_coherent_am.s7diagram"));openTeachingGuide("SP14","SP14-coherent-am");QVERIFY(!QTest::currentTestFailed());
         const TeachingBindings bindings{{"rf_scope/rf",{"transmit",0,"V"}},{"baseband_scope/target",{"envelope",0,"V"}},
             {"baseband_scope/recovered",{"recovered",0,"V"}},{"mixer_scope/mixed",{"mixed",0,"V"}},
             {"carrier_scope/carrier",{"carrier",0,"1"}},{"carrier_scope/local",{"local",0,"1"}}};
@@ -3287,7 +3291,7 @@ private slots:
     }
     void educationCompensator() {
         using namespace s7tests::education;
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/ct08_lead_lag.s7diagram"));openTeachingGuide("CT08","CT08-lead-lag");QVERIFY(!QTest::currentTestFailed());
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EDUCATION_DIR)+"/CT08-lead-lag/ct08_lead_lag.s7diagram"));openTeachingGuide("CT08","CT08-lead-lag");QVERIFY(!QTest::currentTestFailed());
         const TeachingBindings bindings{{"scope/reference",{"reference",0,"1"}},{"scope/P_output",{"base_y",0,"1"}},{"scope/lead_output",{"lead_y",0,"1"}},
             {"command_scope/P_command",{"base",0,"1"}},{"command_scope/lead_command",{"lead",0,"1"}},
             {"pulse_scope/pulse",{"pulse",0,"1"}},{"pulse_scope/open_output",{"open_y",0,"1"}},
@@ -3331,7 +3335,7 @@ private slots:
     void educationLoop() {
         QFETCH(bool,margins);using namespace s7tests::education;
         const QString lab=margins ? "CT07":"CT06",file=margins ? "ct07_stability_margins":"ct06_closed_loop_poles",slug=margins ? "CT07-stability-margins":"CT06-closed-loop-poles";
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));openTeachingGuide(lab,slug);QVERIFY(!QTest::currentTestFailed());
+        QVERIFY(fileAction("action.open",QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));openTeachingGuide(lab,slug);QVERIFY(!QTest::currentTestFailed());
         TeachingBindings bindings;
         if(margins) bindings={{"scope/reference",{"reference",0,"1"}},{"scope/closed_output",{"closed_y",0,"1"}},
             {"pulse_scope/pulse",{"pulse",0,"1"}},{"pulse_scope/open_output",{"open_y",0,"1"}},
@@ -3402,7 +3406,7 @@ private slots:
         const QString lab=windup ? "CT05":"CT04",file=windup ? "ct05_actuator_windup":"ct04_controller_comparison";
         const QString slug=windup ? "CT05-actuator-windup":"CT04-controller-comparison";
         const int count=windup ? 1200:1600;const double seconds=windup ? 12:16;
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open",QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* root=editor();auto* view=root->findChild<QGraphicsView*>();QVERIFY(view);
         const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
         auto frame=frames.front();QSet<QString> links;QPoint guide(-1,-1);
@@ -3547,7 +3551,7 @@ private slots:
     }
     void educationStft() {
         using namespace s7tests::education;
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp11_short_time_fourier.s7diagram"));
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EDUCATION_DIR)+"/SP11-short-time-fourier/sp11_short_time_fourier.s7diagram"));
         auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
         const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
         const auto frame=frames.front();QPoint guidePoint(-1,-1);QSet<QString> links;
@@ -3785,7 +3789,7 @@ private slots:
         QCOMPARE(correlation.result()->runId,std::uint64_t(43));QVERIFY(correlation.result()->frame->finished);
     }
     void educationConvolution() {
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp10_circular_convolution.s7diagram"));
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EDUCATION_DIR)+"/SP10-circular-convolution/sp10_circular_convolution.s7diagram"));
         auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
         const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
         const auto frame=frames.front();QPoint guidePoint(-1,-1),implementationPoint(-1,-1);QSet<QString> links;
@@ -3914,7 +3918,7 @@ private slots:
         const bool leakage=lab=="SP08";
         const auto file=leakage ? QString("sp08_dft_leakage") : QString("sp09_window_normalization");
         const auto slug=leakage ? QString("SP08-dft-leakage") : QString("SP09-window-normalization");
-        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/"+file+".s7diagram"));
+        QVERIFY(fileAction("action.open",QString::fromStdString(s7tests::education_diagram_path(S7_GUI_EDUCATION_DIR, (file+".s7diagram").toStdString()).string())));
         auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);
         const auto frames=scene()->textFrames();QCOMPARE(frames.size(),std::size_t(1));
         const auto frame=frames.front();QPoint guidePoint(-1,-1);QSet<QString> links;
@@ -4263,9 +4267,13 @@ private slots:
     // The run each bundled example's article documents; the rate is the
     // diagram's own 1/dt. Live-only demonstrations use a short run.
     static double documentedSeconds(const QString& path) {
+        if (path.startsWith("../education/labs/")) {
+            QFile file(QDir(QString(S7_GUI_EXAMPLES_DIR)).filePath(path));
+            if (!file.open(QIODevice::ReadOnly)) return 0;
+            return QJsonDocument::fromJson(file.readAll()).object()["studio_run"].toObject()["runtime_seconds"].toDouble();
+        }
         static const QList<std::pair<QString, double>> table{
-            {"education/fn04_", 10}, {"education/fn05_", 6}, {"education/fn06_", 30},
-            {"education/ct01_", 5}, {"education/ct02_", 8}, {"education/ct03_", 10}, {"education/fn", 2}, {"education/sp01_", 2}, {"education/sp03_", 2}, {"education/sp05_", 2}, {"education/sp07_", 64}, {"education/sp08_", 2}, {"education/sp09_", 2}, {"education/sp10_", 2}, {"education/ct08_", 64}, {"education/ct06_", 32}, {"education/ct07_", 64}, {"education/ct04_", 16}, {"education/ct05_", 12}, {"education/sp14_", 4}, {"education/sp11_", 4}, {"education/sp06_", 4}, {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
+            {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
             {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
             {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
             {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},
@@ -4310,6 +4318,8 @@ private slots:
         QDirIterator files(QString(S7_GUI_EXAMPLES_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
         QStringList all;
         while (files.hasNext()) all << QDir(QString(S7_GUI_EXAMPLES_DIR)).relativeFilePath(files.next());
+        QDirIterator labs(QString(S7_GUI_EDUCATION_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
+        while (labs.hasNext()) all << QDir(QString(S7_GUI_EXAMPLES_DIR)).relativeFilePath(labs.next());
         all.sort();
         QVERIFY(all.size() > 50);
         for (qsizetype i = 0; i < all.size(); ++i)
@@ -4691,9 +4701,13 @@ private slots:
         }));
         QCOMPARE(frames.front()->params().at("font_size").as_int64(), 4);
         int framesChecked = 0;
-        QDirIterator files(QString(S7_GUI_EXAMPLES_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
-        while (files.hasNext()) {
-            QFile file(files.next()); QVERIFY(file.open(QIODevice::ReadOnly));
+        QStringList diagrams;
+        for (const auto& directory : {QString(S7_GUI_EXAMPLES_DIR), QString(S7_GUI_EDUCATION_DIR)}) {
+            QDirIterator files(directory, {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
+            while (files.hasNext()) diagrams << files.next();
+        }
+        for (const auto& path : diagrams) {
+            QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
             const auto root = QJsonDocument::fromJson(file.readAll()).object();
             for (const auto& value : root["diagram"].toObject()["text_frames"].toArray()) {
                 ++framesChecked;

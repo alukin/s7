@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include "education_control_reference.hpp"
 #include <s7/schema_library.hpp>
 #include <array>
@@ -10,7 +11,7 @@ namespace {
 using namespace s7tests::education;
 void require(bool ok,const std::string& why) {if(!ok) throw std::runtime_error(why);}
 boost::json::object document(bool windup,bool edited,double rate) {
-    auto doc=s7tests::read_json_object(std::filesystem::path(S7_CONTROL_LABS_DIR)/(windup ? "ct05_actuator_windup.s7diagram":"ct04_controller_comparison.s7diagram"));
+    auto doc=s7tests::read_json_object(s7tests::education_diagram_path(S7_CONTROL_LABS_DIR, windup ? "ct05_actuator_windup.s7diagram":"ct04_controller_comparison.s7diagram"));
     require(doc.at("dt").to_number<double>()==.01,"saved 100 Hz rate");
     require(doc.at("studio_run").at("runtime_seconds").to_number<double>()==(windup ? 12:16),"saved duration");
     for(auto& e:doc.at("schema").at("elements").as_array()) {

@@ -11,7 +11,7 @@ remembered input history matters even before the first pulse.
 
 ## Three rows, one rule
 
-Open **File → Example Diagrams… → education → sp05_convolution.s7diagram**.
+Open **Help → Education: start here → sp05_convolution.s7diagram**.
 This original graph has three explicit copies of a short causal filter:
 
 ```text
@@ -91,7 +91,7 @@ explanatory node labels are not automatically rewritten by parameter edits.
 ## Independent verification
 
 The [headless test](../../../s7tests/education_lti_smoke.cpp) loads the
-[actual saved diagram](../../../examples/education/sp05_convolution.s7diagram)
+[actual saved diagram](sp05_convolution.s7diagram)
 with the production loader, validates and compiles it, and observes every
 sample. It independently computes `sum h[j] x[n−j]`, checks the two shifted
 finite responses, repeats a fresh run, tests the amplitude edit and checks
@@ -125,4 +125,4 @@ key is bundled. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 Previous: [SP03 — aliasing](../SP03-aliasing/README.md).
 Next: [SP06 — three-tap FIR](../SP06-three-tap-fir/README.md), then
 [SP07 — filter transfer](../SP07-filter-transfer/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

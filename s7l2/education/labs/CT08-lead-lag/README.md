@@ -50,8 +50,8 @@ optimality or hardware-actuator claim is made.
 
 ## Construct, run and measure
 
-Open [ct08_lead_lag.s7diagram](../../../examples/education/ct08_lead_lag.s7diagram)
-through **File → Example Diagrams… → education**. Keep **64 s at 10 Hz**.
+Open [ct08_lead_lag.s7diagram](ct08_lead_lag.s7diagram)
+through **Help → Education: start here**. Keep **64 s at 10 Hz**.
 
 1. Trace the two closed loops and their separate plant states. The shared
    reference/parameter constants do not share plant or controller memory.
@@ -162,4 +162,4 @@ examples and parameters differ from this explicit sampled model. This is
 original topic alignment, not reproduction of a worked problem; no handout,
 figure or solution is bundled. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

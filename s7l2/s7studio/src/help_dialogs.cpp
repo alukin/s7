@@ -41,7 +41,7 @@ constexpr Topic topics[] = {
     {"Live cursors, measurements and export", "qrc:/s7studio/help/docs/STUDIO_WINDOW_INSPECTION.md"},
     {"Live edge-trigger synchronization", "qrc:/s7studio/help/docs/STUDIO_TRIGGERING.md"},
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
-    {"Education: start here", "qrc:/s7studio/help/examples/education/README.md"},
+    {"Education: start here", "qrc:/s7studio/help/education/labs/README.md"},
     {"Education: FN01 one sample of memory", "qrc:/s7studio/help/education/labs/FN01-unit-delay/README.md"},
     {"Education: FN02 natural and forced response", "qrc:/s7studio/help/education/labs/FN02-natural-forced/README.md"},
     {"Education: FN03 initial conditions", "qrc:/s7studio/help/education/labs/FN03-initial-conditions/README.md"},
@@ -112,11 +112,14 @@ bool isHelpArticle(const QUrl& url)
 
 QString helpExamplePath(const QUrl& url)
 {
-    const auto prefix = QStringLiteral("/s7studio/help/examples/");
+    const auto prefix = QStringLiteral("/s7studio/help/");
     if (url.scheme() != QStringLiteral("qrc") || !url.authority().isEmpty() ||
         url.hasQuery() || url.hasFragment() || !url.path().startsWith(prefix) ||
         !url.path().endsWith(QStringLiteral(".s7diagram"))) return {};
-    return url.path().mid(prefix.size());
+    const auto relative = url.path().mid(prefix.size());
+    if (!relative.startsWith(QStringLiteral("examples/")) &&
+        !relative.startsWith(QStringLiteral("education/labs/"))) return {};
+    return relative;
 }
 
 void showWindow(QDialog* dialog)

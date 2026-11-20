@@ -8,7 +8,7 @@ provide engineering references. Some topics also need new capabilities. Never ad
 because its prerequisite S7 example runs.
 
 **Maintainer decision, 2026-11-19:** create new diagrams specifically for
-the education collection, under `examples/education/`. Existing examples
+the education collection, beside their guides under `education/labs/<ID>-<slug>/`. Existing examples
 and tests are implementation references, not the diagrams delivered as labs.
 Each educational diagram remains canonical for its lab and may be linked
 from several course routes. See the [core implementation manifest](CORE_MANIFEST.md).
@@ -17,7 +17,7 @@ New students can now start with [FN01 — one sample of memory](labs/FN01-unit-d
 then [FN02 — natural and forced response](labs/FN02-natural-forced/README.md)
 and [FN03 — initial conditions](labs/FN03-initial-conditions/README.md).
 These new diagrams save a short 20-sample run and link directly to their
-student guides and MIT readings. See the [learning route](../examples/education/README.md).
+student guides and MIT readings. See the [learning route](labs/README.md).
 
 Continue with [FN04 — impulse and transfer](labs/FN04-impulse-transfer/README.md),
 [FN05 — integration rules](labs/FN05-integration-rules/README.md),
@@ -132,7 +132,7 @@ This order is pedagogical, not a mandate to implement lab IDs in sequence.
 ## One model, several curricula
 
 The new canonical runnable files live under
-[`../examples/education/`](../examples/education/README.md). The curriculum
+[`../education/labs/`](labs/README.md). The curriculum
 references them rather than copying diagrams into multiple courses. An RC response can
 support a circuit lesson, a discrete approximation lesson and an intro
 control lesson using distinct lab questions and verification conditions.

@@ -11,7 +11,7 @@ the record duration, and distinguish finite-record mean from a physical offset.
 
 ## Read the new signal graph
 
-Open **File → Example Diagrams… → education → sp08_dft_leakage.s7diagram**.
+Open **Help → Education: start here → sp08_dft_leakage.s7diagram**.
 It contains two independent cosine sources and a known DC offset:
 
 ```text
@@ -120,7 +120,7 @@ power and PSD use 10 log10. The display floor affects drawing, not raw results.
 ## Independent checks, sources and limits
 
 The [headless test](../../../s7tests/education_spectral_smoke.cpp) executes the
-[actual saved graph](../../../examples/education/sp08_dft_leakage.s7diagram)
+[actual saved graph](sp08_dft_leakage.s7diagram)
 through production loading, validation, compilation and observation. It checks
 every sample, a fresh repeat, the edit, first/full/last intervals, and compares
 an independent direct complex DFT with the finite geometric formula above.
@@ -148,4 +148,4 @@ guide: CC-BY-4.0.
 
 Extension: predict which other frequencies are coherent for a 1 s versus
 2 s record, preserving the rate. Next: [SP09 — window normalization](../SP09-window-normalization/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

@@ -20,7 +20,7 @@ class TeachingAssetsTest(unittest.TestCase):
             self.assertEqual(report['core_diagrams'], 24)
             self.assertGreater(report['offline_links_checked'], 100)
             self.assertGreater(report['development_links_excluded'], 0)
-            for directory in ('examples/education', 'education/labs'):
+            for directory in ('education',):
                 for asset in (source / directory).rglob('*'):
                     if asset.suffix in ('.md', '.s7diagram'):
                         self.assertEqual(asset.read_bytes(), (stage / asset.relative_to(source)).read_bytes())
@@ -38,7 +38,7 @@ class TeachingAssetsTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '24 named core guides'):
                 check(moved)
             guide.write_text(text)
-            diagram = moved / 'examples/education/sp14_coherent_am.s7diagram'
+            diagram = moved / 'education/labs/SP14-coherent-am/sp14_coherent_am.s7diagram'
             diagram.unlink()
             with self.assertRaisesRegex(ValueError, '24 named core diagrams'):
                 check(moved)
@@ -49,13 +49,13 @@ class TeachingAssetsTest(unittest.TestCase):
             root = Path(temporary)
             staging_source = root / 'source'
             copy(source, staging_source)
-            cache = staging_source / 'examples/education/__pycache__'
+            cache = staging_source / 'education/labs/__pycache__'
             cache.mkdir()
             (cache / 'cached.pyc').write_bytes(b'cache')
             (staging_source / 'education/cached.pyo').write_bytes(b'cache')
             package = root / 'package'
             copy(staging_source, package)
-            self.assertFalse((package / 'examples/education/__pycache__').exists())
+            self.assertFalse((package / 'education/labs/__pycache__').exists())
             self.assertFalse((package / 'education/cached.pyo').exists())
             leaked = package / 'education/leaked.pyc'
             leaked.write_bytes(b'cache')

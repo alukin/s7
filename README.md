@@ -30,7 +30,7 @@ their behavior. The runtime also works headlessly for scripted experiments,
 automated checks and execution on other machines.
 
 For students, the current source includes [24 original educational examples
-with guided labs](s7l2/examples/education/README.md), covering signals and
+with guided labs](s7l2/education/labs/README.md), covering signals and
 systems, convolution, Fourier analysis, numerical modeling and feedback control.
 Each lab pairs a purpose-built diagram with an offline student guide, MIT
 online readings and independent numerical checks. Predict the result, run the
@@ -93,14 +93,13 @@ and original MIT online teaching materials; web links open in the external brows
 | [SP14](s7l2/education/labs/SP14-coherent-am/README.md) | AM sidebands, coherent phase error, finite-filter settling and calibrated recovered spectra |
 | [SP06](s7l2/education/labs/SP06-three-tap-fir/README.md) | A three-tap FIR filter built from explicit delays, gains and a summer |
 
-Start with the [student learning route](s7l2/examples/education/README.md).
-In a current source build of Studio, choose **File → Example Diagrams… →
-education → fn01_unit_delay.s7diagram**. Predict the first samples using its
+Start with the [student learning route](s7l2/education/labs/README.md).
+In a current source build of Studio, choose **Help → Education: start here → fn01_unit_delay.s7diagram**. Predict the first samples using its
 guide, click **Run** and keep the saved settings, then double-click
 **Compare the named signals** to open Scope. Follow the guide's parameter
 experiment and explain the changed result.
 Studio Help also opens diagram links as working copies. Installed packages
-include the offline lab guides beside the examples under `share/s7/`.
+include each diagram beside its offline guide under `share/s7/education/labs/`.
 
 These labs also serve as **executable specifications for S7**. Independent
 formulas check the saved graphs' samples, initial conditions, timing and

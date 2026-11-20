@@ -40,8 +40,8 @@ images at 60/64/68 Hz, are below Nyquist **128 Hz**.
 
 ## Construct, run and inspect
 
-Open [sp14_coherent_am.s7diagram](../../../examples/education/sp14_coherent_am.s7diagram)
-through **File → Example Diagrams… → education**. Keep **4 s at 256 Hz**,
+Open [sp14_coherent_am.s7diagram](sp14_coherent_am.s7diagram)
+through **Help → Education: start here**. Keep **4 s at 256 Hz**,
 1024 samples. Follow message+bias → multiply carrier → multiply local →
 two low-pass schema elements. Each FirstOrderLag contains an explicit
 difference/divider/EulerIntegrator network, not an ideal frequency cutoff.
@@ -171,4 +171,4 @@ finite sampled two-state network.
 This is original S7 topic alignment, not an MIT assignment or worked solution.
 No PDF, figure, audio or solution is bundled. Diagram/generator: CC0-1.0;
 guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

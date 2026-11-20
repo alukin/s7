@@ -38,7 +38,7 @@ An Adder explicitly subtracts low from shifted to expose the residual.
 
 ## Predict the overlay
 
-Open **File → Example Diagrams… → education → sp03_aliasing.s7diagram**.
+Open **Help → Education: start here → sp03_aliasing.s7diagram**.
 
 | n | Signal time (s) | Scope time (s) | Each source (V) | Difference (V) |
 | --- | --- | --- | --- | --- |
@@ -104,7 +104,7 @@ a digital filter afterward cannot identify which original alias was present.
 ## Independent checks and viewer correctness
 
 The [headless test](../../../s7tests/education_signals_smoke.cpp) loads the
-[actual graph](../../../examples/education/sp03_aliasing.s7diagram) with the
+[actual graph](sp03_aliasing.s7diagram) with the
 production loader, validates, compiles and samples through the read-only
 observation API. Independent long-double evaluations check every value,
 a fresh repeat, the edited frequency and the 256 Hz contrast. A direct complex
@@ -140,4 +140,4 @@ Previous: [SP01](../SP01-fourier-synthesis/README.md).
 Continue with [SP06 — three-tap FIR](../SP06-three-tap-fir/README.md).
 Continue to [SP05 — shifted impulse responses](../SP05-convolution/README.md)
 and [SP07 — filter transfer](../SP07-filter-transfer/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).

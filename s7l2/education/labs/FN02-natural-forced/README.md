@@ -11,7 +11,7 @@ when each begins and check that changing one input leaves the others alone.
 
 ## Open, predict, then run
 
-Open **File → Example Diagrams… → education → fn02_natural_forced.s7diagram**.
+Open **Help → Education: start here → fn02_natural_forced.s7diagram**.
 The three rows have the same rule, `y[n]=u[n]+0.5 y[n−1]`, with different
 inputs or stored past. All inputs and outputs are F64 voltages; the gain is
 dimensionless. Each loop is a new explicit Delay/Gain/Adder network.
@@ -86,7 +86,7 @@ step_response[n] = 0 before n=5; 2(1−0.5^(n−4)) V afterward
 ```
 
 The [test](../../../s7tests/education_foundations_smoke.cpp) executes the
-[saved graph](../../../examples/education/fn02_natural_forced.s7diagram),
+[saved graph](fn02_natural_forced.s7diagram),
 checks every response and source sample against these independent sums,
 checks timestamps, repeats from fresh initial state, doubles the step and
 tests the wrong impulse area. It uses the production loader and normal
@@ -121,4 +121,4 @@ browser. No MIT material is redistributed. S7 diagrams/generators are CC0-1.0;
 this guide is CC-BY-4.0.
 
 Next: [FN03 — Where does the response come from?](../FN03-initial-conditions/README.md)
-Previous: [FN01](../FN01-unit-delay/README.md) · [Learning route](../../../examples/education/README.md).
+Previous: [FN01](../FN01-unit-delay/README.md) · [Learning route](../README.md).

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include "education_linear_reference.hpp"
 #include <s7/schema_library.hpp>
 #include <iostream>
@@ -13,7 +14,7 @@ using Document = boost::json::object;
 using Trace = std::vector<std::vector<double>>;
 void require(bool ok, const std::string& what) {if (!ok) throw std::runtime_error(what);}
 Document load(const LinearLab& lab) {
-    return s7tests::read_json_object(std::filesystem::path(S7_LINEAR_LABS_DIR)/(lab.file+".s7diagram"));
+    return s7tests::read_json_object(s7tests::education_diagram_path(S7_LINEAR_LABS_DIR, lab.file+".s7diagram"));
 }
 boost::json::object& element(Document& doc, const std::string& id) {
     for (auto& e : doc.at("schema").at("elements").as_array()) if (e.at("id").as_string() == id) return e.as_object();

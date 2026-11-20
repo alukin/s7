@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include <s7/schema_library.hpp>
 #include <functional>
 #include <iomanip>
@@ -23,7 +24,7 @@ void require(bool ok, const std::string& message)
 
 Document load(const std::string& name)
 {
-    return s7tests::read_json_object(std::filesystem::path(S7_FOUNDATIONS_DIR)/(name+".s7diagram"));
+    return s7tests::read_json_object(s7tests::education_diagram_path(S7_FOUNDATIONS_DIR, name+".s7diagram"));
 }
 
 boost::json::object& element(Document& doc, const std::string& id)

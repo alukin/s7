@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "diagram_harness.hpp"
+#include "education_assets.hpp"
 #include "education_signals_reference.hpp"
 #include <s7/schema_library.hpp>
 #include <iostream>
@@ -11,7 +12,7 @@ using namespace s7tests::education;
 using Document=boost::json::object;
 using Trace=std::vector<std::vector<double>>;
 void require(bool ok,const std::string& what) {if (!ok) throw std::runtime_error(what);}
-Document load(const std::string& file) {return s7tests::read_json_object(std::filesystem::path(S7_SIGNAL_LABS_DIR)/(file+".s7diagram"));}
+Document load(const std::string& file) {return s7tests::read_json_object(s7tests::education_diagram_path(S7_SIGNAL_LABS_DIR, file+".s7diagram"));}
 void edit(Document& doc,const std::string& id,const std::string& key,double value) {
     for (auto& e:doc.at("schema").at("elements").as_array())
         if (e.at("id").as_string()==id) {e.at("params").as_object()[key]=value;return;}

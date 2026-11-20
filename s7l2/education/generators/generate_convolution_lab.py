@@ -3,8 +3,7 @@
 # SPDX-License-Identifier: CC0-1.0
 """Construct the original SP10 scalar graph; no frame ports or solver."""
 import json
-from pathlib import Path
-from generate_foundations import Drawing
+from generate_foundations import diagram_path, Drawing
 
 MIT = 'https://ocw.mit.edu/courses/res-6-008-digital-signal-processing-spring-2011/resources/lecture-10-circular-convolution/'
 
@@ -77,4 +76,4 @@ def make():
 
 
 if __name__ == '__main__':
-    Path(__file__).with_name('sp10_circular_convolution.s7diagram').write_text(json.dumps(make(), indent=2)+'\n')
+    diagram_path('sp10_circular_convolution.s7diagram').write_text(json.dumps(make(), indent=2)+'\n')

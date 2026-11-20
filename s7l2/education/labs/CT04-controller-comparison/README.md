@@ -38,8 +38,8 @@ A nonzero P error under a constant load is expected, not a viewer defect.
 
 ## Construct and inspect the causal network
 
-Open [ct04_controller_comparison.s7diagram](../../../examples/education/ct04_controller_comparison.s7diagram)
-from **File → Example Diagrams… → education**. Trace each feedback lane:
+Open [ct04_controller_comparison.s7diagram](ct04_controller_comparison.s7diagram)
+from **Help → Education: start here**. Trace each feedback lane:
 reference minus its own output → controller → bounded command →
 plant derivative → **EulerIntegrator** → output. The plant integrator is
 causal memory. Adding an outer Delay changes the model; removing plant
@@ -142,4 +142,4 @@ No handout, figure or solution is bundled. The signals, graph and references
 are original S7 work. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Next: [CT05 — actuator windup](../CT05-actuator-windup/README.md).
-[Return to the learning route](../../../examples/education/README.md).
+[Return to the learning route](../README.md).
