@@ -220,6 +220,7 @@ private:
     QAction* loadLibraryAction_ = nullptr;
     QAction* saveLibraryAction_ = nullptr;
     QAction* examplesAction_ = nullptr;
+    QAction* openLabsAction_ = nullptr;
     QAction* fitDiagramAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* runAction_ = nullptr;

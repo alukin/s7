@@ -41,7 +41,7 @@ constexpr Topic topics[] = {
     {"Live cursors, measurements and export", "qrc:/s7studio/help/docs/STUDIO_WINDOW_INSPECTION.md"},
     {"Live edge-trigger synchronization", "qrc:/s7studio/help/docs/STUDIO_TRIGGERING.md"},
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
-    {"Education: start here", "qrc:/s7studio/help/education/labs/README.md"},
+    {"Education: start here", "qrc:/s7studio/help/education/index.md"},
     {"Education: FN01 one sample of memory", "qrc:/s7studio/help/education/labs/FN01-unit-delay/README.md"},
     {"Education: FN02 natural and forced response", "qrc:/s7studio/help/education/labs/FN02-natural-forced/README.md"},
     {"Education: FN03 initial conditions", "qrc:/s7studio/help/education/labs/FN03-initial-conditions/README.md"},

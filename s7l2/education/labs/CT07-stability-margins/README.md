@@ -123,4 +123,4 @@ Its continuous-time examples differ from this declared sampled loop.
 This is topic alignment; the model, data, equations and graph are original.
 No assignment, figure or solution is copied. Diagram/generator: CC0-1.0;
 guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

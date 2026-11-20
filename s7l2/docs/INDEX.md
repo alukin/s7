@@ -61,7 +61,7 @@ are qualification **targets**, not completed tests. See the
 The [core implementation manifest](../education/CORE_MANIFEST.md) records the
 2026-11-19 decision to create new educational diagrams and the remaining gaps.
 Begin with [FN01 — one sample of memory](../education/labs/FN01-unit-delay/README.md),
-then FN02–FN06 and CT01–CT03 in the [learning route](../education/labs/README.md).
+then FN02–FN06 and CT01–CT03 in the [learning route](../education/index.md).
 [SP01 — Fourier synthesis](../education/labs/SP01-fourier-synthesis/README.md)
 and [SP03 — aliasing](../education/labs/SP03-aliasing/README.md) add harmonic
 and sampling experiments, with explicit viewer verification.

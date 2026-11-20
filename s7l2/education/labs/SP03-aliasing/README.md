@@ -140,4 +140,4 @@ Previous: [SP01](../SP01-fourier-synthesis/README.md).
 Continue with [SP06 — three-tap FIR](../SP06-three-tap-fir/README.md).
 Continue to [SP05 — shifted impulse responses](../SP05-convolution/README.md)
 and [SP07 — filter transfer](../SP07-filter-transfer/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

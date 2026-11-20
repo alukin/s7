@@ -3,7 +3,7 @@
 **Layout update, 2026-11-20:** canonical diagrams now live beside their guides
 in `education/labs/<ID>-<slug>/`; generators live in `education/generators/`.
 Historical commands and hashes below retain the paths used at the time.
-The [current lab navigator](labs/README.md) links to the relocated files.
+The [current lab navigator](index.md) links to the relocated files.
 
 This file records executed development checks, separately from the final
 release acceptance matrix. Earlier batches used baseline `96fe7b438ceeb9a206d404b4ae2a05943c89b21d`.

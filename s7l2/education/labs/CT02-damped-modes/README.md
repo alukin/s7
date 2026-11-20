@@ -101,4 +101,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [CT01](../CT01-first-order/README.md).
 Next: [CT03](../CT03-sample-time/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

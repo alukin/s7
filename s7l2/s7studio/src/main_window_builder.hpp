@@ -24,6 +24,7 @@ struct MainWindowActions {
     QAction* loadLibraryAction = nullptr;
     QAction* saveLibraryAction = nullptr;
     QAction* examplesAction = nullptr;
+    QAction* openLabsAction = nullptr;
     QAction* fitDiagramAction = nullptr;
     QAction* exitAction = nullptr;
     QAction* runAction = nullptr;

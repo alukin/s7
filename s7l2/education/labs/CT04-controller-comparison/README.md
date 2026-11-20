@@ -142,4 +142,4 @@ No handout, figure or solution is bundled. The signals, graph and references
 are original S7 work. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Next: [CT05 — actuator windup](../CT05-actuator-windup/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

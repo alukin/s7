@@ -100,4 +100,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [CT02](../CT02-damped-modes/README.md).
 Next: [SP06](../SP06-three-tap-fir/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

@@ -17,7 +17,7 @@ New students can now start with [FN01 — one sample of memory](labs/FN01-unit-d
 then [FN02 — natural and forced response](labs/FN02-natural-forced/README.md)
 and [FN03 — initial conditions](labs/FN03-initial-conditions/README.md).
 These new diagrams save a short 20-sample run and link directly to their
-student guides and MIT readings. See the [learning route](labs/README.md).
+student guides and MIT readings. See the [learning route](index.md).
 
 Continue with [FN04 — impulse and transfer](labs/FN04-impulse-transfer/README.md),
 [FN05 — integration rules](labs/FN05-integration-rules/README.md),
@@ -132,7 +132,7 @@ This order is pedagogical, not a mandate to implement lab IDs in sequence.
 ## One model, several curricula
 
 The new canonical runnable files live under
-[`../education/labs/`](labs/README.md). The curriculum
+[`../education/labs/`](index.md). The curriculum
 references them rather than copying diagrams into multiple courses. An RC response can
 support a circuit lesson, a discrete approximation lesson and an intro
 control lesson using distinct lab questions and verification conditions.

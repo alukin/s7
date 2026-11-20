@@ -2259,10 +2259,10 @@ private slots:
         QCOMPARE(browser->source(), source);
         // A bundled page need not be a top-level topic to be navigable.
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
-            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/education/labs/README.md"))));
-        QVERIFY(browser->toPlainText().contains("New education diagrams"));
+            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/education/index.md"))));
+        QVERIFY(browser->toPlainText().contains("S7 teaching labs"));
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
-            Q_ARG(QUrl, QUrl("SP06-three-tap-fir/README.md#predict"))));
+            Q_ARG(QUrl, QUrl("labs/SP06-three-tap-fir/README.md#predict"))));
         QVERIFY(browser->toPlainText().contains("Build and test a three-tap FIR filter"));
         capture(help, "education-sp06-help", true);
         const auto internal = browser->source();
@@ -2275,9 +2275,16 @@ private slots:
         const auto input = QString(S7_GUI_EDUCATION_DIR)+"/SP14-coherent-am/sp14_coherent_am.s7diagram";
         QFile original(input); QVERIFY(original.open(QIODevice::ReadOnly));
         const auto bytes = original.readAll(); original.close();
-        action("action.help")->trigger();
+        const auto current = window_->currentDocument();
+        auto* menu = window_->findChild<QMenu*>("menu.file"); QVERIFY(menu);
+        QVERIFY(menu->actions().contains(action("action.openLabs")));
+        activateMenu("menu.file", action("action.openLabs"));
         auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help);
+        QVERIFY(help->isVisible()); QVERIFY(!help->isModal());
+        QCOMPARE(window_->currentDocument(), current);
         auto* browser = help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        QCOMPARE(browser->source(), QUrl("qrc:/s7studio/help/education/index.md"));
+        QVERIFY(browser->toPlainText().contains("S7 teaching labs"));
         const QUrl guide("qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md");
         browser->setSource(guide, QTextDocument::MarkdownResource);
         const auto linkPoint = [&] {
@@ -2345,7 +2352,7 @@ private slots:
         for (const auto& path : diagrams) {
             const auto name = QFileInfo(path).fileName();
             action("action.help")->trigger();
-            browser->setSource(QUrl("qrc:/s7studio/help/education/labs/README.md"), QTextDocument::MarkdownResource);
+            browser->setSource(QUrl("qrc:/s7studio/help/education/index.md"), QTextDocument::MarkdownResource);
             auto cursor = browser->document()->find(name); QVERIFY2(!cursor.isNull(), qPrintable(name));
             cursor.setPosition(cursor.selectionStart() + 3);
             browser->setTextCursor(cursor); browser->ensureCursorVisible();

@@ -121,4 +121,4 @@ browser. No MIT material is redistributed. S7 diagrams/generators are CC0-1.0;
 this guide is CC-BY-4.0.
 
 Next: [FN03 — Where does the response come from?](../FN03-initial-conditions/README.md)
-Previous: [FN01](../FN01-unit-delay/README.md) · [Learning route](../README.md).
+Previous: [FN01](../FN01-unit-delay/README.md) · [Learning route](../../index.md).

@@ -20,7 +20,7 @@ that 48 MIT examples are implemented, verified or officially endorsed.
 ## Education laboratories
 
 New diagrams designed specifically for teaching; see the
-[education diagram guide](../education/labs/README.md) and per-lab evidence.
+[education diagram guide](../education/index.md) and per-lab evidence.
 
 | Lab | Diagram |
 | --- | --- |

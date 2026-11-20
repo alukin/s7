@@ -99,4 +99,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN06](../FN06-pole-maps/README.md).
 Next: [CT02](../CT02-damped-modes/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

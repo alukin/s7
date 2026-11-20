@@ -106,4 +106,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN04](../FN04-impulse-transfer/README.md).
 Next: [FN06](../FN06-pole-maps/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

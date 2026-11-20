@@ -123,4 +123,4 @@ browser; this guide is available offline. No MIT handout is bundled.
 S7 diagrams/generators: CC0-1.0; this guide: CC-BY-4.0.
 
 Continue to [FN02 — Three ways to excite a system](../FN02-natural-forced/README.md),
-or return to the [learning route](../README.md).
+or return to the [learning route](../../index.md).

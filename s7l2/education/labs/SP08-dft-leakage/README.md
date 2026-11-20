@@ -148,4 +148,4 @@ guide: CC-BY-4.0.
 
 Extension: predict which other frequencies are coherent for a 1 s versus
 2 s record, preserving the rate. Next: [SP09 — window normalization](../SP09-window-normalization/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

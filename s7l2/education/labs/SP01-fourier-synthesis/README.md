@@ -130,4 +130,4 @@ Its peak-amplitude spectrum alone loses that sign; inspect the time trace
 or a complex coefficient. That extension has no separate qualification claim.
 
 Next: [SP03 — sampling and aliasing](../SP03-aliasing/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

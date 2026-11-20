@@ -114,4 +114,4 @@ uses the z-plane/unit-circle criterion. No lecture figure, worked problem
 or solution is copied. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Next: [CT07 — stability margins](../CT07-stability-margins/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

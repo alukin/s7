@@ -162,4 +162,4 @@ examples and parameters differ from this explicit sampled model. This is
 original topic alignment, not reproduction of a worked problem; no handout,
 figure or solution is bundled. Diagram/generator: CC0-1.0; guide: CC-BY-4.0.
 
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

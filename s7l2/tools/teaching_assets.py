@@ -39,7 +39,7 @@ def check(root):
             raise ValueError(f'Python cache included in teaching tree: {tree}')
     checked = 0
     development_links = 0
-    for page in [root / 'education/labs/README.md', *guides]:
+    for page in [root / 'education/index.md', *guides]:
         for href in re.findall(r'\[[^\]]*\]\(([^)]+)\)', page.read_text(encoding='utf-8')):
             url = urlsplit(href)
             if url.scheme == 'qrc' and url.path.startswith('/s7studio/help/'):

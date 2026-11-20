@@ -125,4 +125,4 @@ key is bundled. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 Previous: [SP03 — aliasing](../SP03-aliasing/README.md).
 Next: [SP06 — three-tap FIR](../SP06-three-tap-fir/README.md), then
 [SP07 — filter transfer](../SP07-filter-transfer/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

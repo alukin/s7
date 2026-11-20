@@ -130,4 +130,4 @@ Previous: [FN02](../FN02-natural-forced/README.md).
 Continue to [FN04 — impulse and transfer](../FN04-impulse-transfer/README.md).
 For a signal-processing application using delays, try
 [SP06 — Three-tap FIR](../SP06-three-tap-fir/README.md), or return to the
-[learning route](../README.md).
+[learning route](../../index.md).

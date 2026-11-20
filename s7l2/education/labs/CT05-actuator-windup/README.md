@@ -143,4 +143,4 @@ provides the underlying proportional/integral context.
 This is original S7 topic alignment, not an MIT assignment, worked solution
 or endorsement. No MIT PDF or figure is bundled. Diagram/generator:
 CC0-1.0; guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

@@ -6,6 +6,10 @@ Press **F1** or choose **Help → S7 Studio Help** to open this offline guide.
 Search matches topic titles and article text. Use Back, Forward and Home to
 navigate. Help and About can stay open while you work.
 
+Choose **File → Open Labs…** to open the [teaching lab index](../education/index.md)
+in the separate Help window. Follow a student guide or click a diagram to open
+its working copy. Opening the index leaves your current diagram intact.
+
 ## First simulation
 
 1. Choose **File → Example Diagrams…**. The standard file chooser starts in

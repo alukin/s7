@@ -120,4 +120,4 @@ through Help. Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [FN03](../FN03-initial-conditions/README.md).
 Next: [FN05](../FN05-integration-rules/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

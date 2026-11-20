@@ -393,6 +393,7 @@ void MainWindow::buildActions()
     loadLibraryAction_ = actions.loadLibraryAction;
     saveLibraryAction_ = actions.saveLibraryAction;
     examplesAction_ = actions.examplesAction;
+    openLabsAction_ = actions.openLabsAction;
     fitDiagramAction_ = actions.fitDiagramAction;
     exitAction_ = actions.exitAction;
     runAction_ = actions.runAction;
@@ -522,6 +523,10 @@ void MainWindow::buildActions()
     connect(loadLibraryAction_, &QAction::triggered, this, &MainWindow::loadElementLibrary);
     connect(saveLibraryAction_, &QAction::triggered, this, &MainWindow::saveSchemaLibrary);
     connect(examplesAction_, &QAction::triggered, this, &MainWindow::chooseExampleDiagram);
+    connect(openLabsAction_, &QAction::triggered, this, [this] {
+        openHelpLink(this, QUrl(QStringLiteral("qrc:/s7studio/help/education/index.md")),
+                     [this](const QString& path) { return openHelpExample(path); });
+    });
     connect(fitDiagramAction_, &QAction::triggered, this, [this] {
         if (activeDiagramEditor()) {
             activeDiagramEditor()->fitDiagramInView();
@@ -574,6 +579,7 @@ void MainWindow::buildUi()
     actions.loadLibraryAction = loadLibraryAction_;
     actions.saveLibraryAction = saveLibraryAction_;
     actions.examplesAction = examplesAction_;
+    actions.openLabsAction = openLabsAction_;
     actions.fitDiagramAction = fitDiagramAction_;
     actions.exitAction = exitAction_;
     actions.runAction = runAction_;

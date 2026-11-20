@@ -173,4 +173,4 @@ Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 Previous: [SP06](../SP06-three-tap-fir/README.md).
 Continue to [SP08 — DFT leakage](../SP08-dft-leakage/README.md) and
 [SP09 — window normalization](../SP09-window-normalization/README.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

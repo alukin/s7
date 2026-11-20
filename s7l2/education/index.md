@@ -1,8 +1,8 @@
-# New education diagrams
+# S7 teaching labs
 
 These graphs are created specifically for S7 teaching laboratories. Earlier
 examples under `examples/` are implementation references. Open a diagram
-from **Help → Education: start here** and set its stated run profile.
+from **File → Open Labs…** (also **Help → Education: start here**) and set its stated run profile.
 Inside Studio Help, click a diagram link below to open a working copy directly.
 Your unsaved edits use the normal Save/Discard/Cancel prompt. Offline packages
 keep each diagram beside its guide under `share/s7/education/labs/<ID>-<slug>/`.
@@ -10,30 +10,30 @@ Generators live in `education/generators/` in the source tree.
 
 | Lab | New diagram | Run | Guide |
 | --- | --- | --- | --- |
-| FN01: one sample of memory | [fn01_unit_delay.s7diagram](FN01-unit-delay/fn01_unit_delay.s7diagram) | 2 s at 10 Hz | [Student lab](FN01-unit-delay/README.md) |
-| FN02: natural and forced response | [fn02_natural_forced.s7diagram](FN02-natural-forced/fn02_natural_forced.s7diagram) | 2 s at 10 Hz | [Student lab](FN02-natural-forced/README.md) |
-| FN03: initial conditions | [fn03_initial_conditions.s7diagram](FN03-initial-conditions/fn03_initial_conditions.s7diagram) | 2 s at 10 Hz | [Student lab](FN03-initial-conditions/README.md) |
-| FN04: from one pulse to a transfer function | [fn04_impulse_transfer.s7diagram](FN04-impulse-transfer/fn04_impulse_transfer.s7diagram) | 10 s at 20 Hz | [Student lab](FN04-impulse-transfer/README.md) |
-| FN05: three rules for the same decay | [fn05_integration_rules.s7diagram](FN05-integration-rules/fn05_integration_rules.s7diagram) | 6 s at 2 Hz | [Student lab](FN05-integration-rules/README.md) |
-| FN06: stable does not mean accurate | [fn06_pole_maps.s7diagram](FN06-pole-maps/fn06_pole_maps.s7diagram) | 30 s at 0.333333 Hz | [Student lab](FN06-pole-maps/README.md) |
-| CT01: a capacitor takes time to charge | [ct01_first_order.s7diagram](CT01-first-order/ct01_first_order.s7diagram) | 5 s at 10 Hz | [Student lab](CT01-first-order/README.md) |
-| CT02: how damping changes a spring | [ct02_damped_modes.s7diagram](CT02-damped-modes/ct02_damped_modes.s7diagram) | 8 s at 100 Hz | [Student lab](CT02-damped-modes/README.md) |
-| CT03: can a slow sample rate invent growth? | [ct03_sample_time.s7diagram](CT03-sample-time/ct03_sample_time.s7diagram) | 10 s at 2 Hz | [Student lab](CT03-sample-time/README.md) |
-| CT04: controller comparison | [ct04_controller_comparison.s7diagram](CT04-controller-comparison/ct04_controller_comparison.s7diagram) | 16 s at 100 Hz | [Student lab](CT04-controller-comparison/README.md) |
-| CT05: actuator windup | [ct05_actuator_windup.s7diagram](CT05-actuator-windup/ct05_actuator_windup.s7diagram) | 12 s at 100 Hz | [Student lab](CT05-actuator-windup/README.md) |
-| CT06: closed-loop poles | [ct06_closed_loop_poles.s7diagram](CT06-closed-loop-poles/ct06_closed_loop_poles.s7diagram) | 32 s at 10 Hz | [Student lab](CT06-closed-loop-poles/README.md) |
-| CT07: stability margins | [ct07_stability_margins.s7diagram](CT07-stability-margins/ct07_stability_margins.s7diagram) | 64 s at 10 Hz | [Student lab](CT07-stability-margins/README.md) |
-| CT08: lead/lag compensation | [ct08_lead_lag.s7diagram](CT08-lead-lag/ct08_lead_lag.s7diagram) | 64 s at 10 Hz | [Student lab](CT08-lead-lag/README.md) |
-| SP01: build a square wave from smooth tones | [sp01_fourier_synthesis.s7diagram](SP01-fourier-synthesis/sp01_fourier_synthesis.s7diagram) | 2 s at 128 Hz | [Student lab](SP01-fourier-synthesis/README.md) |
-| SP03: three tones, one sampled sequence | [sp03_aliasing.s7diagram](SP03-aliasing/sp03_aliasing.s7diagram) | 2 s at 64 Hz | [Student lab](SP03-aliasing/README.md) |
-| SP05: add shifted impulse responses | [sp05_convolution.s7diagram](SP05-convolution/sp05_convolution.s7diagram) | 2 s at 20 Hz | [Student lab](SP05-convolution/README.md) |
-| SP06: three-tap FIR | [sp06_three_tap_fir.s7diagram](SP06-three-tap-fir/sp06_three_tap_fir.s7diagram) | 4 s at 300 Hz | [Student lab](SP06-three-tap-fir/README.md) |
-| SP07: which filter resonates? | [sp07_filter_transfer.s7diagram](SP07-filter-transfer/sp07_filter_transfer.s7diagram) | 64 s at 64 Hz | [Student lab](SP07-filter-transfer/README.md) |
-| SP08: where did the tone amplitude go? | [sp08_dft_leakage.s7diagram](SP08-dft-leakage/sp08_dft_leakage.s7diagram) | 2 s at 128 Hz | [Student lab](SP08-dft-leakage/README.md) |
-| SP09: change the window, preserve the units | [sp09_window_normalization.s7diagram](SP09-window-normalization/sp09_window_normalization.s7diagram) | 2 s at 128 Hz | [Student lab](SP09-window-normalization/README.md) |
-| SP10: where does the tail go? | [sp10_circular_convolution.s7diagram](SP10-circular-convolution/sp10_circular_convolution.s7diagram) | 2 s at 8 Hz | [Student lab](SP10-circular-convolution/README.md) |
-| SP11: when did that frequency happen? | [sp11_short_time_fourier.s7diagram](SP11-short-time-fourier/sp11_short_time_fourier.s7diagram) | 4 s at 128 Hz | [Student lab](SP11-short-time-fourier/README.md) |
-| SP14: coherent AM detection | [sp14_coherent_am.s7diagram](SP14-coherent-am/sp14_coherent_am.s7diagram) | 4 s at 256 Hz | [Student lab](SP14-coherent-am/README.md) |
+| FN01: one sample of memory | [fn01_unit_delay.s7diagram](labs/FN01-unit-delay/fn01_unit_delay.s7diagram) | 2 s at 10 Hz | [Student lab](labs/FN01-unit-delay/README.md) |
+| FN02: natural and forced response | [fn02_natural_forced.s7diagram](labs/FN02-natural-forced/fn02_natural_forced.s7diagram) | 2 s at 10 Hz | [Student lab](labs/FN02-natural-forced/README.md) |
+| FN03: initial conditions | [fn03_initial_conditions.s7diagram](labs/FN03-initial-conditions/fn03_initial_conditions.s7diagram) | 2 s at 10 Hz | [Student lab](labs/FN03-initial-conditions/README.md) |
+| FN04: from one pulse to a transfer function | [fn04_impulse_transfer.s7diagram](labs/FN04-impulse-transfer/fn04_impulse_transfer.s7diagram) | 10 s at 20 Hz | [Student lab](labs/FN04-impulse-transfer/README.md) |
+| FN05: three rules for the same decay | [fn05_integration_rules.s7diagram](labs/FN05-integration-rules/fn05_integration_rules.s7diagram) | 6 s at 2 Hz | [Student lab](labs/FN05-integration-rules/README.md) |
+| FN06: stable does not mean accurate | [fn06_pole_maps.s7diagram](labs/FN06-pole-maps/fn06_pole_maps.s7diagram) | 30 s at 0.333333 Hz | [Student lab](labs/FN06-pole-maps/README.md) |
+| CT01: a capacitor takes time to charge | [ct01_first_order.s7diagram](labs/CT01-first-order/ct01_first_order.s7diagram) | 5 s at 10 Hz | [Student lab](labs/CT01-first-order/README.md) |
+| CT02: how damping changes a spring | [ct02_damped_modes.s7diagram](labs/CT02-damped-modes/ct02_damped_modes.s7diagram) | 8 s at 100 Hz | [Student lab](labs/CT02-damped-modes/README.md) |
+| CT03: can a slow sample rate invent growth? | [ct03_sample_time.s7diagram](labs/CT03-sample-time/ct03_sample_time.s7diagram) | 10 s at 2 Hz | [Student lab](labs/CT03-sample-time/README.md) |
+| CT04: controller comparison | [ct04_controller_comparison.s7diagram](labs/CT04-controller-comparison/ct04_controller_comparison.s7diagram) | 16 s at 100 Hz | [Student lab](labs/CT04-controller-comparison/README.md) |
+| CT05: actuator windup | [ct05_actuator_windup.s7diagram](labs/CT05-actuator-windup/ct05_actuator_windup.s7diagram) | 12 s at 100 Hz | [Student lab](labs/CT05-actuator-windup/README.md) |
+| CT06: closed-loop poles | [ct06_closed_loop_poles.s7diagram](labs/CT06-closed-loop-poles/ct06_closed_loop_poles.s7diagram) | 32 s at 10 Hz | [Student lab](labs/CT06-closed-loop-poles/README.md) |
+| CT07: stability margins | [ct07_stability_margins.s7diagram](labs/CT07-stability-margins/ct07_stability_margins.s7diagram) | 64 s at 10 Hz | [Student lab](labs/CT07-stability-margins/README.md) |
+| CT08: lead/lag compensation | [ct08_lead_lag.s7diagram](labs/CT08-lead-lag/ct08_lead_lag.s7diagram) | 64 s at 10 Hz | [Student lab](labs/CT08-lead-lag/README.md) |
+| SP01: build a square wave from smooth tones | [sp01_fourier_synthesis.s7diagram](labs/SP01-fourier-synthesis/sp01_fourier_synthesis.s7diagram) | 2 s at 128 Hz | [Student lab](labs/SP01-fourier-synthesis/README.md) |
+| SP03: three tones, one sampled sequence | [sp03_aliasing.s7diagram](labs/SP03-aliasing/sp03_aliasing.s7diagram) | 2 s at 64 Hz | [Student lab](labs/SP03-aliasing/README.md) |
+| SP05: add shifted impulse responses | [sp05_convolution.s7diagram](labs/SP05-convolution/sp05_convolution.s7diagram) | 2 s at 20 Hz | [Student lab](labs/SP05-convolution/README.md) |
+| SP06: three-tap FIR | [sp06_three_tap_fir.s7diagram](labs/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram) | 4 s at 300 Hz | [Student lab](labs/SP06-three-tap-fir/README.md) |
+| SP07: which filter resonates? | [sp07_filter_transfer.s7diagram](labs/SP07-filter-transfer/sp07_filter_transfer.s7diagram) | 64 s at 64 Hz | [Student lab](labs/SP07-filter-transfer/README.md) |
+| SP08: where did the tone amplitude go? | [sp08_dft_leakage.s7diagram](labs/SP08-dft-leakage/sp08_dft_leakage.s7diagram) | 2 s at 128 Hz | [Student lab](labs/SP08-dft-leakage/README.md) |
+| SP09: change the window, preserve the units | [sp09_window_normalization.s7diagram](labs/SP09-window-normalization/sp09_window_normalization.s7diagram) | 2 s at 128 Hz | [Student lab](labs/SP09-window-normalization/README.md) |
+| SP10: where does the tail go? | [sp10_circular_convolution.s7diagram](labs/SP10-circular-convolution/sp10_circular_convolution.s7diagram) | 2 s at 8 Hz | [Student lab](labs/SP10-circular-convolution/README.md) |
+| SP11: when did that frequency happen? | [sp11_short_time_fourier.s7diagram](labs/SP11-short-time-fourier/sp11_short_time_fourier.s7diagram) | 4 s at 128 Hz | [Student lab](labs/SP11-short-time-fourier/README.md) |
+| SP14: coherent AM detection | [sp14_coherent_am.s7diagram](labs/SP14-coherent-am/sp14_coherent_am.s7diagram) | 4 s at 256 Hz | [Student lab](labs/SP14-coherent-am/README.md) |
 
 ## First time with S7? Start here
 
@@ -60,7 +60,7 @@ Each file saves the run configuration in the table. FN01–FN03 use
 links to an offline lab guide and MIT online readings. Predict the first
 samples before running, then follow the guide's one-parameter experiment.
 
-For [SP10](SP10-circular-convolution/README.md), run
+For [SP10](labs/SP10-circular-convolution/README.md), run
 **2 s at 8 Hz**. Read the second eight-sample block at Scope times
 **1.125…2 s**, after the periodic paths have warmed up. Compare the linear,
 four-sample circular and eight-sample padded outputs. One shared coefficient
@@ -69,15 +69,15 @@ frame processors using the graph's recorded word and independent references.
 Build `s7tests_education_convolution` and `s7core_convolution_smoke`; regenerate
 the new graph with `python3 -B education/generators/generate_convolution_lab.py`.
 
-For [SP11](SP11-short-time-fourier/README.md), run
+For [SP11](labs/SP11-short-time-fourier/README.md), run
 **4 s at 128 Hz**. Open a map, choose **FFT size 64**, then **Hop 32 samples**,
 **Magnitude**, and **Display up to 64 Hz**. Compare 15 columns at 2 Hz spacing
 with N=128/H=64 and N=64/H=16. Read the guide before interpreting a window
 center as an event time. Build `s7tests_education_stft`; regenerate with
 `python3 -B education/generators/generate_stft_lab.py`.
 
-For [CT04](CT04-controller-comparison/README.md) and
-[CT05](CT05-actuator-windup/README.md), keep the saved
+For [CT04](labs/CT04-controller-comparison/README.md) and
+[CT05](labs/CT05-actuator-windup/README.md), keep the saved
 100 Hz profiles. CT04 separates tracking, applied control and error; CT05
 separates output, actual command, unlimited demand and integral state.
 CT05’s primary experiment edits only `aw/i_rate.weights` in its nested tab,
@@ -91,7 +91,7 @@ Reproduce the three new graphs with
 
 ## Transfer, numerical methods and physical plants
 
-Continue from FN03 to [FN04](FN04-impulse-transfer/README.md),
+Continue from FN03 to [FN04](labs/FN04-impulse-transfer/README.md),
 then FN05/FN06 and CT01–CT03. Each new graph has a prediction, a primary edit,
 an independent numerical reference and a linked offline guide with MIT readings.
 FN06 separates growing and stable modes into different Scopes; CT02 separates
@@ -110,10 +110,10 @@ Regenerate this batch with
 
 ## Harmonics and sampling
 
-[SP01](SP01-fourier-synthesis/README.md) compares one-,
+[SP01](labs/SP01-fourier-synthesis/README.md) compares one-,
 three- and five-term Fourier sums with a square target. Predict the retained
 harmonics, investigate ringing and remove the ninth harmonic.
-[SP03](SP03-aliasing/README.md) uses 10, 74 and 54 Hz
+[SP03](labs/SP03-aliasing/README.md) uses 10, 74 and 54 Hz
 functions that produce the same samples at 64 Hz. Edit one frequency, then
 increase the run rate to 256 Hz to distinguish the tones.
 
@@ -144,8 +144,8 @@ Headless check: build `s7tests_education_sp06`, then run
 `ctest --test-dir build-release -R '^s7tests_education_sp06$' -V`.
 Reproduce the saved diagram with `python3 -B education/generators/generate_sp06.py`
 from `s7l2/`. Qualification and current limitations are recorded in the
-[education evidence](../EVIDENCE.md) and
-[24-lab implementation manifest](../CORE_MANIFEST.md).
+[education evidence](EVIDENCE.md) and
+[24-lab implementation manifest](CORE_MANIFEST.md).
 
 The exercise is original S7 work aligned with convolution and filtering
 topics in [MIT 6.3000 Fall 2026](https://sigproc.mit.edu/fall26/), not an official
@@ -153,12 +153,12 @@ MIT lab or endorsement. This is development work, not a qualified course bundle.
 
 ## Convolution and filter transfer functions
 
-[SP05](SP05-convolution/README.md) compares filtering a
+[SP05](labs/SP05-convolution/README.md) compares filtering a
 pair of pulses with summing their separately shifted responses. Two Scopes
 expose the contributions, actual output and residual. Predict the overlap,
 edit one pulse weight, then deliberately change remembered input history.
 
-[SP07](SP07-filter-transfer/README.md) compares a low-pass
+[SP07](labs/SP07-filter-transfer/README.md) compares a low-pass
 and a resonant filter built from explicit EulerIntegrators. Its **64 s / 64 Hz**
 profile gives a sufficiently decayed tail for measured frequency response.
 Inspect the output Scope at **0–10 s**, then open each frequency-response
@@ -172,13 +172,13 @@ Regenerate these original graphs with
 
 ## DFT leakage and periodic windows
 
-[SP08](SP08-dft-leakage/README.md) compares a coherent
+[SP08](labs/SP08-dft-leakage/README.md) compares a coherent
 16 Hz tone with a 16.5 Hz tone, using the same 128 Hz recording over first,
 full and late intervals. Predict why the tallest 1 s FFT bin is below 1 V,
 then recover a coherent 1 V peak from the actual 2 s record. The guide also
 explains inclusive interval boundaries, odd-length transforms and finite means.
 
-[SP09](SP09-window-normalization/README.md) compares
+[SP09](labs/SP09-window-normalization/README.md) compares
 Rectangular, Periodic Hann and Periodic Hamming with a 2 V calibration and
 a strong/weak mixture. Keep **0–1 s**, **N=128**, **All inputs**, **Remove mean
 off** for the initial comparison. The guide distinguishes coherent gain,

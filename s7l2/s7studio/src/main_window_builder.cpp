@@ -72,6 +72,7 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.loadLibraryAction = new QAction("Load Element Library…", window);
     actions.saveLibraryAction = new QAction("Save Diagram as Library Element…", window);
     actions.examplesAction = new QAction("Example Diagrams…", window);
+    actions.openLabsAction = new QAction("Open Labs…", window);
     actions.fitDiagramAction = new QAction("Fit Diagram to View", window);
     actions.exitAction = new QAction("Exit", window);
 
@@ -91,6 +92,8 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.loadLibraryAction->setObjectName(QStringLiteral("action.loadLibrary"));
     actions.saveLibraryAction->setObjectName(QStringLiteral("action.saveLibrary"));
     actions.examplesAction->setObjectName(QStringLiteral("action.examples"));
+    actions.openLabsAction->setObjectName(QStringLiteral("action.openLabs"));
+    actions.openLabsAction->setToolTip(QStringLiteral("Open the teaching lab index with diagrams and student guides."));
     actions.fitDiagramAction->setObjectName(QStringLiteral("action.fitDiagram"));
     actions.deployAction->setObjectName(QStringLiteral("action.deploy"));
     actions.openDeployedAction->setObjectName(QStringLiteral("action.openDeployed"));
@@ -158,6 +161,7 @@ auto MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     libraries->addAction(actions.saveLibraryAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.examplesAction);
+    fileMenu->addAction(actions.openLabsAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.exitAction);
 

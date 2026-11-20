@@ -163,4 +163,4 @@ Diagrams/generator: CC0-1.0; guide: CC-BY-4.0.
 
 Previous: [SP08](../SP08-dft-leakage/README.md).
 Next planned: SP10 (linear/circular convolution), then SP11 (time-frequency).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).

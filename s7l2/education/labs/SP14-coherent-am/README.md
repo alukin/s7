@@ -171,4 +171,4 @@ finite sampled two-state network.
 This is original S7 topic alignment, not an MIT assignment or worked solution.
 No PDF, figure, audio or solution is bundled. Diagram/generator: CC0-1.0;
 guide: CC-BY-4.0. See [sources](../../SOURCES.md).
-[Return to the learning route](../README.md).
+[Return to the learning route](../../index.md).
