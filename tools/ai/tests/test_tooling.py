@@ -13,6 +13,7 @@ TOOLS = Path(__file__).resolve().parents[1]
 ROOT = TOOLS.parents[1]
 sys.path.insert(0, str(TOOLS))
 import benchmark
+import env_probe
 import select_tests
 import task_handoff
 import validate_diagram
@@ -135,9 +136,29 @@ class BenchmarkTests(unittest.TestCase):
                 benchmark.load_results(file)
 
 
+class EnvironmentTests(unittest.TestCase):
+    def test_profile_is_redacted_and_fingerprinted(self):
+        profile = env_probe.build_profile()
+        self.assertEqual(len(profile["fingerprint_sha256"]), 64)
+        self.assertNotIn("hostname", profile)
+        self.assertNotIn("username", profile)
+        self.assertNotIn("environment", profile)
+
+    def test_benchmarks_do_not_mix_environment_profiles(self):
+        rows = [
+            {"task": "same", "variant": "skills", "status": "pass",
+             "baseline_sha": "a" * 40, "environment_fingerprint": "1" * 64,
+             "duration_s": 11, "input_tokens": 30, "output_tokens": 2},
+            {"task": "same", "variant": "skills", "status": "pass",
+             "baseline_sha": "a" * 40, "environment_fingerprint": "2" * 64,
+             "duration_s": 12, "input_tokens": 40, "output_tokens": 3},
+        ]
+        self.assertEqual(len(benchmark.evaluate(rows)), 2)
+
+
 class CLITests(unittest.TestCase):
     def test_help_for_all_tools(self):
-        for script in ("validate_diagram.py", "select_tests.py", "task_handoff.py", "benchmark.py"):
+        for script in ("validate_diagram.py", "select_tests.py", "task_handoff.py", "benchmark.py", "env_probe.py"):
             with self.subTest(script=script):
                 p = subprocess.run([sys.executable, str(TOOLS / script), "--help"],
                                    capture_output=True, text=True)
