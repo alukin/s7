@@ -205,9 +205,13 @@ especially before modifying causal semantics or a protocol.
 
 **S7 began in 1993.** **Oleksiy Lukin** implemented its first version in
 **Turbo Pascal 5.5**. **Sehii Kondratiuk** subsequently added a graphical
-user interface. The present S7 project carries that early diagram-based
-engineering idea forward with modern runtimes, numerical verification and
-distributed computation.
+user interface. Both original authors were classmates at
+[Kharkiv Aviation Institute (KhAI)](https://khai.edu/), their alma mater.
+Oleksiy Lukin has also continued working on S7 at
+[Chernihiv Polytechnic National University](https://stu.cn.ua/).
+The present S7 project carries that early diagram-based engineering idea
+forward with modern runtimes, numerical verification and distributed
+computation.
 
 ## License
 
