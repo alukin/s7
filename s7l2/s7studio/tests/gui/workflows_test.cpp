@@ -5024,6 +5024,37 @@ private slots:
         QCOMPARE(edited.at("dt").to_number<double>(), .0005);
         QCOMPARE(edited.at("studio_run").at("runtime_seconds").to_number<double>(), .25);
     }
+    void newDiagramFromFileMenu() {
+        const auto originalPath = temporary_.filePath("new-diagram-original.s7diagram");
+        QVERIFY(QFile::copy(QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc.s7diagram", originalPath));
+        QVERIFY(fileAction("action.open", originalPath));
+        QVERIFY(scene()->addElement({"unsaved", "Constant", {}, {}, {}, "Unsaved"}, {0, 0}));
+        const auto edited = window_->currentDocument();
+
+        auto* command = action("action.newDiagram");
+        auto* menu = window_->findChild<QMenu*>("menu.file");
+        QVERIFY(menu && command && menu->actions().contains(command));
+        const auto selectNew = [&] { activateMenu("menu.file", command); };
+        for (const auto choice : {QMessageBox::Cancel, QMessageBox::Discard}) {
+            QVERIFY(modalWorkflow(selectNew, [choice](QDialog* dialog) {
+                auto* box = qobject_cast<QMessageBox*>(dialog);
+                if (!box || !box->button(choice)) return false;
+                QTest::mouseClick(box->button(choice), Qt::LeftButton);
+                return true;
+            }));
+            if (choice == QMessageBox::Cancel) {
+                QCOMPARE(window_->currentDocument(), edited);
+                QVERIFY(window_->documentModified());
+            }
+        }
+        QVERIFY(scene()->elementNodes().empty());
+        QVERIFY(!window_->documentModified());
+        QVERIFY(!action("action.undo")->isEnabled());
+        QVERIFY(window_->windowTitle().contains("Untitled"));
+        const auto newPath = temporary_.filePath("new-diagram.s7diagram");
+        QVERIFY(fileAction("action.save", newPath));
+        QVERIFY(QFile::exists(newPath));
+    }
     void unsavedCloseChoices_data() {
         QTest::addColumn<int>("choice");
         QTest::newRow("save") << int(QMessageBox::Save);

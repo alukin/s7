@@ -384,6 +384,7 @@ void MainWindow::connectRunnerSignals()
 void MainWindow::buildActions()
 {
     const auto actions = ui::MainWindowBuilder::createActions(this);
+    newDiagramAction_ = actions.newDiagramAction;
     openAction_ = actions.openAction;
     closeDiagramAction_ = actions.closeDiagramAction;
     saveAction_ = actions.saveAction;
@@ -509,11 +510,13 @@ void MainWindow::buildActions()
     fitDiagramAction_->setToolTip(QStringLiteral("Zoom so that the whole diagram fills the window (Ctrl+8)"));
     fitDiagramAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_8));
 
+    newDiagramAction_->setShortcuts(QKeySequence::New);
     openAction_->setShortcut(QKeySequence::Open);
     closeDiagramAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W));
     saveAction_->setShortcut(QKeySequence::Save);
     saveAsAction_->setShortcut(QKeySequence::SaveAs);
 
+    connect(newDiagramAction_, &QAction::triggered, this, &MainWindow::newDiagram);
     connect(openAction_, &QAction::triggered, this, &MainWindow::openDocumentFile);
     connect(closeDiagramAction_, &QAction::triggered, this, &MainWindow::closeCurrentDiagram);
     connect(saveAction_, &QAction::triggered, this, &MainWindow::saveDocument);
@@ -570,6 +573,7 @@ void MainWindow::buildActions()
 void MainWindow::buildUi()
 {
     ui::MainWindowActions actions;
+    actions.newDiagramAction = newDiagramAction_;
     actions.openAction = openAction_;
     actions.closeDiagramAction = closeDiagramAction_;
     actions.saveAction = saveAction_;
@@ -2386,6 +2390,15 @@ void MainWindow::restoreStartupDiagram()
         if (openRecentDiagram(path, false)) return;
     }
     loadDemoDiagram();
+}
+
+void MainWindow::newDiagram()
+{
+    if (!confirmDocumentReplacement()) return;
+
+    document_ = DocumentSession{};
+    loadSchemaJson(document_.schema(), {});
+    statusBar()->showMessage(QStringLiteral("New diagram created"), 4000);
 }
 
 void MainWindow::openDocumentFile()

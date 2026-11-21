@@ -17,6 +17,7 @@ class DiagramEditor;
 namespace ui {
 
 struct MainWindowActions {
+    QAction* newDiagramAction = nullptr;
     QAction* openAction = nullptr;
     QAction* closeDiagramAction = nullptr;
     QAction* saveAction = nullptr;

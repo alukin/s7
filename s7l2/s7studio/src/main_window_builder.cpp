@@ -65,6 +65,7 @@ void nameToolButtonsWithoutEllipsis(QToolBar* toolbar)
 auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
 {
     MainWindowActions actions;
+    actions.newDiagramAction = new QAction("New Diagram", window);
     actions.openAction = new QAction("Open Diagram…", window);
     actions.closeDiagramAction = new QAction("Close Diagram", window);
     actions.saveAction = new QAction("Save", window);
@@ -85,6 +86,7 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.deployAction = new QAction("Deploy to Nodes…", window);
     actions.openDeployedAction = new QAction("Open Deployed Diagram…", window);
 
+    actions.newDiagramAction->setObjectName(QStringLiteral("action.newDiagram"));
     actions.openAction->setObjectName(QStringLiteral("action.open"));
     actions.closeDiagramAction->setObjectName(QStringLiteral("action.closeDiagram"));
     actions.saveAction->setObjectName(QStringLiteral("action.save"));
@@ -149,6 +151,7 @@ auto MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     menus.settings = menu("&Settings", "menu.settings");
     menus.help = menu("&Help", "menu.help");
     auto* fileMenu = menus.file;
+    fileMenu->addAction(actions.newDiagramAction);
     fileMenu->addAction(actions.openAction);
     fileMenu->addAction(actions.closeDiagramAction);
     fileMenu->addSeparator();

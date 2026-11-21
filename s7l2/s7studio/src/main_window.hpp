@@ -90,6 +90,7 @@ private slots:
     void onProbeRenameRequested(const QString& probeName, const QString& newName);
     void onProbeDeleteRequested(const QString& probeName);
     void refreshWireTypeLabels();
+    void newDiagram();
     void openDocumentFile();
     void closeCurrentDiagram();
     void saveDocument();
@@ -213,6 +214,7 @@ private:
     std::unique_ptr<ui::ModelRunController> controller_;
 
     QMenu* recentDiagramsMenu_ = nullptr;
+    QAction* newDiagramAction_ = nullptr;
     QAction* openAction_ = nullptr;
     QAction* closeDiagramAction_ = nullptr;
     QAction* saveAction_ = nullptr;
