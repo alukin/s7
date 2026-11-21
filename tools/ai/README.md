@@ -58,6 +58,14 @@ python3 tools/ai/task_handoff.py show /tmp/s7-task.json
 
 The JSON format records baseline commit, scope, preserved invariants, acceptance checks, task status and command/evidence entries. init refuses overwriting an existing handoff. accepted requires actual execution results. This is a handoff, not permission to skip code inspection.
 
+## Fingerprint a development host before a benchmark
+
+~~~bash
+python3 tools/ai/env_probe.py --output /tmp/s7-env.json
+~~~
+
+This records repository SHA, dirty-worktree flag, OS/kernel/architecture, Python/CMake/C++/Qt versions and CPU count, and a stable profile fingerprint. No hostname, username, IP address, device serial or environment variables are included. The output refuses overwriting an existing file. Capture this **before** each run. Different profiles should not be averaged together when comparing agent configurations.
+
 ## Evaluate Codex instructions, skills and scripts
 
 ~~~bash
@@ -68,11 +76,12 @@ python3 tools/ai/benchmark.py record \
   --results /tmp/s7-ai-results.jsonl \
   --task diagram-layout-preservation --variant skills-and-scripts \
   --model codex --status pass --attempts 1 \
-  --duration-s 120 --evidence /tmp/s7-diagram-validation/report.json
+  --duration-s 120 --environment /tmp/s7-env.json \
+  --evidence /tmp/s7-diagram-validation/report.json
 python3 tools/ai/benchmark.py report --results /tmp/s7-ai-results.jsonl
 ~~~
 
-The sample numbers above show command syntax; they are **not measured S7 results**. Input/output token counts should be recorded only when the usage source exposes them; otherwise they remain null. The benchmark accepts reported outcomes and evidence references but does not run Codex or independently certify completion. Compare the same task, baseline SHA, acceptance checks and comparable hardware/model settings. Also track time and correction attempts. Seven candidate tasks are defined in benchmark_tasks.json. Keep run results outside Git.
+The sample numbers above show command syntax; they are **not measured S7 results**. Input/output token counts should be recorded only when the usage source exposes them; otherwise they remain null. The benchmark accepts reported outcomes and evidence references but does not run Codex or independently certify completion. Reports group comparisons by task, baseline and environment fingerprint; do not average uncontrolled runs together. Compare the same task, baseline SHA, acceptance checks and comparable hardware/model settings. Also track time and correction attempts. Seven candidate tasks are defined in benchmark_tasks.json. Keep run results outside Git.
 
 ## Tool self-tests
 
