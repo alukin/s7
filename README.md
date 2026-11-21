@@ -11,8 +11,12 @@
 S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
 understanding a system through its signals, interconnected blocks, state and
-feedback. S7 carries that tradition forward for **engineering, research
-and learning**: building models, running experiments and inspecting results.
+feedback. **S7 deliberately stays close to the familiar block-diagram language
+of Siebert's book and modern MIT signals-and-systems teaching materials.**
+Its diagrams use recognizable signals, functional blocks, integrators, delays
+and feedback paths, with explicit, executable causal semantics. S7 carries
+this tradition forward for **engineering, research and learning**: building
+models, running experiments and inspecting results.
 
 In S7, a model is a diagram of connected elements with explicit state,
 types and causal dependencies. It can run locally or, within documented
