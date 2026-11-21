@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "pattern": "s7l2/s7studio/src/diagram/*",
+      "ctest": [
+        "^s7studio_(diagram|edit_check|wire_types)$"
+      ],
+      "gui": [
+        "^s7studio_gui_workflows$"
+      ],
+      "notes": [
+        "Validate changed saved .s7diagram files with tools/ai/validate_diagram.py; capture pixels when layout changes."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7studio/*",
+      "ctest": [
+        "^s7studio_(smoke|diagram|viewers|scope_view|document_safety)$"
+      ],
+      "gui": [
+        "^s7studio_gui_workflows$"
+      ],
+      "notes": [
+        "Studio GUI tests stay local; see s7l2/docs/STUDIO_GUI_TESTING.md."
+      ]
+    },
+    {
+      "pattern": "s7l2/education/*",
+      "ctest": [
+        "^s7tests_education_.*$"
+      ],
+      "gui": [
+        "^s7studio_gui_education_.*$"
+      ],
+      "notes": [
+        "Run the exact saved lab and independent oracle; release qualification is separate."
+      ]
+    },
+    {
+      "pattern": "s7l2/examples/*",
+      "ctest": [
+        "^s7tests_.*examples_smoke$",
+        "^s7tests_diagram_harness_smoke$"
+      ],
+      "gui": [
+        "^s7studio_gui_examples_.*$"
+      ],
+      "notes": [
+        "Choose the relevant example and reference solution; GUI example shards are optional and local."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7core/*",
+      "ctest": [
+        "^s7core_.*_smoke$",
+        "^s7core_smoke$"
+      ],
+      "gui": [],
+      "notes": [
+        "Core semantic changes require additional numerical references and release-level regressions."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7tests/*",
+      "ctest": [
+        "^s7tests_.*smoke$"
+      ],
+      "gui": [],
+      "notes": []
+    },
+    {
+      "pattern": "s7l2/s7transport/*",
+      "ctest": [
+        "^s7transport_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Check cross-language wire fixtures for protocol changes."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7net/*",
+      "ctest": [
+        "^s7net_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Check distributed failure/reconnect beyond local unit tests."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7runtime/*",
+      "ctest": [
+        "^s7runtime_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Check TLS, deployment and permission failures on affected paths."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7audio/*",
+      "ctest": [
+        "^s7audio_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Use deterministic replay first; physical audio requires operator approval."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7sdr/*",
+      "ctest": [
+        "^s7sdr_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Use recorded IQ first; RF TX requires operator approval."
+      ]
+    },
+    {
+      "pattern": "s7l2/s7hardware/*",
+      "ctest": [
+        "^s7hardware_.*$"
+      ],
+      "gui": [],
+      "notes": [
+        "Do not initiate physical devices automatically."
+      ]
+    },
+    {
+      "pattern": "s7py/*",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "cd s7py && python3 -m unittest discover -s tests (run explicitly, outside CTest if not registered)."
+      ]
+    },
+    {
+      "pattern": "s7java/*",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "Run s7java's documented Java test/build command (verify actual module first)."
+      ]
+    },
+    {
+      "pattern": "tools/ai/*",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "python3 -m unittest discover -s tools/ai/tests -v"
+      ]
+    },
+    {
+      "pattern": "doc/S7_Formal_Model.md",
+      "ctest": [
+        "^s7core_(causal_order|indexed_execution|integrators)_smoke$"
+      ],
+      "gui": [],
+      "notes": [
+        "Formal model change: architecture and compatibility review required."
+      ]
+    },
+    {
+      "pattern": "s7l2/CMakeLists.txt",
+      "ctest": [
+        "^s7core_smoke$"
+      ],
+      "gui": [],
+      "notes": [
+        "Reconfigure CMake and run full CI-equivalent checks before merge."
+      ]
+    },
+    {
+      "pattern": ".github/workflows/*",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "Validate CI workflow syntax and run GitHub Actions on the branch."
+      ]
+    },
+    {
+      "pattern": "AGENTS.md",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "Review agent instructions for consistency; no runtime test implied."
+      ]
+    },
+    {
+      "pattern": ".agents/skills/*",
+      "ctest": [],
+      "gui": [],
+      "notes": [
+        "Validate changed skill frontmatter and test invocation with Codex locally."
+      ]
+    }
+  ]
+}
