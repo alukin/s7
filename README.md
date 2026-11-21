@@ -151,10 +151,10 @@ must not be confused with the broader hardware and GStreamer goals of
 
 | Path | What lives there |
 | --- | --- |
-| [**\`doc/\`**](doc/README.md) | Language-neutral vision, formal model, architecture, decisions, and common protocols. |
-| [**\`s7l2/\`**](s7l2/README.md) | C++ reference implementation, graph compiler/runtime, transport, device integrations, command-line tools and Qt6 Studio. |
-| [**\`s7py/\`**](s7py/README.md) | Python headless node with a supported subset of execution and control/data interoperability. |
-| [**\`s7java/\`**](s7java/README.md) | Java data node and protocol implementation; its control-plane support is not yet equivalent to the C++/Python nodes. |
+| [**`doc/`**](doc/README.md) | Language-neutral vision, formal model, architecture, decisions, and common protocols. |
+| [**`s7l2/`**](s7l2/README.md) | C++ reference implementation, graph compiler/runtime, transport, device integrations, command-line tools and Qt6 Studio. |
+| [**`s7py/`**](s7py/README.md) | Python headless node with a supported subset of execution and control/data interoperability. |
+| [**`s7java/`**](s7java/README.md) | Java data node and protocol implementation; its control-plane support is not yet equivalent to the C++/Python nodes. |
 
 Start with the [documentation index](s7l2/docs/INDEX.md) for build,
 runtime, numerical, Studio, packaging and research guides. Open design
