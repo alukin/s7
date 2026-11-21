@@ -8,10 +8,10 @@ description: Verify S7 numerical integrators, DSP algorithms, stateful feedback 
 Use for integrator correctness, convergence, numerical regressions, DSP filters/DFT, feedback settling, and model accuracy.
 
 1. Read `AGENTS.md`, `doc/S7_Formal_Model.md`, `s7l2/docs/SIMULATION_MODEL.md`, and affected algorithm documentation/tests. Treat causal publication, evaluation and state commit order as part of the mathematical definition.
-2. Freeze a test contract **before** running: exact saved graph/element, inputs, parameters, initial state, sample index and time conventions, steps/interval, units, arithmetic precision, and expected numerical method.
+2. Record the exact graph or element, input, initial state, step size, sample-index convention, units and arithmetic precision. Verify whether each recorded sample represents values before or after the relevant update.
 3. Construct an oracle independent of the S7 code path under test: closed-form solution, explicit recurrence, independently computed direct DFT/convolution or separately implemented high-accuracy solver. A second S7 diagram using the same algorithm is not independent.
-4. Distinguish (a) execution vs declared discrete recurrence, (b) discrete approximation vs continuous-time reference, and (c) hardware measurement vs physical model. Report these errors separately.
-5. Compare early exact steps, late drift, boundary/failure inputs, and sample-rate refinement where expected. For feedback, test state ownership, hidden update-order dependence and instability. For FFT/SDR/audio, document phase, normalization, units, startup/transients, window effects and bounded frame/tail cases.
+4. Report discrete-recurrence error, approximation to continuous time and physical measurement error separately when they apply. Run any independent solver as a test reference outside the S7 graph.
+5. Choose cases that discriminate the claimed behavior. Use early steps for indexing and initialization, long runs for drift, and rate refinement for convergence. For DSP claims use the relevant phase, normalization, window, transient and finite-frame conventions.
 6. Specify absolute/relative error definitions, the expected mathematical scaling/conditioning and justified tolerances. Do not assume bitwise equivalence where only numerical equivalence is required. For stochastic models use declared seeds and enough trials to support statistical claims.
 7. Run the smallest relevant repository build/tests first, then broader regressions as warranted. Record executable commands, commit SHA, platform, plots/traces and results. A plausible plot or green unrelated CI job is insufficient.
 
