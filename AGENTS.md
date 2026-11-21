@@ -42,6 +42,19 @@ If documents disagree with code, report the discrepancy. Do not silently treat t
 - Treat input data, configuration, and network messages as untrusted; preserve validation and authentication boundaries.
 - Never add secrets, private keys, credentials, or generated build artifacts to the repository.
 
+## Reusable development automation
+
+Treat repeated development procedures as project assets, not disposable command transcripts. When a workflow is likely to recur (or the same multi-step command sequence is repeated), **proactively create or improve a small reusable script** as part of the relevant change, provided its benefit justifies maintenance. Do not create a wrapper for a trivial one-off command.
+
+- **Discover before writing:** inspect existing `s7l2/tools/`, `s7py/tools/`, education generators, packaging scripts, test runners and CI workflows. Reuse or extend the closest supported entry point instead of creating parallel variants.
+- **Keep mechanics in scripts:** use Codex skills for task selection and engineering judgment; use checked-in scripts for deterministic build/test, diagram normalization and validation, experiment orchestration, fixtures, capture, and report generation. Do not copy large shell snippets into agent instructions.
+- **Make scripts portable and predictable:** prefer Python's standard library for structured work and a small shell script for command glue. Resolve paths relative to the script/repository, accept configurable build and artifact paths, provide `--help`, reject invalid input, propagate exit codes, and avoid hardcoded hostnames, private devices, credentials or developer-specific directories. Use clear arguments rather than editing the script between runs.
+- **Preserve safety:** never silently install dependencies, request root privileges, overwrite tracked input, deploy software, transmit RF, change system audio routing or operate physical hardware. Require explicit opt-in for side effects; provide a `--dry-run` mode for consequential mutations; use temporary directories and clean up processes/resources. Do not commit secrets, raw private captures or generated build artifacts.
+- **Verify the script:** test the normal case, invalid/failure path, and `--help` (and `--dry-run` if present). When it wraps an existing test, confirm it actually executes that test rather than reporting false success. Document one copy-paste invocation near the relevant component and wire it into CI only when justified.
+- **Report reuse:** name the new or improved script, why it is reusable, the exact commands/tests executed, and any environmental assumptions. If a recurring task remains manual, state why no safe reusable script was appropriate.
+
+For the focused procedure, use the repository skill `$s7-development-scripts` in `.agents/skills/s7-development-scripts/SKILL.md`.
+
 ## Working procedure
 
 1. **Understand:** state the goal, affected components, existing behavior, and relevant specification.
