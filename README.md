@@ -204,7 +204,7 @@ especially before modifying causal semantics or a protocol.
 ## Project origins
 
 **S7 began in 1993.** **Oleksiy Lukin** implemented its first version in
-**Turbo Pascal 5.5**. **Sehii Kondratiuk** subsequently added a graphical
+**Turbo Pascal 5.5**. **Serhii Kondratiuk** subsequently added a graphical
 user interface. Both original authors were classmates at
 [Kharkiv Aviation Institute (KhAI)](https://khai.edu/), their alma mater.
 Oleksiy Lukin has also continued working on S7 at
