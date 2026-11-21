@@ -193,31 +193,13 @@ and reviews the work. Contributors and coding agents should read
 [AGENTS.md](AGENTS.md) and the applicable component documentation,
 especially before modifying causal semantics or a protocol.
 
-## Origins and scientific context
+## Project origins
 
 **S7 began in 1993.** **Oleksiy Lukin** implemented its first version in
 **Turbo Pascal 5.5**. **Sehii Kondratiuk** subsequently added a graphical
 user interface. The present S7 project carries that early diagram-based
-engineering idea forward with modern runtimes, numerical verification, and
+engineering idea forward with modern runtimes, numerical verification and
 distributed computation.
-
-That early S7 history and Siebert's book are part of the project's
-identity, not merely background references. The epigraph at the top
-expresses the goal of making complex behavior understandable through
-simple, explicit connections.
-
-S7 also draws on work in signals and systems, dataflow, formal modeling,
-and distributed computation: among others, **Dennis Freeman, Sanjoy
-Mahajan, Alan Oppenheim, Alan Willsky, S. Hamid Nawab, Edward A. Lee,
-Sanjit Seshia, Nancy Lynch, Leslie Lamport**, and the Ptolemy research
-community. See the
-[integrator reference record](s7l2/docs/INTEGRATOR_REFERENCES.md)
-and [dataflow/causality research record](s7l2/docs/CROSS_NODE_CAUSALITY_RESEARCH.md)
-for the publications and their relevance to S7.
-
-These are intellectual influences, not institutional affiliations or
-endorsements. We also acknowledge the maintainers of the free software
-and scientific tools on which S7 depends.
 
 ## License
 
@@ -229,3 +211,7 @@ Your own diagrams and results remain yours.
 
 The authoritative component-by-component terms and third-party credits
 are in [LICENSING.md](LICENSING.md).
+
+For textbooks, research papers, intellectual acknowledgements and
+development credits, see [Scientific foundations, references and
+acknowledgements](doc/SCIENTIFIC_FOUNDATIONS_AND_ACKNOWLEDGEMENTS.md).
