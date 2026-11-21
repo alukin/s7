@@ -1,6 +1,6 @@
 # S7 — A visual workbench for signals and systems
 
-**S7 is an open-source visual workbench for engineering, research and learning. It lets you design, execute and verify causal computational systems—from signals, dynamics and feedback control to distributed processing across networked nodes—and connect models to real hardware through explicit device interfaces.**
+**S7 is an open-source visual workbench for engineering, research and learning. It lets you design, execute and verify causal computational systems—from signals, dynamics and feedback control to heterogeneous distributed processing across networked nodes—and connect models to real hardware through explicit device interfaces.**
 
 > “… everything simple is true and everything complicated is untrue.”
 >
@@ -22,6 +22,16 @@ In S7, a model is a diagram of connected elements with explicit state,
 types and causal dependencies. It can run locally or, within documented
 supported profiles, across networked nodes. Its behavior can be inspected
 and compared with theory, numerical references and measurements.
+
+**S7 separates the computational model from its execution environment.**
+The diagram specifies local computation, instance-owned state and causal
+relationships—not a particular programming language, thread schedule or
+physical device. Headless runtimes execute supported diagrams; explicit
+network boundaries and device interfaces connect them to heterogeneous nodes,
+sensors and outputs. Causality remains part of the model rather than being
+inferred from packet arrival or physical clock time. The roadmap extends
+this design toward native code generated and verified against the reference
+runtime, without requiring Studio on the deployed device.
 
 **The diagram is the specification.** Today, S7 validates diagrams and runs
 them through a dynamic reference runtime. The [roadmap](s7l2/docs/RELEASE_ROADMAP.md)
