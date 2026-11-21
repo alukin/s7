@@ -1,4 +1,4 @@
-# S7 — Signals and systems for engineering, research and learning
+# S7 — A visual workbench for signals and systems
 
 > “… everything simple is true and everything complicated is untrue.”
 >
@@ -9,9 +9,9 @@
 S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
 understanding a system through its signals, interconnected blocks, state and
-feedback. S7 turns that way of thinking into an open-source tool for
-**students, researchers, scientists and engineers** to build models, run
-experiments and inspect their results.
+feedback. S7 turns that way of thinking into a visual, open-source
+workbench for **engineering, research and learning**—a place to build
+models, run experiments and inspect their results.
 
 S7 is an engineering workbench for signal processing, dynamic systems,
 control, and distributed causal computation. Build a system as a diagram
