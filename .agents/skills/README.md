@@ -16,6 +16,7 @@ These focused skills complement the root `AGENTS.md`; they do **not** replace it
 | `$s7-change-verification` | Select focused tests and validate diagram functional/layout invariants |
 | `$s7-ai-benchmark` | Compare Codex workflows using controlled, recorded tasks and known token usage |
 | `$s7-task-handoff` | Create bounded engineering handoffs for agents or future sessions |
+| `$s7-independent-review` | Independently review causal, numerical, security and protocol risks with evidence |
 
 Shared helpers: see [tools/ai/README.md](../../tools/ai/README.md) for the working CLI toolchain and its unit tests.
 
