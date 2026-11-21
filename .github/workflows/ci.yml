@@ -30,6 +30,8 @@ jobs:
           bash tools/install_deps_fedora.sh --no-studio --no-extras
           c++ --version
           cmake --version
+      - name: Check AI development tooling (Python-only)
+        run: python3 -m unittest discover -s ../tools/ai/tests -v
       - name: Check licensing metadata
         run: |
           dnf install -y python3-pip
