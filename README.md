@@ -1,5 +1,7 @@
 # S7 — A visual workbench for signals and systems
 
+**S7 is an open-source workbench for designing, executing and verifying causal computational systems—from signals, dynamics and feedback control to distributed processing across networked nodes.**
+
 > “… everything simple is true and everything complicated is untrue.”
 >
 > — Ukrainian philosopher **Hryhorii Skovoroda** (Григорій Сковорода),
@@ -9,14 +11,13 @@
 S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
 understanding a system through its signals, interconnected blocks, state and
-feedback. S7 turns that way of thinking into a visual, open-source
-workbench for **engineering, research and learning**—a place to build
-models, run experiments and inspect their results.
+feedback. S7 carries that tradition forward for **engineering, research
+and learning**: building models, running experiments and inspecting results.
 
-S7 is an engineering workbench for signal processing, dynamic systems,
-control, and distributed causal computation. Build a system as a diagram
-of connected elements, make its state and dependencies explicit, execute
-the model, and check its behavior against theory or measurements.
+In S7, a model is a diagram of connected elements with explicit state,
+types and causal dependencies. It can run locally or, within documented
+supported profiles, across networked nodes. Its behavior can be inspected
+and compared with theory, numerical references and measurements.
 
 **The diagram is the specification.** Today, S7 validates diagrams and runs
 them through a dynamic reference runtime. The [roadmap](s7l2/docs/RELEASE_ROADMAP.md)
