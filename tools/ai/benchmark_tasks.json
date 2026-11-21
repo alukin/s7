@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "note": "Controlled evaluation prompts, not evidence of completed work. Run each variant from the same baseline in isolated worktrees and evaluate with independent acceptance checks.",
+  "tasks": [
+    {
+      "id": "diagram-layout-preservation",
+      "domain": "studio",
+      "input": "s7l2/examples/2int_osc.s7diagram",
+      "prompt": "Improve diagram readability without changing the executable model, ports, probes, or run settings.",
+      "acceptance": [
+        "functional_content identical to baseline",
+        "Studio normalization passes",
+        "actual rendered pixels inspected, not just PNG presence"
+      ]
+    },
+    {
+      "id": "new-fir-diagram",
+      "domain": "studio",
+      "input": "s7l2/education/labs/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram",
+      "prompt": "Create an original small FIR demonstration diagram in a temporary worktree, with a numerical oracle. Do not overwrite the existing SP06 lab.",
+      "acceptance": [
+        "correct valid .s7diagram v2",
+        "independent FIR recurrence matches captured model output",
+        "GUI screenshot visibly connected and labeled"
+      ]
+    },
+    {
+      "id": "integrator-convergence",
+      "domain": "numerical",
+      "input": "s7l2/s7core",
+      "prompt": "Independently verify a selected implemented integrator on a documented test equation at two or more stepsizes; do not modify production code.",
+      "acceptance": [
+        "reference independent of S7 under test",
+        "initial/sample timing specified",
+        "measured errors and convergence trend with justified tolerances"
+      ]
+    },
+    {
+      "id": "s7py-trace",
+      "domain": "python",
+      "input": "s7py/README.md",
+      "prompt": "Run and explain the Python local trace workflow for an existing example, including causal execution order, and identify one useful negative case.",
+      "acceptance": [
+        "exact executed commands and exits",
+        "trace compared to a stated expected recurrence",
+        "no claimed distributed validation from a local trace"
+      ]
+    },
+    {
+      "id": "distributed-wire-fixture",
+      "domain": "distributed",
+      "input": "s7l2/tools/check_wire_fixtures.py",
+      "prompt": "Verify existing wire protocol fixtures and report supported conformance scope and one failure path; do not modify live nodes.",
+      "acceptance": [
+        "fixture checker executed",
+        "failure path evaluated separately",
+        "no invented durability or ordering guarantees"
+      ]
+    },
+    {
+      "id": "studio-visual-capture",
+      "domain": "gui",
+      "input": "s7l2/docs/STUDIO_GUI_TESTING.md",
+      "prompt": "Execute one existing GUI capture regression on a supported local host and verify the actual output pixels.",
+      "acceptance": [
+        "named case and exact environment",
+        "nonblank PNG plus pixel inspection",
+        "skipped graphics reported as skipped"
+      ]
+    },
+    {
+      "id": "reusable-dev-script",
+      "domain": "tooling",
+      "input": "s7l2/tools/run_gui_test.py",
+      "prompt": "Identify a genuinely repeated S7 development sequence and create or enhance a safe small script, avoiding duplicated existing wrappers.",
+      "acceptance": [
+        "script --help and negative path tested",
+        "no unintended environment or hardware mutations",
+        "documentation shows a reproducible command"
+      ]
+    }
+  ]
+}
