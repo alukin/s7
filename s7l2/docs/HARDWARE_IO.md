@@ -50,8 +50,11 @@ validation. Their `step()` refuses execution without an explicit hardware owner.
 Studio discovers these plugins at startup in a development build or an
 installation. The Element Library places audio boundaries under **Sound and
 Video** and SDR boundaries under **Radio**. The Radio library also provides
-complex baseband FM and AM modulators and an FM discriminator. Filters and
-resamplers are under **Signal Processing**.
+complex baseband AM and FM modulators and demodulators. Match the AM depth
+(greater than zero) or the FM sample rate and deviation between the modulator
+and demodulator to recover the normalized message. The FM discriminator
+reports the raw phase change in radians per sample. Filters and resamplers
+are under **Signal Processing**.
 
 The [mono FM receiver diagram](../examples/sdr/fm_receiver.s7diagram)
 can be edited in Studio and executed with `s7hw`. Follow the

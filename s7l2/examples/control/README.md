@@ -147,11 +147,8 @@ must be below 0.05 in the stated units and decrease by a factor of 1.7–2.3
 when dt halves. This checks plant discretization under the actual applied
 control; it does not prove arbitrary continuous-time closed-loop accuracy.
 
-**StepGenerator start_sample is a sample count.** The saved schedule assumes
-1 kHz. To repeat at 2 kHz with unchanged physical event times, double all
-start_sample values, set all rates to 2 kHz, and set all integrator dt values
-(including embedded controller dt) to 0.0005 s. Merely changing the run rate
-does not rescale event sample counts. The headless test does this explicitly.
-Never compare different rates with different physical input schedules.
+To repeat at 2 kHz, change the rate in Run Configuration. The `StepGenerator`
+parameters store `start_time` in seconds, so both runs use the same physical
+event schedule. The headless test runs the same schedule at both rates.
 The examples are single-rate F64 models; parameter changes and higher gains
 require fresh stability and timestep checks.

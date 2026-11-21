@@ -1502,15 +1502,6 @@
           "enum_values": []
         },
         {
-          "name": "dt",
-          "type": "value",
-          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
-          "default": null,
-          "required": false,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "initial_value",
           "type": "value",
           "description": "y[0]",
@@ -1672,15 +1663,6 @@
       ],
       "parameters": [
         {
-          "name": "dt",
-          "type": "value",
-          "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.",
-          "default": null,
-          "required": false,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "initial_value",
           "type": "real",
           "description": "State published on the first step.",
@@ -1740,15 +1722,6 @@
           "default": null,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "dt",
-          "type": "value",
-          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
-          "default": null,
-          "required": false,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "initial_value",
@@ -1844,15 +1817,6 @@
           "default": null,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "dt",
-          "type": "value",
-          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
-          "default": null,
-          "required": false,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "initial_position",
@@ -2035,30 +1999,10 @@
           "name": "sweep_time",
           "type": "real",
           "description": "Sweep duration in seconds, a whole number of samples at the run rate (default 1 s).",
-          "default": null,
+          "default": 1.0,
           "required": false,
           "min": 0.0,
           "enum_values": []
-        },
-        {
-          "name": "sweep_samples",
-          "type": "int",
-          "description": "Legacy sample count, used only when sweep_time is absent: converted at the stored sample_rate_hz.",
-          "default": null,
-          "required": false,
-          "min": 1.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "amplitude",
@@ -2215,30 +2159,10 @@
           "name": "bit_time",
           "type": "real",
           "description": "Duration of one bit in seconds, a whole number of samples at the run rate (default 0.001 s).",
-          "default": null,
+          "default": 0.001,
           "required": false,
           "min": 0.0,
           "enum_values": []
-        },
-        {
-          "name": "bit_samples",
-          "type": "int",
-          "description": "Legacy sample count, used only when bit_time is absent: converted at the stored sample_rate_hz.",
-          "default": null,
-          "required": false,
-          "min": 1.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "low",
@@ -2312,16 +2236,6 @@
           "default": null,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "amplitude",
@@ -2423,16 +2337,6 @@
           "enum_values": []
         },
         {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "low",
           "type": "value",
           "description": "Low level",
@@ -2532,33 +2436,13 @@
           "enum_values": []
         },
         {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "start_time",
           "type": "real",
           "description": "Time of the impulse in seconds, a whole number of samples at the run rate (default 0).",
-          "default": null,
+          "default": 0.0,
           "required": false,
           "min": 0.0,
           "enum_values": []
-        },
-        {
-          "name": "start_sample",
-          "type": "int",
-          "description": "Legacy sample count, used only when start_time is absent: converted at the stored sample_rate_hz.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "area",
@@ -2626,38 +2510,18 @@
           "enum_values": []
         },
         {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "start_time",
           "type": "real",
           "description": "Time of the step in seconds, a whole number of samples at the run rate (default 0).",
-          "default": null,
+          "default": 0.0,
           "required": false,
           "min": 0.0,
           "enum_values": []
         },
         {
-          "name": "start_sample",
-          "type": "int",
-          "description": "Legacy sample count, used only when start_time is absent: converted at the stored sample_rate_hz.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "initial_value",
           "type": "value",
-          "description": "Level before start_sample",
+          "description": "Level before start_time",
           "default": 0,
           "required": false,
           "enum_values": []
@@ -2665,7 +2529,7 @@
         {
           "name": "final_value",
           "type": "value",
-          "description": "Level at and after start_sample",
+          "description": "Level at and after start_time",
           "default": 1,
           "required": false,
           "enum_values": []
@@ -2750,16 +2614,6 @@
           "default": null,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "amplitude",
@@ -3069,16 +2923,6 @@
           "enum_values": []
         },
         {
-          "name": "dt",
-          "type": "value",
-          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
           "name": "initial_value",
           "type": "value",
           "description": "Initial published state",
@@ -3266,16 +3110,6 @@
           "default": null,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         }
       ],
       "type_variables": [
@@ -3346,31 +3180,10 @@
           "name": "period",
           "type": "real",
           "description": "Carrier period in seconds, 2 to 65504 whole samples at the run rate (default 0.0001 s).",
-          "default": null,
+          "default": 0.0001,
           "required": false,
           "min": 0.0,
           "enum_values": []
-        },
-        {
-          "name": "period_samples",
-          "type": "int",
-          "description": "Legacy sample count, used only when period is absent: converted at the stored sample_rate_hz.",
-          "default": null,
-          "required": false,
-          "min": 2.0,
-          "max": 65504.0,
-          "enum_values": [],
-          "legacy": true
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "min": 0.0,
-          "enum_values": [],
-          "legacy": true
         }
       ],
       "type_variables": [
@@ -3452,15 +3265,6 @@
           "default": 0,
           "required": false,
           "enum_values": []
-        },
-        {
-          "name": "sample_rate_hz",
-          "type": "real",
-          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
-          "default": null,
-          "required": false,
-          "enum_values": [],
-          "legacy": true
         },
         {
           "name": "phase",

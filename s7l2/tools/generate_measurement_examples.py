@@ -26,7 +26,7 @@ def pll(mode):
     final = 35 if mode == 'out_of_range' else 22 if mode == 'frequency_step' else 20
     d.step('reference_frequency', 20, final, 2, 3, 18)
     d.element('reference_rate', 'Gain', dict(factor=2*math.pi), 24, 18, '2*pi*f_ref (rad/s)')
-    d.element('reference_phase', 'EulerIntegrator', dict(dt=d.dt, initial_value=.8), 46, 18, 'Reference phase (rad)')
+    d.element('reference_phase', 'EulerIntegrator', dict(initial_value=.8), 46, 18, 'Reference phase (rad)')
     d.step('phase_step', 0, 1 if mode == 'phase_step' else 0, 2, 24, 36)
     d.element('reference_angle', 'Adder', dict(weights=[1, 1]), 66, 18)
     d.element('phase_error', 'PhaseDifference', {}, 88, 18,
@@ -38,7 +38,7 @@ def pll(mode):
     d.constant('nominal_frequency', 18, 132, 36)
     d.element('vco_frequency', 'Adder', dict(weights=[1, 10]), 132, 18, '18 + 10*u (Hz)')
     d.element('vco_rate', 'Gain', dict(factor=2*math.pi), 154, 18, '2*pi*f_vco (rad/s)')
-    d.element('vco_phase', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 154, 48, 'VCO phase (rad)')
+    d.element('vco_phase', 'EulerIntegrator', dict(initial_value=0), 154, 48, 'VCO phase (rad)')
     for source, target, port in [('reference_frequency', 'reference_rate', 0),
             ('reference_rate', 'reference_phase', 0), ('reference_phase', 'reference_angle', 0),
             ('phase_step', 'reference_angle', 1), ('reference_angle', 'phase_error', 0),
@@ -50,7 +50,7 @@ def pll(mode):
     for label, phase, x in [('reference', 'reference_angle', 24), ('vco', 'vco_phase', 88)]:
         d.element(label+'_wrapped', 'PhaseWrap', {}, x, 50)
         d.element(label+'_signal', 'Trig', dict(function='sin'), x, 63, label+' waveform')
-        d.element(label+'_meter', 'FrequencyMeter', dict(sample_rate_hz=1/d.dt), x+22, 63)
+        d.element(label+'_meter', 'FrequencyMeter', {}, x+22, 63)
         d.wire(phase, label+'_wrapped')
         d.wire(label+'_wrapped', label+'_signal')
         d.wire(label+'_signal', label+'_meter')
@@ -77,12 +77,12 @@ def lag(d, ident, source, tau, x, y):
 def am():
     d = Diagram('am_coherent_detection', .0001, 'signal_measurement', 2,
                 '100 Hz carrier, 2 Hz message, modulation index 0.6; coherent detection, tau=0.02 s.')
-    d.element('message', 'AnalogOscillator', dict(amplitude=1, frequency_hz=2, sample_rate_hz=10000), 3, 18)
+    d.element('message', 'AnalogOscillator', dict(amplitude=1, frequency_hz=2), 3, 18)
     d.constant('bias', 1, 3, 34)
     d.element('envelope', 'Adder', dict(weights=[1, .6]), 24, 18, '1 + 0.6*message')
     d.wire('bias', 'envelope')
     d.wire('message', 'envelope', input_=1)
-    d.element('carrier', 'AnalogOscillator', dict(amplitude=1, frequency_hz=100, sample_rate_hz=10000), 24, 50)
+    d.element('carrier', 'AnalogOscillator', dict(amplitude=1, frequency_hz=100), 24, 50)
     d.element('am_signal', 'Multiply', {}, 46, 18)
     d.wire('envelope', 'am_signal')
     d.wire('carrier', 'am_signal', input_=1)
@@ -105,14 +105,14 @@ def am():
 def fm():
     d = Diagram('fm_frequency_detection', .0001, 'signal_measurement', 2,
                 '100 Hz carrier, +/-20 Hz deviation, 2 Hz message; crossing-period detection and 0.02 s smoothing.')
-    d.element('message', 'AnalogOscillator', dict(amplitude=1, frequency_hz=2, sample_rate_hz=10000), 3, 18)
+    d.element('message', 'AnalogOscillator', dict(amplitude=1, frequency_hz=2), 3, 18)
     d.constant('carrier_frequency', 100, 3, 36)
     d.element('frequency', 'Adder', dict(weights=[1, 20]), 25, 18, '100 + 20*message (Hz)')
     d.wire('carrier_frequency', 'frequency')
     d.wire('message', 'frequency', input_=1)
-    d.element('fm_signal', 'ControlledOscillator', dict(amplitude=1, sample_rate_hz=10000, phase=0), 47, 18)
+    d.element('fm_signal', 'ControlledOscillator', dict(amplitude=1, phase=0), 47, 18)
     d.wire('frequency', 'fm_signal')
-    d.element('meter', 'FrequencyMeter', dict(sample_rate_hz=10000), 69, 18)
+    d.element('meter', 'FrequencyMeter', {}, 69, 18)
     d.wire('fm_signal', 'meter')
     d.element('raw_message', 'Adder', dict(weights=[.05, -.05]), 91, 18, '(Measured Hz - 100)/20')
     d.wire('meter', 'raw_message')
@@ -141,7 +141,7 @@ def rms(dc):
         d.element('signal', 'Gain', dict(factor=1), 47, 18, 'Signed DC voltage (V)')
         d.wire('amplitude', 'signal')
     else:
-        d.element('carrier', 'AnalogOscillator', dict(amplitude=1, frequency_hz=50, sample_rate_hz=10000), 3, 42)
+        d.element('carrier', 'AnalogOscillator', dict(amplitude=1, frequency_hz=50), 3, 42)
         d.element('signal', 'Multiply', {}, 47, 18, 'Amplitude * sin(2*pi*50*t) (V)')
         d.wire('amplitude', 'signal')
         d.wire('carrier', 'signal', input_=1)

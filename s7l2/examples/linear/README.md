@@ -139,9 +139,8 @@ by dt. Do not compare a state against an analytical reference shifted by one
 sample. A 10 s run has its last published state at `10-dt` seconds.
 
 Repeat at 2 kHz with the same duration. Studio Run Configuration supplies the
-effective rate; when editing saved JSON directly, update top-level dt, every
-integrator dt, and the oscillator sample_rate_hz together. At sufficiently
-small dt, halving dt should approximately halve state error. Parameter edits,
+effective rate. When editing saved JSON directly, update the schema timestep.
+At sufficiently small dt, halving dt should approximately halve state error. Parameter edits,
 undamped long runs, and extreme rates are outside the default checked envelope.
 
 ## Reproduce headless reference checks

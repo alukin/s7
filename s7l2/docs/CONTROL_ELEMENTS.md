@@ -78,8 +78,8 @@ This is stateless with direct feedthrough.
 
 ## FrequencyMeter
 
-Input 0: `in`; outputs 0/1: `frequency_hz`, `valid`. Parameter
-`sample_rate_hz=1000` pins the model rate. A rising crossing is detected when
+Input 0 is `in`, and outputs 0 and 1 are `frequency_hz` and `valid`.
+The meter follows its rate domain. A rising crossing is detected when
 the previous sample is negative and the current sample is nonnegative. Its
 position is linearly interpolated between the two samples. Frequency is
 sample rate divided by the interval between successive rising crossings.

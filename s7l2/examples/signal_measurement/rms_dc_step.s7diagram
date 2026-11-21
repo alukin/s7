@@ -18,8 +18,7 @@
         "params": {
           "initial_value": -2,
           "final_value": 1,
-          "sample_rate_hz": 10000.0,
-          "start_sample": 10000
+          "start_time": 1.0
         }
       },
       {
@@ -67,7 +66,6 @@
               "id": "state",
               "type": "ControlledIntegrator",
               "params": {
-                "dt": 0.0001,
                 "lower_limit": 0
               }
             },

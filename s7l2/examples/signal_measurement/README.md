@@ -165,10 +165,8 @@ AM filter, FM continuous-waveform and RMS analytical errors must decrease by
 a factor of 1.7–2.3 on timestep halving. Refinement does not remove intended
 filter lag or convert a crossing-period average into instantaneous frequency.
 
-For a Studio 20 kHz repeat, use dt = 0.00005 throughout embedded schemas and
-source rates. **Double RMS amplitude-step start_sample from 10000 to 20000**
-to keep the event at 1 s. Run Configuration updates rates, not event sample
-counts. AM/FM have no event counts to rescale.
+For a Studio repeat at 20 kHz, set the rate in Run Configuration. The RMS
+amplitude step remains at `start_time=1` s.
 
 At runtime step k, causal filter states represent `(k-1)*dt` and the observation
 label is `k*dt`. Sine/VCO outputs use the phase for that same source sample,

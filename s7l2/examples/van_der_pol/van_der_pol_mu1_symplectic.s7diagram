@@ -16,7 +16,6 @@
         "id": "small_state",
         "type": "SymplecticIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_position": 0.1,
           "initial_velocity": 0
         }
@@ -62,7 +61,6 @@
         "id": "cycle_state",
         "type": "SymplecticIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_position": 2,
           "initial_velocity": 0
         }
@@ -108,7 +106,6 @@
         "id": "large_state",
         "type": "SymplecticIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_position": 4,
           "initial_velocity": 0
         }

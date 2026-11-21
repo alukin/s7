@@ -167,9 +167,9 @@ Changing it never edits the diagram:
   run's rate. Their durations are times in seconds (`start_time`,
   `sweep_time`, `bit_time`, PWM `period`), so events stay at the same model
   time; a duration that is not a whole number of samples at the new rate is
-  reported in the problems list. Older diagrams that store `dt`,
-  `sample_rate_hz` or sample counts still open; those legacy fields are kept
-  in the Advanced JSON tab but no longer shown for editing.
+  reported in the problems list. Current schemas reject obsolete per-element
+  `dt`, `sample_rate_hz` and sample-count parameters on rate-following blocks.
+  See [Signal Sources](SIGNAL_SOURCES.md) for conversion to seconds.
 - FIR and IIR filters record the rate their coefficients were designed for
   (the diagram's rate when the filter was added, or the saved `dt` of an older
   diagram). A run at another rate stops with an error naming the filter,

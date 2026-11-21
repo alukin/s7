@@ -192,7 +192,11 @@ void registry() {
         {"ChirpGenerator",{{"waveform","noise"}}},
         {"ChirpGenerator",{{"duty",-0.1}}},
         {"ChirpGenerator",{{"rise_fraction",1.1}}},
-        {"StepGenerator",{{"start_sample",-1}}},
+        {"StepGenerator",{{"start_sample",4}}},
+        {"ChirpGenerator",{{"sweep_samples",1000}}},
+        {"PRBSGenerator",{{"bit_samples",1}}},
+        {"PWM",{{"period_samples",100}}},
+        {"AnalogOscillator",{{"sample_rate_hz",1000}}},
         {"ImpulseGenerator",{{"start_time",-1}}},
         {"StepGenerator",{{"start_time",0.0005}}}, // half a sample at 1 kHz
         {"PRBSGenerator",{{"bit_time",0.0015}}},
@@ -202,17 +206,14 @@ void registry() {
         add(schema,"source",entry.first,entry.second);
         require(!s7::Validator::validate(schema).ok(), "Invalid registry parameter is rejected");
     }
-    // Durations are times: a legacy sample count converts at its stored rate
-    // (4 samples at 8 Hz = 0.5 s), then counts at the run's rate (8 at 16 Hz).
-    for (const auto& params : {boost::json::object{{"start_sample",4},{"sample_rate_hz",8}},
-                               boost::json::object{{"start_time",0.5}}}) {
+    for (const auto rate : {8, 16}) {
         s7::Schema timed("timed_step");
-        timed.set_rate(s7::Rate::from_hz(16));
-        add(timed,"source","StepGenerator",params);
+        timed.set_rate(s7::Rate::from_hz(rate));
+        add(timed,"source","StepGenerator",{{"start_time",0.5}});
         s7::NodeRuntime runtime(s7::Compiler::compile(timed));
         for (int n=0;n<12;++n) {
             runtime.step();
-            require(runtime.real_output_of("source")==(n<8 ? 0 : 1), "Step at 0.5 s whatever rate the document used");
+            require(runtime.real_output_of("source")==(n<rate/2 ? 0 : 1), "Step at 0.5 s at both rates");
         }
     }
     // Rate-authoritative pins (built in C++) still conflict.

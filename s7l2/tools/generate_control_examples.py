@@ -34,8 +34,7 @@ class Diagram:
 
     def step(self, ident, initial, final, time, x, y):
         return self.element(ident, 'StepGenerator', dict(initial_value=initial,
-                            final_value=final, sample_rate_hz=1/self.dt,
-                            start_sample=round(time/self.dt)), x, y)
+                            final_value=final, start_time=time), x, y)
 
     def wire(self, source, target, output=0, input_=0, observer=False):
         if not observer:
@@ -123,7 +122,7 @@ def control(plant, mode):
     if plant == 'first_order':
         d.element('plant_rate', 'Adder', dict(weights=[2, -2, -2]), 98, 18,
                   "y' = (u - y - load)/0.5")
-        d.element('output', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 120, 18)
+        d.element('output', 'EulerIntegrator', dict(initial_value=0), 120, 18)
         d.wire('controller', 'plant_rate')
         d.wire('output', 'plant_rate', input_=1)
         d.wire('load', 'plant_rate', input_=2)
@@ -132,10 +131,10 @@ def control(plant, mode):
         d.element('armature_voltage', 'Gain', dict(factor=4), 85, 18, 'Va = 4*u V')
         d.element('current_rate', 'Adder', dict(weights=[10, -10, -5]), 104, 18,
                   "i' = (Va - i - 0.5*omega)/0.1")
-        d.element('current', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 126, 18, 'Current (A)')
+        d.element('current', 'EulerIntegrator', dict(initial_value=0), 126, 18, 'Current (A)')
         d.element('speed_rate', 'Adder', dict(weights=[5, -1, -10]), 126, 40,
                   "omega' = (0.5*i - 0.1*omega - load)/0.1")
-        d.element('speed', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 148, 40, 'Speed (rad/s)')
+        d.element('speed', 'EulerIntegrator', dict(initial_value=0), 148, 40, 'Speed (rad/s)')
         d.element('output', 'Gain', dict(factor=.2), 148, 18, 'Normalized speed = omega / 5')
         for source, target, port in [('controller', 'armature_voltage', 0),
                 ('armature_voltage', 'current_rate', 0), ('current', 'current_rate', 1),
@@ -185,7 +184,7 @@ def buck(closed_loop):
         d.wire('output_voltage', 'controller', input_=1)
     else:
         d.constant('controller', .5, 54, 18)
-    d.element('pwm', 'PWM', dict(period_samples=100, sample_rate_hz=100000), 76, 18)
+    d.element('pwm', 'PWM', dict(period=.001), 76, 18)
     d.wire('controller', 'pwm')
     d.wire('pwm', 'switch_24V')
     d.scope('voltage_scope', [('reference_V', 'reference', 0, 'V'),
@@ -210,10 +209,10 @@ def thermostat(band):
               low_value=0, high_value=1, initial_on=False), 44, 18)
     d.element('heater_rate', 'Adder', dict(weights=[200, -.1]), 66, 18,
               "P' = (2000*relay - P)/10 W/s")
-    d.element('heater_power', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 88, 18, 'Heater power (W)')
+    d.element('heater_power', 'EulerIntegrator', dict(initial_value=0), 88, 18, 'Heater power (W)')
     d.element('thermal_rate', 'Adder', dict(weights=[.0001, -.01, .01]), 110, 18,
               "T' = (P - 100*(T-Ta))/10000 K/s")
-    d.element('temperature', 'EulerIntegrator', dict(dt=d.dt, initial_value=18), 132, 18, 'Temperature (degC)')
+    d.element('temperature', 'EulerIntegrator', dict(initial_value=18), 132, 18, 'Temperature (degC)')
     for source, target, port in [('setpoint', 'error', 0), ('temperature', 'error', 1),
             ('error', 'relay', 0), ('relay', 'heater_rate', 0), ('heater_power', 'heater_rate', 1),
             ('heater_rate', 'heater_power', 0), ('heater_power', 'thermal_rate', 0),

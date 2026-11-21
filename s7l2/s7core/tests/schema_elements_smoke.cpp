@@ -77,7 +77,7 @@ void controller_transients() {
             auto& e=value.as_object();
             if(e.at("id").as_string()==(pid ? "input1" : "input0")) {
                 e["type"]="StepGenerator";
-                e["params"]=boost::json::object{{"initial_value",pid ? 0 : 10},{"final_value",pid ? .2 : 0},{"start_sample",pid ? 100 : 1000}};
+                e["params"]=boost::json::object{{"initial_value",pid ? 0 : 10},{"final_value",pid ? .2 : 0},{"start_time",pid ? .1 : 1.0}};
             }
         }
         s7::configure_schema_discretization(json,.001);
@@ -119,22 +119,13 @@ void independence_and_limits() {
     mismatch.as_object().at("connections").as_array().push_back(boost::json::object{{"from_element","other_tau"},{"from_port",0},{"to_element","other"},{"to_port",1}});
     auto invalid=s7::SchemaLibraryLoader::build_schema(mismatch);
     require(!s7::Validator::validate(invalid).ok(),"Parent detects rate conflict with nested schema");
-    // Inside a nested schema, elements follow its rate: a dt stored in its
-    // document is a legacy field and cannot contradict the schema's rate.
     auto stored_dt=model("FirstOrderLag",{2,.1});
     auto nested=*s7::ElementRegistry::instance().find("FirstOrderLag")->metadata().schema_definition;
     for(auto& e : nested.as_object().at("elements").as_array())
         if(e.as_object().at("id").as_string()=="state") e.as_object()["params"].as_object()["dt"]=.002;
     stored_dt.as_object().at("elements").as_array()[0].as_object()["schema"]=nested;
-    auto follows=s7::SchemaLibraryLoader::build_schema(stored_dt);
-    s7::NodeRuntime following(s7::Compiler::compile(follows));
-    auto reference=s7::SchemaLibraryLoader::build_schema(model("FirstOrderLag",{2,.1}));
-    s7::NodeRuntime unchanged(s7::Compiler::compile(reference));
-    for(int n=0;n<100;++n) {
-        following.step(); unchanged.step();
-        require(following.real_output_of("component")==unchanged.real_output_of("component"),
-                "Nested elements follow the nested schema's rate, not a stored dt");
-    }
+    const auto validation=s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(stored_dt));
+    require(!validation.ok(),"Nested integrators reject obsolete element dt");
     // ADR-024 checks the flattened paths: FirstOrderLag's integrator closes
     // this same-node loop. Seed the whole graph, including the original input
     // constant that becomes disconnected when its wire is replaced.
@@ -165,7 +156,7 @@ void lead_lag() {
         auto json=model("LeadLagController",{0,scale,zero,pole});
         auto& input=json.as_object().at("elements").as_array()[1].as_object();
         input["type"]="StepGenerator";
-        input["params"]=boost::json::object{{"initial_value",1},{"final_value",-.25},{"start_sample",17}};
+        input["params"]=boost::json::object{{"initial_value",1},{"final_value",-.25},{"start_time",.017}};
         s7::configure_schema_discretization(json,.001);
         auto schema=s7::SchemaLibraryLoader::build_schema(json);
         require(s7::Validator::validate(schema).ok(),"Lead/lag resource validates");

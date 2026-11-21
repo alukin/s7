@@ -17,7 +17,6 @@
         "params": {
           "amplitude": 1.0,
           "frequency_hz": 2.0,
-          "sample_rate_hz": 1000.0,
           "phase": 0.0
         }
       },
@@ -38,7 +37,6 @@
         "id": "eulerintegrator_1",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0
         }
       }

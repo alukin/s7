@@ -19,8 +19,8 @@ scroll independently; the splitter is adjustable and dialog buttons stay outside
 it. Information is resizable, read-only and selectable, with no external content
 loading. Missing documentation is labelled explicitly.
 
-The **Controls** tab builds an instrument-style panel from the same parameter
-metadata. Real numeric fields have a relative dial and an exact text field.
+The first tab, **Controls**, builds an instrument-style panel from the same
+parameter metadata. Real numeric fields have a relative dial and an exact text field.
 The dial uses the declared bounds when available. Enum and boolean fields use
 selectors, and exact integers, arrays and complex values use text fields.
 Edits carry between **Parameters**, **Controls** and **Advanced JSON**. The

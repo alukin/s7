@@ -25,8 +25,7 @@
         "params": {
           "initial_value": 15,
           "final_value": 10,
-          "sample_rate_hz": 10.0,
-          "start_sample": 6000
+          "start_time": 600.0
         }
       },
       {
@@ -64,7 +63,6 @@
         "id": "heater_power",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.1,
           "initial_value": 0
         }
       },
@@ -83,7 +81,6 @@
         "id": "temperature",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.1,
           "initial_value": 18
         }
       }

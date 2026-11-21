@@ -17,7 +17,6 @@
         "params": {
           "amplitude": 1,
           "frequency_hz": 0.3183098861837907,
-          "sample_rate_hz": 1000,
           "phase": 0
         }
       },
@@ -25,7 +24,6 @@
         "id": "velocity",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0
         }
       },
@@ -33,7 +31,6 @@
         "id": "position",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0.0
         }
       },

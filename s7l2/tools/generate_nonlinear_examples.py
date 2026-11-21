@@ -64,13 +64,13 @@ def van_der_pol(mu, method):
         def wire(source, target, output=0, input_=0):
             d.wire(label+'_'+source, label+'_'+target, output, input_)
         if method == 'symplectic':
-            add('state', 'SymplecticIntegrator', dict(dt=d.dt, initial_position=initial, initial_velocity=0),
+            add('state', 'SymplecticIntegrator', dict(initial_position=initial, initial_velocity=0),
                 102, title='Euler-Cromer x / v')
             position, velocity = (label+'_state', 0), (label+'_state', 1)
             target = 'state'
         else:
-            add('v', 'EulerIntegrator', dict(dt=d.dt, initial_value=0), 88, title='Velocity v')
-            add('x', 'EulerIntegrator', dict(dt=d.dt, initial_value=initial), 110, title='Position x')
+            add('v', 'EulerIntegrator', dict(initial_value=0), 88, title='Velocity v')
+            add('x', 'EulerIntegrator', dict(initial_value=initial), 110, title='Position x')
             wire('v', 'x')
             position, velocity, target = (label+'_x', 0), (label+'_v', 0), 'v'
         add('one', 'Constant', dict(value=1), 3, title='1')
@@ -103,7 +103,7 @@ def lorenz(rho):
         def wire(source, target, input_=0):
             d.wire(label+'_'+source, label+'_'+target, input_=input_)
         for ident, initial, y in [('x', initial_x, 0), ('y', 1, 12), ('z', 1, 24)]:
-            add(ident, 'EulerIntegrator', dict(dt=d.dt, initial_value=initial), 96, y, ident)
+            add(ident, 'EulerIntegrator', dict(initial_value=initial), 96, y, ident)
         add('dx', 'Adder', dict(weights=[10, -10]), 22, title="x' = 10*(y-x)")
         wire('y', 'dx')
         wire('x', 'dx', 1)
@@ -140,8 +140,8 @@ def lorenz(rho):
 def lotka_volterra(name, alpha, prey, predator):
     d = Diagram('lotka_volterra', name, .00025 if alpha == 1.5 else .001, 40,
                 f"prey'={alpha}*prey-0.5*prey*predator; predator'=0.5*prey*predator-predator; initial ({prey},{predator}).")
-    d.element('prey', 'EulerIntegrator', dict(dt=d.dt, initial_value=prey), 80, 20, 'Prey population (scaled)')
-    d.element('predator', 'EulerIntegrator', dict(dt=d.dt, initial_value=predator), 80, 50, 'Predator population (scaled)')
+    d.element('prey', 'EulerIntegrator', dict(initial_value=prey), 80, 20, 'Prey population (scaled)')
+    d.element('predator', 'EulerIntegrator', dict(initial_value=predator), 80, 50, 'Predator population (scaled)')
     d.element('interaction', 'Multiply', {}, 15, 36, 'Prey * predator')
     d.element('prey_rate', 'Adder', dict(weights=[alpha, -.5]), 48, 20, 'Births - predation')
     d.element('predator_rate', 'Adder', dict(weights=[.5, -1]), 48, 50, 'Predation growth - deaths')

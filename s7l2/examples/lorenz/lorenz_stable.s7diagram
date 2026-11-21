@@ -16,7 +16,6 @@
         "id": "base_x",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1
         }
       },
@@ -24,7 +23,6 @@
         "id": "base_y",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1
         }
       },
@@ -32,7 +30,6 @@
         "id": "base_z",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1
         }
       },
@@ -81,7 +78,6 @@
         "id": "nearby_x",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1.000001
         }
       },
@@ -89,7 +85,6 @@
         "id": "nearby_y",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1
         }
       },
@@ -97,7 +92,6 @@
         "id": "nearby_z",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.00025,
           "initial_value": 1
         }
       },

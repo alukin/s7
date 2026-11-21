@@ -111,7 +111,8 @@ int main(int argc,char** argv) {
 #if defined(S7_TEST_SDR_PICKER)
         require(groupFor("SdrSource") == "Radio" && groupFor("SdrSink") == "Radio" &&
                 groupFor("FmDiscriminator") == "Radio" && groupFor("AmModulator") == "Radio" &&
-                groupFor("FmModulator") == "Radio", "Studio discovers SDR and Radio plugins on startup");
+                groupFor("FmModulator") == "Radio" && groupFor("AmDemodulator") == "Radio" &&
+                groupFor("FmDemodulator") == "Radio", "Studio discovers SDR and Radio plugins on startup");
         require(groupFor("FirFilter") == "Signal Processing" && groupFor("Resampler") == "Signal Processing",
                 "Generic filtering and resampling remain in Signal Processing");
         auto* library = window.findChild<QRadioButton*>("elements.byLibrary");
@@ -159,11 +160,11 @@ int main(int argc,char** argv) {
         QTimer::singleShot(0,&window,[&] {
             for(auto* widget : QApplication::topLevelWidgets())
                 if(auto* dialog=qobject_cast<QDialog*>(widget); dialog && dialog->windowTitle().startsWith("Element Properties")) {
-                    auto* text=dialog->findChild<QPlainTextEdit*>();
+                    auto* text=dialog->findChild<QPlainTextEdit*>("element.parameters");
                     auto* parameters = dialog->findChild<QTabWidget*>("element.parameterTabs");
                     auto* buttons = dialog->findChild<QDialogButtonBox*>();
                     if(text && parameters && buttons) {
-                        parameters->setCurrentIndex(1);
+                        parameters->setCurrentWidget(text);
                         text->setPlainText(QStringLiteral("{\"factor\":2}"));
                         edited_properties=true; buttons->button(QDialogButtonBox::Ok)->click();
                     }

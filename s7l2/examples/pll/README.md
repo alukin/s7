@@ -80,17 +80,15 @@ then save/rerun the root document. Change the reference initial phase or frequen
 step, keeping the desired frequency inside 8–28 Hz when studying successful lock.
 Compare waveform crossing estimates with commanded frequency after transients.
 
-Repeat at **2 kHz**, dt = 0.0005 s, keeping duration and physical event time:
-double both StepGenerator `start_sample` values from 2000 to 4000. Update all
-integrator dt, sample-rate and embedded-schema rate values consistently. Studio
-Run Configuration updates rates recursively but does not rescale sample counts.
+Repeat at **2 kHz** in Studio Run Configuration. Keep the duration and both
+StepGenerator `start_time` values fixed in seconds.
 Forward Euler is first order; larger gains or dt require fresh numerical checks.
 No noise, waveform phase extraction, propagation delay or clock jitter is modeled.
 
 At runtime step k phase/integral states represent `(k-1)*dt`, while observations
 are labeled `k*dt`. Direct detector/control values act on those published states.
 The initial states are published at step 1; source steps apply at zero-based
-sample 2000. A six-second run ends with state time `6-dt`.
+sample 2000 at the default rate. A six-second run ends with state time `6-dt`.
 
 ## Headless checks
 

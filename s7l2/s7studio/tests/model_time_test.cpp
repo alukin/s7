@@ -92,11 +92,10 @@ private slots:
         }
     }
     void runRateBindsEveryElement() {
-        // A document integrator follows the run's dt (ADR-022): its stored dt
-        // is a legacy field, so a 44.1 kHz run of a 1 ms design is consistent.
+        // A document integrator follows the run's dt, including at 44.1 kHz.
         auto model = schema();
         model.as_object()["elements"].as_array().push_back(boost::json::object{
-            {"id", "integral"}, {"type", "EulerIntegrator"}, {"params", {{"dt", .001}}}});
+            {"id", "integral"}, {"type", "EulerIntegrator"}});
         model.as_object()["connections"].as_array().push_back(boost::json::object{
             {"from_element", "source"}, {"from_port", 0}, {"to_element", "integral"}, {"to_port", 0}});
         QSignalSpy completed(runner_.get(), &LocalSchemaRunner::runCompleted);
@@ -148,7 +147,7 @@ private slots:
         const double dt = 1. / 44100;
         auto model = schema();
         model.as_object()["elements"].as_array().push_back(boost::json::object{
-            {"id", "integral"}, {"type", "EulerIntegrator"}, {"params", {{"dt", dt}, {"initial_value", 0.}}}});
+            {"id", "integral"}, {"type", "EulerIntegrator"}, {"params", {{"initial_value", 0.}}}});
         model.as_object()["connections"].as_array().push_back(boost::json::object{
             {"from_element", "source"}, {"from_port", 0}, {"to_element", "integral"}, {"to_port", 0}});
         const std::vector<RunProbe> probes{{"scope/v", "integral", 0}};

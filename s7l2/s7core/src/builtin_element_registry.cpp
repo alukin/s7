@@ -38,21 +38,6 @@ signal_storage_t<T> param_value(const ElementCreationContext& ctx, const std::st
     return signal_value_from_json<T>(ctx.params.at(name), parameter_label(ctx, name));
 }
 
-// A duration in seconds (doc/S7_Sample_Rate_Model.md section 8.2). A document
-// written before durations were times stores a sample count instead; it is
-// converted at the rate that document was written at, its sample_rate_hz
-// (legacy_rate when absent, the old default).
-double duration_param(const ElementCreationContext& ctx, const std::string& seconds, const std::string& legacy_samples,
-                      const double legacy_rate, const double fallback)
-{
-    if (ctx.has_param(seconds)) return ctx.get_real(seconds);
-    if (ctx.has_param(legacy_samples)) {
-        const double rate = ctx.has_param("sample_rate_hz") ? ctx.get_real("sample_rate_hz") : legacy_rate;
-        return static_cast<double>(ctx.get_int(legacy_samples)) / rate;
-    }
-    return fallback;
-}
-
 // The rate a rate-designed element's coefficients were written for, if recorded.
 std::optional<double> design_rate_param(const ElementCreationContext& ctx)
 {
@@ -320,7 +305,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                 if constexpr (signal_type_info(T).is_floating()) {
                     return std::make_unique<EulerIntegratorT<T>>(
-                        std::nullopt, // follows its domain's rate; a stored dt is a legacy field
+                        std::nullopt, // follows its domain's rate
                         param_value<T>(ctx, "initial_value", {}), static_cast<int>(ctx.get_int("substeps")));
                 } else {
                     return unsupported_type(ctx);
@@ -344,7 +329,7 @@ void register_builtin_elements(ElementRegistry& registry)
         "GaussLegendreIntegrator",
         [](const ElementCreationContext& ctx) -> std::unique_ptr<Element> {
             return std::make_unique<GaussLegendreIntegrator>(
-                std::nullopt, // follows its domain's rate; a stored dt is a legacy field
+                std::nullopt, // follows its domain's rate
                 param_value<SignalType::F64>(ctx, "initial_value", 0.0));
         },
         metadata.at("GaussLegendreIntegrator")));
@@ -355,7 +340,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                 if constexpr (signal_type_info(T).is_floating()) {
                     return std::make_unique<TrapezoidIntegratorT<T>>(
-                        std::nullopt, // follows its domain's rate; a stored dt is a legacy field
+                        std::nullopt, // follows its domain's rate
                         param_value<T>(ctx, "initial_value", {}),
                         ctx.get_string("mode") == "sampled" ? TrapezoidMode::Sampled : TrapezoidMode::Implicit);
                 } else {
@@ -371,7 +356,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                 if constexpr (signal_type_info(T).is_floating()) {
                     return std::make_unique<SymplecticIntegratorT<T>>(
-                        std::nullopt, // follows its domain's rate; a stored dt is a legacy field
+                        std::nullopt, // follows its domain's rate
                         param_value<T>(ctx, "initial_position", {}), param_value<T>(ctx, "initial_velocity", {}));
                 } else {
                     return unsupported_type(ctx);
@@ -404,7 +389,7 @@ void register_builtin_elements(ElementRegistry& registry)
                                           shape == "ramp" ? SweepWaveform::Ramp : SweepWaveform::Sine;
                     return std::make_unique<ChirpGeneratorT<T>>(
                         param_value<T>(ctx, "start_hz", V(1)), param_value<T>(ctx, "end_hz", V(100)),
-                        duration_param(ctx, "sweep_time", "sweep_samples", 1000, 1.0), std::nullopt,
+                        ctx.get_real("sweep_time"), std::nullopt,
                         param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
                         param_value<T>(ctx, "phase", V(0)), ctx.get_string("sweep") == "linear" ? ChirpSweep::Linear : ChirpSweep::Logarithmic,
                         ctx.get_string("end_behavior") == "repeat", waveform,
@@ -422,7 +407,7 @@ void register_builtin_elements(ElementRegistry& registry)
                     using V = signal_storage_t<T>;
                     return std::make_unique<PrbsGeneratorT<T>>(
                         static_cast<unsigned>(ctx.get_int("order")), static_cast<std::uint32_t>(ctx.get_int("seed")),
-                        duration_param(ctx, "bit_time", "bit_samples", 1000, 0.001), std::nullopt,
+                        ctx.get_real("bit_time"), std::nullopt,
                         param_value<T>(ctx, "low", V(-1)), param_value<T>(ctx, "high", V(1)));
                 } else return unsupported_type(ctx);
             });
@@ -437,8 +422,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                     if constexpr (signal_type_info(T).kind == SignalKind::Float) {
                         using V = signal_storage_t<T>;
-                        // Sources follow their domain's rate; a stored sample_rate_hz is a
-                        // legacy field, used only to convert legacy sample counts.
+                        // Sources follow their domain's rate.
                         const std::optional<double> rate;
                         if (name == "TriangleGenerator")
                             return std::make_unique<TriangleGeneratorT<T>>(
@@ -453,11 +437,11 @@ void register_builtin_elements(ElementRegistry& registry)
                         if (name == "ImpulseGenerator")
                             return std::make_unique<ImpulseGeneratorT<T>>(
                                 param_value<T>(ctx, "area", V(1)), rate,
-                                duration_param(ctx, "start_time", "start_sample", 1000, 0.0));
+                                ctx.get_real("start_time"));
                         if (name == "StepGenerator")
                             return std::make_unique<StepGeneratorT<T>>(
                                 param_value<T>(ctx, "initial_value", V(0)), param_value<T>(ctx, "final_value", V(1)),
-                                rate, duration_param(ctx, "start_time", "start_sample", 1000, 0.0));
+                                rate, ctx.get_real("start_time"));
                         return std::make_unique<ControlledOscillatorT<T>>(
                             param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
                             rate, param_value<T>(ctx, "phase", V(0)), param_value<T>(ctx, "base_hz", V(0)),
@@ -503,7 +487,7 @@ void register_builtin_elements(ElementRegistry& registry)
         [](const ElementCreationContext& ctx) {
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                 if constexpr (signal_type_info(T).kind == SignalKind::Float) {
-                    return std::make_unique<PwmT<T>>(duration_param(ctx, "period", "period_samples", 100000, 0.0001),
+                    return std::make_unique<PwmT<T>>(ctx.get_real("period"),
                                                      std::nullopt); // follows its domain's rate
                 } else {
                     return unsupported_type(ctx);

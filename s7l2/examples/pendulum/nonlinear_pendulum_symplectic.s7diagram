@@ -15,7 +15,6 @@
         "id": "state",
         "type": "SymplecticIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_position": 1.5,
           "initial_velocity": 0.0
         }

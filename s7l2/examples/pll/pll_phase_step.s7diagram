@@ -18,8 +18,7 @@
         "params": {
           "initial_value": 20,
           "final_value": 20,
-          "sample_rate_hz": 1000.0,
-          "start_sample": 2000
+          "start_time": 2.0
         }
       },
       {
@@ -33,7 +32,6 @@
         "id": "reference_phase",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0.8
         }
       },
@@ -43,8 +41,7 @@
         "params": {
           "initial_value": 0,
           "final_value": 1,
-          "sample_rate_hz": 1000.0,
-          "start_sample": 2000
+          "start_time": 2.0
         }
       },
       {
@@ -150,9 +147,7 @@
             {
               "id": "i_state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.001
-              }
+              "params": {}
             },
             {
               "id": "sum",
@@ -324,7 +319,6 @@
         "id": "vco_phase",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0
         }
       },
@@ -343,9 +337,7 @@
       {
         "id": "reference_meter",
         "type": "FrequencyMeter",
-        "params": {
-          "sample_rate_hz": 1000.0
-        }
+        "params": {}
       },
       {
         "id": "vco_wrapped",
@@ -362,9 +354,7 @@
       {
         "id": "vco_meter",
         "type": "FrequencyMeter",
-        "params": {
-          "sample_rate_hz": 1000.0
-        }
+        "params": {}
       }
     ],
     "connections": [

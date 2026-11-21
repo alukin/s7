@@ -15,16 +15,13 @@
         "id": "eulerintegrator_1",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 1
         }
       },
       {
         "id": "eulerintegrator_2",
         "type": "EulerIntegrator",
-        "params": {
-          "dt": 0.001
-        }
+        "params": {}
       },
       {
         "id": "adder_1",
@@ -48,7 +45,6 @@
         "id": "eulerintegrator_3",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0
         }
       },

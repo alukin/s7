@@ -150,9 +150,7 @@
             {
               "id": "i_state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.01
-              }
+              "params": {}
             },
             {
               "id": "sum",
@@ -638,9 +636,7 @@
             {
               "id": "i_state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.01
-              }
+              "params": {}
             },
             {
               "id": "sum",
@@ -689,9 +685,7 @@
             {
               "id": "filter_state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.01
-              }
+              "params": {}
             },
             {
               "id": "derivative",

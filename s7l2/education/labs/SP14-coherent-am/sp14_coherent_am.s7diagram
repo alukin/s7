@@ -102,9 +102,7 @@
             {
               "id": "state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.00390625
-              }
+              "params": {}
             }
           ],
           "connections": [
@@ -177,9 +175,7 @@
             {
               "id": "state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.00390625
-              }
+              "params": {}
             }
           ],
           "connections": [

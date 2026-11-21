@@ -33,18 +33,18 @@ def make(model, method):
     drive = 0.0 if model in ('rc_discharge', 'mass_spring_damper') else 1.0
     if model == 'rlc_resonance':
         element('source', 'AnalogOscillator', dict(amplitude=1, frequency_hz=1/math.pi,
-                sample_rate_hz=1000, phase=0), 3, 18, 'Applied voltage: 1 V sin(2t)')
+                phase=0), 3, 18, 'Applied voltage: 1 V sin(2t)')
     else:
         element('source', 'Constant', dict(value=drive), 3, 18,
                 'Applied force (N)' if mechanical else 'Applied voltage (V)')
     if rc:
         if method != 'symplectic':
             element('state', 'GaussLegendreIntegrator' if method == 'gauss' else 'EulerIntegrator',
-                    dict(dt=.001, initial_value=initial),
+                    dict(initial_value=initial),
                     43, 18, 'Capacitor voltage (V)')
             state = ('state', 0)
         else:
-            element('state', 'SymplecticIntegrator', dict(dt=.001,
+            element('state', 'SymplecticIntegrator', dict(
                     initial_position=0, initial_velocity=initial), 43, 18,
                     'out 1: voltage (V); out 0: auxiliary integral (V s)')
             state = ('state', 1)
@@ -56,15 +56,15 @@ def make(model, method):
         outputs = [('voltage', state, 'V')]
     else:
         if method == 'symplectic':
-            element('state', 'SymplecticIntegrator', dict(dt=.001,
+            element('state', 'SymplecticIntegrator', dict(
                     initial_position=initial, initial_velocity=0), 47, 18,
                     'Position / velocity' if mechanical else 'Charge / current')
             position, velocity, target = ('state', 0), ('state', 1), 'state'
         else:
             kind = 'GaussLegendreIntegrator' if method == 'gauss' else 'EulerIntegrator'
-            element('velocity', kind, dict(dt=.001, initial_value=0),
+            element('velocity', kind, dict(initial_value=0),
                     37, 18, 'Velocity (m/s)' if mechanical else 'Current (A)')
-            element('position', kind, dict(dt=.001, initial_value=initial),
+            element('position', kind, dict(initial_value=initial),
                     51, 18, 'Position (m)' if mechanical else 'Charge (C)')
             wire('velocity', 'position')
             position, velocity, target = ('position', 0), ('velocity', 0), 'velocity'

@@ -98,10 +98,9 @@ void test_pinned_component_agrees()
 
 void test_document_elements_follow_the_seed()
 {
-    // A document's stored dt is a legacy field: the integrators follow the seed.
     s7::Schema schema{"document_harmonic"};
-    add(schema, "x", "EulerIntegrator", {{"dt", 0.5}, {"initial_value", 1}});
-    add(schema, "v", "EulerIntegrator", {{"dt", 0.25}});
+    add(schema, "x", "EulerIntegrator", {{"initial_value", 1}});
+    add(schema, "v", "EulerIntegrator");
     add(schema, "minus", "Gain", {{"factor", -1}});
     schema.connect("v", 0, "x", 0);
     schema.connect("x", 0, "minus", 0);
@@ -110,12 +109,11 @@ void test_document_elements_follow_the_seed()
     schema.set_rate(s7::Rate::from_hz(100));
     const auto resolved = resolved_rates(schema);
     expect(resolved.rates.at("x") == s7::Rate::from_hz(100) && resolved.rates.at("v") == s7::Rate::from_hz(100),
-           "document integrators follow the seed, whatever dt they store");
+           "document integrators follow the seed");
     s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
     runtime.step();
     runtime.step();
-    // After two steps v holds v[1] = v[0] - dt * x[0] = -dt: the seed's 0.01 s,
-    // not the 0.25 s the document stores.
+    // After two steps v holds v[1] = v[0] - dt * x[0] = -dt at the seed's 0.01 s.
     expect(runtime.real_output_of("v") == -0.01, "dt comes from the seed");
 }
 
@@ -179,8 +177,8 @@ void test_isolated_pinned_element()
     expect(resolved.rates.at("osc") == s7::Rate::from_hz(48000), "a C++-built oscillator's sample rate pins its rate");
 
     s7::Schema document{"document_oscillator"};
-    add(document, "osc", "AnalogOscillator", {{"sample_rate_hz", 48000}});
-    expect_error(document, "cannot be determined", "a document oscillator's stored sample_rate_hz pins nothing");
+    add(document, "osc", "AnalogOscillator");
+    expect_error(document, "cannot be determined", "a document oscillator pins nothing");
 }
 
 } // namespace

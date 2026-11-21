@@ -354,7 +354,7 @@ class Workflows : public QObject {
         window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto* view=editor()->findChild<QGraphicsView*>();QVERIFY(view);auto node=scene()->elementNode(id);QVERIFY(node);editor()->showItem(node.get());view->setFocus();
         QVERIFY(modalWorkflow([&] {QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>("parameter."+parameter);auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            auto* field=dialog->findChild<QLineEdit*>("control."+parameter);auto* buttons=dialog->findChild<QDialogButtonBox*>();
             if(!field || !buttons) return false;field->setText(QString::number(value,'g',17));QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
         }));
     }
@@ -909,7 +909,7 @@ private slots:
             if (properties) {
                 auto* splitter = dialog->findChild<QSplitter*>("element.propertiesSplitter");
                 if (!splitter || splitter->count() != 2) return false;
-                auto* parameter = dialog->findChild<QWidget*>("parameter.value");
+                auto* parameter = dialog->findChild<QWidget*>("control.value");
                 if (!parameter || !parameter->isVisible()) return false;
                 capture(dialog, "long-element-properties", true);
             }
@@ -995,12 +995,12 @@ private slots:
         auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
         bool checked = false;
         QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [&](QDialog* dialog) {
-            auto* initial = dialog->findChild<QLineEdit*>("parameter.initial_position");
+            auto* initial = dialog->findChild<QLineEdit*>("control.initial_position");
             auto* tabs = dialog->findChild<QTabWidget*>("element.parameterTabs");
             auto* error = dialog->findChild<QLabel*>("element.parameterError");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!initial || !tabs || !error || !buttons) return false;
-            if (initial->accessibleName() != "initial_position") return false;
+            if (tabs->currentIndex() != 0 || !initial->isVisible() || initial->accessibleName() != "initial_position") return false;
             initial->setFocus(); QTest::keyClick(initial, Qt::Key_A, Qt::ControlModifier);
             QTest::keyClicks(initial, "invalid");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
@@ -1008,6 +1008,9 @@ private slots:
             capture(dialog, "parameter-error");
             initial->setText("0.25");
             tabs->setCurrentIndex(1);
+            auto* formValue = tabs->currentWidget()->findChild<QLineEdit*>("parameter.initial_position");
+            if (!formValue || formValue->text().toDouble() != .25) return false;
+            tabs->setCurrentIndex(0);
             auto* control = tabs->currentWidget()->findChild<QLineEdit*>("control.initial_position");
             auto* dial = tabs->currentWidget()->findChild<QDial*>("control.dial.initial_position");
             if (!control || !dial || !dial->isVisible() || !dial->isEnabled() || control->text().toDouble() != .25) return false;
@@ -1020,7 +1023,7 @@ private slots:
             tabs->setCurrentWidget(json);
             if (!json->toPlainText().contains("5E-1")) return false;
             json->setPlainText("{\"initial_position\":0.25}");
-            tabs->setCurrentIndex(0); capture(dialog, "integrator-parameters");
+            tabs->setCurrentIndex(0);
             if (initial->text().toDouble() != .25) return false;
             QTest::keyClick(initial, Qt::Key_Tab);
             if (QApplication::focusWidget() == initial) return false;
@@ -1031,7 +1034,7 @@ private slots:
         QVERIFY(checked); QCOMPARE(node->element().params.at("initial_position").to_number<double>(), .25);
         view->setFocus();
         QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [](QDialog* dialog) {
-            auto* initial = dialog->findChild<QLineEdit*>("parameter.initial_position");
+            auto* initial = dialog->findChild<QLineEdit*>("control.initial_position");
             if (!initial) return false;
             initial->setText("0.75"); QTest::keyClick(initial, Qt::Key_Escape); return true;
         }));
@@ -1045,21 +1048,20 @@ private slots:
         s7studio::ui::ParameterEditor parameters(metadata, {{"seed", std::uint64_t(18446744073709551615ULL)}});
         boost::json::object values; QString error;
         auto* advanced = parameters.findChild<QTabWidget*>("element.parameterTabs");
-        advanced->setCurrentIndex(1);
+        QCOMPARE(advanced->currentIndex(), 0);
         QVERIFY(parameters.readParameters(values, error));
         QCOMPARE(values.at("seed").as_uint64(), std::uint64_t(18446744073709551615ULL));
         QVERIFY(!parameters.findChild<QDial*>("control.dial.seed"));
-        advanced->setCurrentIndex(0);
-        parameters.findChild<QLineEdit*>("parameter.seed")->setText("-1");
+        parameters.findChild<QLineEdit*>("control.seed")->setText("-1");
         QVERIFY(!parameters.readParameters(values, error)); QVERIFY(error.contains("at least"));
-        parameters.findChild<QLineEdit*>("parameter.seed")->setText("1");
-        parameters.findChild<QComboBox*>("parameter.mode")->setCurrentText("b");
-        parameters.findChild<QComboBox*>("parameter.enabled")->setCurrentText("true");
+        parameters.findChild<QLineEdit*>("control.seed")->setText("1");
+        parameters.findChild<QComboBox*>("control.mode")->setCurrentText("b");
+        parameters.findChild<QComboBox*>("control.enabled")->setCurrentText("true");
         QVERIFY(parameters.readParameters(values, error));
         QCOMPARE(values.at("mode").as_string(), boost::json::string("b")); QVERIFY(values.at("enabled").as_bool());
         auto* json = parameters.findChild<QPlainTextEdit*>("element.parameters");
         advanced->setCurrentIndex(1);
-        QCOMPARE(parameters.findChild<QLineEdit*>("control.seed")->text(), QStringLiteral("1"));
+        QCOMPARE(parameters.findChild<QLineEdit*>("parameter.seed")->text(), QStringLiteral("1"));
         advanced->setCurrentWidget(json);
         json->setPlainText("{");
         QVERIFY(!parameters.readParameters(values, error));
@@ -2541,7 +2543,7 @@ private slots:
         scene()->clearSelection(); tap->setSelected(true);
         auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
         QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [](QDialog* dialog) {
-            auto* factor = dialog->findChild<QLineEdit*>("parameter.factor");
+            auto* factor = dialog->findChild<QLineEdit*>("control.factor");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!factor || !buttons) return false;
             factor->setText("0");
@@ -2682,7 +2684,7 @@ private slots:
         auto node = scene()->elementNode(editedId.toStdString()); QVERIFY(node);
         scene()->clearSelection(); node->setSelected(true); view->setFocus();
         QVERIFY(modalWorkflow([view] {QTest::keyClick(view->viewport(), Qt::Key_F4);}, [&](QDialog* dialog) {
-            auto* field = dialog->findChild<QLineEdit*>("parameter."+parameter);
+            auto* field = dialog->findChild<QLineEdit*>("control."+parameter);
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!field || !buttons) return false;
             field->setText(newValue);
@@ -2844,7 +2846,7 @@ private slots:
             auto node=scene()->elementNode(lab.edit_id); QVERIFY(node);
             scene()->clearSelection(); node->setSelected(true); view->setFocus();
             QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-                auto* field=dialog->findChild<QLineEdit*>("parameter."+QString::fromStdString(lab.parameter));
+                auto* field=dialog->findChild<QLineEdit*>("control."+QString::fromStdString(lab.parameter));
                 auto* buttons=dialog->findChild<QDialogButtonBox*>(); if (!field || !buttons) return false;
                 field->setText(QString::number(lab.edited_value,'g',16));
                 QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton); return true;
@@ -3038,7 +3040,7 @@ private slots:
             auto node=scene()->elementNode(id);QVERIFY(node);
             scene()->clearSelection();node->setSelected(true);view->setFocus();
             QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-                auto* field=dialog->findChild<QLineEdit*>("parameter."+parameter);
+                auto* field=dialog->findChild<QLineEdit*>("control."+parameter);
                 auto* buttons=dialog->findChild<QDialogButtonBox*>();if (!field || !buttons) return false;
                 field->setText(QString::number(value,'g',16));QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
             }));
@@ -3262,7 +3264,7 @@ private slots:
         auto node=scene()->elementNode(convolution ? "weight" : "damping");QVERIFY(node);
         scene()->clearSelection();node->setSelected(true);view->setFocus();
         QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>("parameter.factor");auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            auto* field=dialog->findChild<QLineEdit*>("control.factor");auto* buttons=dialog->findChild<QDialogButtonBox*>();
             if (!field || !buttons) return false;field->setText(convolution ? "0.75" : "3.2");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
         }));
@@ -3546,7 +3548,7 @@ private slots:
         auto node=edit->scene()->elementNode(windup ? "i_rate":"kd");QVERIFY(node);edit->showItem(node.get());
         auto* canvas=edit->findChild<QGraphicsView*>();QVERIFY(canvas);canvas->setFocus();
         QVERIFY(modalWorkflow([&] {QTest::keyClick(canvas->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>(windup ? "parameter.weights":"parameter.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();
+            auto* field=dialog->findChild<QLineEdit*>(windup ? "control.weights":"control.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();
             if(!field || !buttons) return false;field->setText(windup ? "[1,0]":"0");QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
         }));
         if(windup) {
@@ -3783,7 +3785,7 @@ private slots:
         window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto node=scene()->elementNode("stop");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
         QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>("parameter.start_time");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
+            auto* field=dialog->findChild<QLineEdit*>("control.start_time");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
             field->setText("1.5");buttons->button(QDialogButtonBox::Ok)->click();return true;
         }));
         const auto copy=temporary_.filePath("sp11-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
@@ -3939,7 +3941,7 @@ private slots:
         window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto node=scene()->elementNode("last_tap");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
         QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>("parameter.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
+            auto* field=dialog->findChild<QLineEdit*>("control.value");auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;
             field->setText("0.5");QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
         }));
         const auto copy=temporary_.filePath("sp10-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
@@ -4123,7 +4125,7 @@ private slots:
         window_->raise();window_->activateWindow();QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto node=scene()->elementNode(leakage ? "test" : "weak");QVERIFY(node);scene()->clearSelection();node->setSelected(true);view->setFocus();
         QVERIFY(modalWorkflow([view]{QTest::keyClick(view->viewport(),Qt::Key_F4);},[&](QDialog* dialog) {
-            auto* field=dialog->findChild<QLineEdit*>(leakage ? "parameter.frequency_hz" : "parameter.amplitude");
+            auto* field=dialog->findChild<QLineEdit*>(leakage ? "control.frequency_hz" : "control.amplitude");
             auto* buttons=dialog->findChild<QDialogButtonBox*>();if(!field || !buttons) return false;field->setText(leakage ? "18" : "0.1");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok),Qt::LeftButton);return true;
         }));

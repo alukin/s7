@@ -63,8 +63,7 @@ viewer. Faster prey growth changes the predator equilibrium, orbit and period.
    delta/gamma in `predator_rate` weights `[delta,-gamma]`. Calculate the new
    equilibrium before running. The interaction block remains prey*predator.
 4. Double the native rate (2 kHz, dt = 0.0005; faster-growth case: 8 kHz,
-   dt = 0.000125) for the same duration. Run Configuration
-   updates the integrator dt; no sample-count source events need rescaling.
+   dt = 0.000125) for the same duration using Run Configuration.
    Compare state error and H drift against an independent reference.
 
 Forward Euler does not preserve H and generally produces outward numerical

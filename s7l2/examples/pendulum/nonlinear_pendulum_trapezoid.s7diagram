@@ -15,7 +15,6 @@
         "id": "omega",
         "type": "TrapezoidIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 0.0
         }
       },
@@ -23,7 +22,6 @@
         "id": "theta",
         "type": "TrapezoidIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 1.5
         }
       },

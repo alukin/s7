@@ -87,9 +87,7 @@
           {
             "id": "state",
             "type": "EulerIntegrator",
-            "params": {
-              "dt": 0.001
-            }
+            "params": {}
           }
         ],
         "connections": [
@@ -177,7 +175,6 @@
             "id": "state",
             "type": "ControlledIntegrator",
             "params": {
-              "dt": 0.001,
               "lower_limit": 0
             }
           },
@@ -329,9 +326,7 @@
           {
             "id": "i_state",
             "type": "EulerIntegrator",
-            "params": {
-              "dt": 0.001
-            }
+            "params": {}
           },
           {
             "id": "sum",
@@ -510,9 +505,7 @@
           {
             "id": "i_state",
             "type": "EulerIntegrator",
-            "params": {
-              "dt": 0.001
-            }
+            "params": {}
           },
           {
             "id": "sum",
@@ -561,9 +554,7 @@
           {
             "id": "filter_state",
             "type": "EulerIntegrator",
-            "params": {
-              "dt": 0.001
-            }
+            "params": {}
           },
           {
             "id": "derivative",

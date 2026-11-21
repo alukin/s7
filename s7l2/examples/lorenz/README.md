@@ -50,9 +50,8 @@ visits to both lobes and separation of initially nearby states.
    beta in the second weight of both `*_dz` Adders. The two copies should
    differ only in initial conditions for a sensitivity comparison.
 4. Repeat at 8 kHz, dt = 0.000125, with the same 40-unit duration. Run
-   Configuration updates integrator dt. There are no timed source events to
-   rescale. Expect short-horizon improvement but a different late trajectory:
-   numerical truncation also perturbs the orbit.
+   Configuration sets the model rate. Expect short-horizon improvement and a
+   different late trajectory because numerical truncation perturbs the orbit.
 
 Forward Euler is first order, can distort geometry and can become unstable
 at larger timesteps or changed parameters. Smaller dt is not proof of accuracy.

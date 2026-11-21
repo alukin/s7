@@ -16,7 +16,6 @@
         "id": "prey",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 2.2
         }
       },
@@ -24,7 +23,6 @@
         "id": "predator",
         "type": "EulerIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 2
         }
       },

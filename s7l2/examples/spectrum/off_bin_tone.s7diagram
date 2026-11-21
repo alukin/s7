@@ -17,7 +17,6 @@
         "params": {
           "amplitude": 1,
           "frequency_hz": 32.5,
-          "sample_rate_hz": 1024,
           "phase": 0
         }
       }

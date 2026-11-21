@@ -91,11 +91,9 @@ consistently. Double-click the PID to change tracking gain or the output limits;
 compare startup with tracking disabled. The controller's outer feedback cycle
 closes through the explicit power-stage integrators.
 
-For timestep refinement, keep 1 kHz switching and the load step at 0.5 s:
-at **200 kHz**, set `period_samples=200`, load `start_sample=100000`, all
-sample_rate_hz fields to 200000, and all integrator/embedded-schema dt fields
-to 0.000005. Run Configuration updates rates recursively but does not rescale
-carrier/event sample counts. Changing only the rate changes the experiment.
+For timestep refinement, set **200 kHz** in Run Configuration. The PWM
+`period` remains 0.001 s and the load `start_time` remains 0.5 s, so the
+switching frequency and load schedule stay fixed.
 PWM quantization also changes with rate; pointwise closed-loop switching
 trajectories are not expected to match exactly across rates.
 

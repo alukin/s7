@@ -17,7 +17,6 @@
         "params": {
           "amplitude": 1,
           "frequency_hz": 0.3183098861837907,
-          "sample_rate_hz": 1000,
           "phase": 0
         }
       },
@@ -25,7 +24,6 @@
         "id": "state",
         "type": "SymplecticIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_position": 0.0,
           "initial_velocity": 0
         }

@@ -48,9 +48,7 @@
       {
         "id": "integral_state",
         "type": "EulerIntegrator",
-        "params": {
-          "dt": 1e-05
-        }
+        "params": {}
       },
       {
         "id": "derivative_filtered",
@@ -94,8 +92,7 @@
         "id": "pwm_1kHz",
         "type": "PWM",
         "params": {
-          "period_samples": 100,
-          "sample_rate_hz": 100000
+          "period": 0.001
         }
       },
       {
@@ -126,9 +123,7 @@
       {
         "id": "inductor_current",
         "type": "EulerIntegrator",
-        "params": {
-          "dt": 1e-05
-        }
+        "params": {}
       },
       {
         "id": "winding_drop",
@@ -157,9 +152,7 @@
       {
         "id": "output_voltage",
         "type": "EulerIntegrator",
-        "params": {
-          "dt": 1e-05
-        }
+        "params": {}
       },
       {
         "id": "load_current",
@@ -171,8 +164,7 @@
         "type": "AnalogOscillator",
         "params": {
           "amplitude": 4,
-          "frequency_hz": 2,
-          "sample_rate_hz": 100000
+          "frequency_hz": 2
         }
       },
       {

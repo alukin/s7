@@ -7,25 +7,45 @@
 
 namespace s7::radio {
 namespace {
+constexpr double turn = 2 * std::numbers::pi;
+
+std::complex<double> finite_iq(std::complex<float> sample) {
+    const std::complex<double> current{sample.real(), sample.imag()};
+    if (math::isnan(current.real()) || math::isinf(current.real()) ||
+        math::isnan(current.imag()) || math::isinf(current.imag())) {
+        throw std::domain_error("Radio demodulation requires finite I/Q input");
+    }
+    return current;
+}
+
+double fm_phase_scale(Rate rate, double deviation) {
+    if (!(deviation > 0 && deviation < rate.to_hz() / 2)) {
+        throw std::invalid_argument("FM deviation must be positive and below half the sample rate");
+    }
+    return turn * (deviation / rate.to_hz());
+}
+
 class FmDiscriminator final : public Element {
 public:
-    FmDiscriminator() : Element("FmDiscriminator", true) {
-        register_input(0, "iq", SignalType::C32, nullptr);
-        register_output(0, "phase_step", SignalType::F64, &output_);
-    }
+    FmDiscriminator() : FmDiscriminator("FmDiscriminator", "phase_step", std::nullopt, 1) {}
+    FmDiscriminator(Rate rate, double deviation)
+        : FmDiscriminator("FmDemodulator", "message", rate, fm_phase_scale(rate, deviation)) {}
 
+    std::optional<Rate> declared_rate() const override { return rate_; }
     void step() override {
-        const auto sample = read_input<std::complex<float>>(0);
-        const std::complex<double> current{sample.real(), sample.imag()};
-        if (math::isnan(current.real()) || math::isinf(current.real()) ||
-            math::isnan(current.imag()) || math::isinf(current.imag())) {
-            throw std::domain_error("FM discriminator input must be finite");
-        }
+        const auto current = finite_iq(read_input<std::complex<float>>(0));
         const auto product = current * std::conj(previous_);
-        output_ = product == std::complex<double>{} ? 0.0 : math::atan2(product.imag(), product.real());
+        output_ = product == std::complex<double>{} ? 0.0 : math::atan2(product.imag(), product.real()) / phase_scale_;
         previous_ = current;
     }
 private:
+    FmDiscriminator(const char* type, const char* output, std::optional<Rate> rate, double phase_scale)
+        : Element(type, true), rate_(rate), phase_scale_(phase_scale) {
+        register_input(0, "iq", SignalType::C32, nullptr);
+        register_output(0, output, SignalType::F64, &output_);
+    }
+    std::optional<Rate> rate_;
+    double phase_scale_;
     std::complex<double> previous_{};
     double output_{};
 };
@@ -33,10 +53,7 @@ private:
 class FmModulator final : public Element {
 public:
     FmModulator(Rate rate, double deviation)
-        : Element("FmModulator", true), rate_(rate), phase_scale_(turn * (deviation / rate.to_hz())) {
-        if (deviation >= rate.to_hz() / 2) {
-            throw std::invalid_argument("FM deviation must be below half the sample rate");
-        }
+        : Element("FmModulator", true), rate_(rate), phase_scale_(fm_phase_scale(rate, deviation)) {
         register_input(0, "message", SignalType::F64, nullptr);
         register_output(0, "iq", SignalType::C32, &output_);
     }
@@ -52,7 +69,6 @@ public:
         output_ = {static_cast<float>(math::cos(phase_)), static_cast<float>(math::sin(phase_))};
     }
 private:
-    static constexpr double turn = 2 * std::numbers::pi;
     Rate rate_;
     double phase_scale_;
     double phase_{};
@@ -75,6 +91,24 @@ private:
     std::complex<float> output_{};
 };
 
+class AmDemodulator final : public Element {
+public:
+    explicit AmDemodulator(double depth) : Element("AmDemodulator", false), depth_(depth) {
+        if (!(depth > 0 && depth <= 1)) {
+            throw std::invalid_argument("AM demodulation depth must be greater than zero and at most one");
+        }
+        register_input(0, "iq", SignalType::C32, nullptr);
+        register_output(0, "message", SignalType::F64, &output_);
+    }
+    void step() override {
+        const auto sample = finite_iq(read_input<std::complex<float>>(0));
+        output_ = ((1 + depth_) * math::abs(sample) - 1) / depth_;
+    }
+private:
+    double depth_;
+    double output_{};
+};
+
 ElementMetadata modulator_metadata(std::string type, std::string name, std::string description) {
     ElementMetadata metadata;
     metadata.type_name = std::move(type);
@@ -86,6 +120,22 @@ ElementMetadata modulator_metadata(std::string type, std::string name, std::stri
     metadata.input_ports = {{"message", "Normalized real modulation signal", SignalType::F64}};
     metadata.output_ports = {{"iq", "Complex baseband sample", SignalType::C32}};
     return metadata;
+}
+
+ElementMetadata demodulator_metadata(const ElementMetadata& modulator, std::string type, std::string name,
+                                     std::string description) {
+    auto metadata = modulator;
+    metadata.type_name = std::move(type);
+    metadata.display_name = std::move(name);
+    metadata.description = std::move(description);
+    metadata.tags = {"demodulation", "quadrature"};
+    metadata.input_ports = {{"iq", "Complex baseband sample", SignalType::C32}};
+    metadata.output_ports = {{"message", "Recovered normalized real message", SignalType::F64}};
+    return metadata;
+}
+
+Rate fm_rate(const ElementCreationContext& ctx) {
+    return Rate::reduced(static_cast<std::uint64_t>(ctx.get_int("sample_rate_hz")), 1);
 }
 
 }
@@ -114,9 +164,14 @@ void register_elements(ElementRegistry& registry) {
          .default_value = 75000, .min_value = 1, .max_value = {}, .enum_values = {}}
     };
     registry.register_element(ElementDescriptor("FmModulator", [](const ElementCreationContext& ctx) {
-        return std::make_unique<FmModulator>(Rate::reduced(static_cast<std::uint64_t>(ctx.get_int("sample_rate_hz")), 1),
-                                             ctx.get_real("deviation_hz"));
+        return std::make_unique<FmModulator>(fm_rate(ctx), ctx.get_real("deviation_hz"));
     }, fm));
+    auto fm_demod = demodulator_metadata(fm, "FmDemodulator", "FM Demodulator",
+        "Recovers the normalized message from zero-IF I/Q using adjacent phase steps. Match the sample rate "
+        "and deviation to the modulator. Outputs zero on the first sample or when either I/Q sample is zero.");
+    registry.register_element(ElementDescriptor("FmDemodulator", [](const ElementCreationContext& ctx) {
+        return std::make_unique<FmDiscriminator>(fm_rate(ctx), ctx.get_real("deviation_hz"));
+    }, fm_demod));
 
     auto am = modulator_metadata("AmModulator", "AM Modulator",
         "Full-carrier double-sideband AM at zero IF. A normalized message in [-1, 1] produces "
@@ -127,5 +182,12 @@ void register_elements(ElementRegistry& registry) {
     registry.register_element(ElementDescriptor("AmModulator", [](const ElementCreationContext& ctx) {
         return std::make_unique<AmModulator>(ctx.get_real("depth"));
     }, am));
+    auto am_demod = demodulator_metadata(am, "AmDemodulator", "AM Demodulator",
+        "Recovers the normalized message from the full-carrier zero-IF I/Q envelope. Requires the modulator's "
+        "amplitude normalization and a matching, nonzero modulation depth.");
+    am_demod.parameters.front().description = "Matching modulation depth, greater than zero and at most one";
+    registry.register_element(ElementDescriptor("AmDemodulator", [](const ElementCreationContext& ctx) {
+        return std::make_unique<AmDemodulator>(ctx.get_real("depth"));
+    }, am_demod));
 }
 }

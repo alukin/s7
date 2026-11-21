@@ -49,8 +49,8 @@ The editable [oscillator](../examples/2int_osc_gauss.s7diagram),
 [RLC step](../examples/linear/rlc_step_gauss.s7diagram) diagrams use this
 actual production element. Existing Euler diagrams can be edited to set
 `substeps`; no separate research solver or hidden delay is required. The
-normal diagram discretization update sets the schema/domain rate and leaves
-legacy element `dt` fields untouched; execution follows the selected rate.
+normal diagram discretization update sets the schema/domain rate, which the
+integrators follow.
 
 ## Causal and numerical contract
 

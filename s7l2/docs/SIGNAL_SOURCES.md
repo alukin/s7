@@ -32,12 +32,14 @@ For a fixed sine, use `AnalogOscillator` with `frequency_hz`, `amplitude`,
 plugin provides White Noise. The Studio element picker also finds the pulse
 source when searching for “square wave”.
 
-Older documents store `sample_rate_hz` and sample counts (`start_sample`,
-`sweep_samples`, `bit_samples`; `PWM`'s `period_samples`). They still load:
-`sample_rate_hz` is ignored as a rate, and each count is converted to a time at
-that stored rate (1000 Hz when absent, the old default), so the event keeps its
-model time at any run rate. A source built in C++ with an explicit sample rate
-is a fixed pin at that rate instead; passing `std::nullopt` makes it follow.
+To migrate older diagrams, divide event or period sample counts by their
+original `sample_rate_hz` and store seconds in `start_time`, `sweep_time`,
+`bit_time` or PWM `period`. If the old rate was omitted, use 1000 Hz for the
+sources and 100000 Hz for PWM. Remove the old count and the per-element rate
+from rate-following elements. The compatibility fields described in ADR-022
+were removed after the bundled examples were migrated. A source built in
+C++ with an explicit sample rate is a fixed pin at that rate. Passing
+`std::nullopt` makes it follow.
 
 The corresponding template names append `T<SignalType>`, for example
 `TriangleGeneratorT<SignalType::F128>`.

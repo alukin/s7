@@ -88,9 +88,9 @@ ParameterEditor::ParameterEditor(std::optional<s7::ElementMetadata> metadata, bo
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
     tabs_ = new QTabWidget(this); tabs_->setObjectName("element.parameterTabs");
     if (metadata_) for (const auto& spec : metadata_->parameters)
-        if (!spec.legacy && !original_.contains(spec.name) && !spec.default_value.is_null()) original_[spec.name] = spec.default_value;
-    tabs_->addTab(buildForm(fields_, false), QStringLiteral("&Parameters"));
+        if (!original_.contains(spec.name) && !spec.default_value.is_null()) original_[spec.name] = spec.default_value;
     tabs_->addTab(buildForm(controls_, true), QStringLiteral("&Controls"));
+    tabs_->addTab(buildForm(fields_, false), QStringLiteral("&Parameters"));
     json_ = new QPlainTextEdit(QString::fromStdString(boost::json::serialize(original_)), tabs_);
     json_->setObjectName("element.parameters"); json_->setAccessibleName("Advanced parameter JSON");
     json_->setToolTip("Exact JSON values, including arrays, complex values and 64-bit integers. Known parameters are validated before applying.");
@@ -100,7 +100,8 @@ ParameterEditor::ParameterEditor(std::optional<s7::ElementMetadata> metadata, bo
     error_ = new QLabel(this); error_->setObjectName("element.parameterError"); error_->setWordWrap(true);
     error_->setTextFormat(Qt::PlainText); error_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(tabs_, 1); layout->addWidget(error_);
-    loadForm(fields_, original_);
+    previousTab_ = tabs_->currentIndex();
+    loadForm(previousTab_ == Controls ? controls_ : fields_, original_);
     auto checked = original_;
     QString initialError;
     if (!metadata_ || !validate(checked, initialError)) {
@@ -140,8 +141,6 @@ QWidget* ParameterEditor::buildForm(std::vector<Field>& fields, bool controls)
         form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     }
     if (metadata_) for (const auto& spec : metadata_->parameters) {
-        // Legacy fields stay in the parameters (and the JSON tab) unedited.
-        if (spec.legacy) continue;
         const auto name = QString::fromStdString(spec.name);
         QWidget* editor;
         if (spec.type == "enum" || spec.type == "bool") {

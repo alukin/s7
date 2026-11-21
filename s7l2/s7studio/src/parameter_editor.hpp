@@ -20,7 +20,7 @@ public:
     void showError(const QString& error);
 private:
     struct Field { s7::ParameterSpec spec; QWidget* editor; QCheckBox* enabled; };
-    enum Tab { Parameters, Controls, AdvancedJson };
+    enum Tab { Controls, Parameters, AdvancedJson };
     QWidget* buildForm(std::vector<Field>& fields, bool controls);
     bool readTab(int index, boost::json::object& result, QString& error) const;
     bool validate(boost::json::object& params, QString& error) const;
@@ -32,6 +32,6 @@ private:
     QTabWidget* tabs_;
     QPlainTextEdit* json_;
     QLabel* error_;
-    int previousTab_ = 0;
+    int previousTab_ = Controls;
 };
 } // namespace s7studio::ui

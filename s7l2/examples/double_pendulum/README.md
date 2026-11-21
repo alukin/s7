@@ -4,8 +4,8 @@ Nine Studio diagrams: three initial conditions for each of the three existing
 integrators. Open any `.s7diagram` here in Studio, set **Run Configuration** to
 20 seconds, choose 1, 10 or 100 kHz, run, and open `scope_states`. Its four
 channels are theta1, omega1, theta2, omega2. Angles are radians, velocities rad/s.
-The default diagram discretization is 1 kHz; Studio updates integrator `dt`
-when changing frequency. Inline probes expose the same four outputs to tests.
+The default diagram rate is 1 kHz. Integrators follow the rate selected in
+Studio, and inline probes expose the same four outputs to tests.
 
 | Initial condition | Euler | Symplectic | Implicit Trapezoid |
 |---|---|---|---|

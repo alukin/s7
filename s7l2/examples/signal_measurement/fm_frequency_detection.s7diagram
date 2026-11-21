@@ -17,8 +17,7 @@
         "type": "AnalogOscillator",
         "params": {
           "amplitude": 1,
-          "frequency_hz": 2,
-          "sample_rate_hz": 10000
+          "frequency_hz": 2
         }
       },
       {
@@ -43,16 +42,13 @@
         "type": "ControlledOscillator",
         "params": {
           "amplitude": 1,
-          "sample_rate_hz": 10000,
           "phase": 0
         }
       },
       {
         "id": "meter",
         "type": "FrequencyMeter",
-        "params": {
-          "sample_rate_hz": 10000
-        }
+        "params": {}
       },
       {
         "id": "raw_message",
@@ -101,9 +97,7 @@
             {
               "id": "state",
               "type": "EulerIntegrator",
-              "params": {
-                "dt": 0.0001
-              }
+              "params": {}
             }
           ],
           "connections": [

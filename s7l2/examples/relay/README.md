@@ -110,10 +110,8 @@ Cycle periods are measured between switch-off events during 200–590 s.
 The analytical check qualifies startup; it does not establish exact continuous
 switch times or long-term trajectory agreement for a discontinuous relay.
 
-For a Studio refinement run at **20 Hz**, also double ambient start_sample
-from 6000 to 12000, keeping the disturbance at 600 s. Set integrator dt to
-0.05 s and source rate to 20 Hz. Sample-count event parameters do not rescale
-automatically with Run Configuration. Threshold timing is quantized to dt;
-use a smaller dt when changing the thermal time constants.
+For a Studio refinement run, set **20 Hz** in Run Configuration. The ambient
+`start_time` keeps the disturbance at 600 s. Threshold timing is quantized
+to the model step, so use a smaller step when changing the thermal time constants.
 
 Regenerate using `python3 tools/generate_control_examples.py` from the root.

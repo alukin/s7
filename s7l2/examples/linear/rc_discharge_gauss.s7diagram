@@ -22,7 +22,6 @@
         "id": "state",
         "type": "GaussLegendreIntegrator",
         "params": {
-          "dt": 0.001,
           "initial_value": 1.0
         }
       },
