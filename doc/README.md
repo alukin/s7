@@ -9,6 +9,7 @@ Paths such as `s7l2/s7runtime/...` in these documents are relative to the reposi
 | Document | Content |
 |---|---|
 | [S7_VISION.md](S7_VISION.md) | Why S7 exists, goals and non-goals |
+| [Scientific foundations and acknowledgements](SCIENTIFIC_FOUNDATIONS_AND_ACKNOWLEDGEMENTS.md) | Scholarly sources, MIT teaching materials, references and credits |
 | [S7_Formal_Model.md](S7_Formal_Model.md) | Computational model: Element, Schema, Connection, State, causal memory |
 | [S7_Architecture_Overview.md](S7_Architecture_Overview.md) | Core principles and architectural invariants |
 | [S7_Terminology.md](S7_Terminology.md) | Official glossary |
