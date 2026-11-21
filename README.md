@@ -167,6 +167,12 @@ especially before modifying causal semantics or a protocol.
 
 ## Origins and scientific context
 
+**S7 began in 1993.** **Oleksiy Lukin** implemented its first version in
+**Turbo Pascal 5.5**. **Sehii Kondratiuk** subsequently added a graphical
+user interface. The present S7 project carries that early diagram-based
+engineering idea forward with modern runtimes, numerical verification, and
+distributed computation.
+
 S7's starting point is the block-diagram view of physical systems in
 **William McC. Siebert's**
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/).
