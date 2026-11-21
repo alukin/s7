@@ -168,6 +168,7 @@ protected:
 };
 }
 QDoubleSpinBox* compactNumber(QWidget* parent) { return new ExactNumber(parent); }
+QDial* createInstrumentDial(QWidget* parent) { return new InstrumentDial(parent); }
 void compactActionButton(QPushButton* button, const QStyle::StandardPixmap icon,
                          const QString& name, const QString& help)
 {

@@ -42,6 +42,7 @@ private:
 };
 
 QDoubleSpinBox* compactNumber(QWidget* parent);
+QDial* createInstrumentDial(QWidget* parent);
 void compactActionButton(QPushButton* button, QStyle::StandardPixmap icon,
                          const QString& name, const QString& help);
 // For editors created by compactNumber: synchronize the inactive readout too.

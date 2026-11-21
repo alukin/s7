@@ -4,6 +4,7 @@
 #include <s7/core.hpp>
 #include <cmath>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -163,9 +164,34 @@ void registry() {
             runtime.step();
         }
     }
+    // At 8 Hz the sweep advances phase by 1/8, then 2/8, then 3/8 per sample.
+    s7::Schema generators("generator_settings");
+    generators.set_rate(s7::Rate::from_hz(8));
+    add(generators, "pulse", "ChirpGenerator", {{"waveform", "pulse"}, {"duty", 0.25},
+        {"start_hz", 1}, {"end_hz", 3}, {"sweep_time", 0.25}, {"amplitude", 2}, {"offset", 3}});
+    add(generators, "ramp", "ChirpGenerator", {{"waveform", "ramp"}, {"rise_fraction", 1},
+        {"start_hz", 1}, {"end_hz", 3}, {"sweep_time", 0.25}});
+    add(generators, "control", "Constant", {{"value", 0.5}});
+    add(generators, "vco", "ControlledOscillator", {{"base_hz", 1}, {"sensitivity_hz_per_volt", 2}});
+    add(generators, "sine", "AnalogOscillator", {{"frequency_hz", 2}, {"offset", 3}});
+    generators.connect("control", 0, "vco", 0);
+    s7::NodeRuntime generated(s7::Compiler::compile(generators));
+    const double pulse[] = {5, 5, 1, 1, 5};
+    const double ramp[] = {-1, -0.75, -0.25, 0.5, -0.75};
+    const double sine[] = {0, 1, 0, -1, 0};
+    for (std::size_t i = 0; i < std::size(pulse); ++i) {
+        generated.step();
+        require(generated.output_of<s7::SignalType::F64>("pulse") == pulse[i], "Sweep pulse duty and levels");
+        require(generated.output_of<s7::SignalType::F64>("ramp") == ramp[i], "Sweep ramp phase and slope");
+        require(std::abs(generated.output_of<s7::SignalType::F64>("vco") - sine[i]) < 1e-12, "VCO voltage-to-frequency law");
+        require(std::abs(generated.output_of<s7::SignalType::F64>("sine") - 3 - sine[i]) < 1e-12, "Sine DC offset");
+    }
     for (const auto& entry : {
         std::pair{"TriangleGenerator",boost::json::object{{"rise_fraction",1.1}}},
         {"PulseGenerator",{{"duty",-0.1}}},
+        {"ChirpGenerator",{{"waveform","noise"}}},
+        {"ChirpGenerator",{{"duty",-0.1}}},
+        {"ChirpGenerator",{{"rise_fraction",1.1}}},
         {"StepGenerator",{{"start_sample",-1}}},
         {"ImpulseGenerator",{{"start_time",-1}}},
         {"StepGenerator",{{"start_time",0.0005}}}, // half a sample at 1 kHz

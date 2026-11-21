@@ -1032,14 +1032,16 @@ public:
 
     // Without a sample rate the oscillator follows its domain's rate (adopt_rate).
     AnalogOscillatorT(value_type amplitude, value_type frequency_hz, std::optional<double> sample_rate_hz,
-                      value_type phase = {})
+                      value_type phase = {}, value_type offset = {})
         : Element("AnalogOscillator", true)
         , amplitude_(amplitude)
+        , offset_(offset)
         , frequency_hz_(frequency_hz)
         , phase_(phase)
         , follows_rate_(!sample_rate_hz)
         , sample_rate_hz_(sample_rate_hz ? *sample_rate_hz : 0.0)
     {
+        if (offset - offset != value_type(0)) throw std::invalid_argument("AnalogOscillator offset must be finite.");
         if (sample_rate_hz) {
             if (!(*sample_rate_hz > 0.0) || !std::isfinite(*sample_rate_hz)) {
                 throw std::invalid_argument("AnalogOscillator requires a positive, finite sample rate.");
@@ -1054,7 +1056,7 @@ public:
     void step() override
     {
         constexpr auto two_pi = value_type(2) * math::pi_v<value_type>;
-        output_value_ = amplitude_ * math::sin(phase_);
+        output_value_ = offset_ + amplitude_ * math::sin(phase_);
         phase_ += phase_increment_;
         if (phase_ > two_pi || phase_ < -two_pi) {
             phase_ = math::fmod(phase_, two_pi);
@@ -1081,6 +1083,7 @@ private:
                                                    / static_cast<Increment>(sample_rate_hz_));
     }
     value_type amplitude_;
+    value_type offset_;
     value_type frequency_hz_;
     value_type phase_;
     bool follows_rate_;

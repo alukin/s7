@@ -35,6 +35,12 @@ template <typename P> P source_phase(P phase) {
     phase = math::fmod(phase, P(1));
     return phase < P(0) ? phase + P(1) : phase;
 }
+
+template <typename P> P ramp_sample(P phase, P rise) {
+    if (rise == P(0)) return P(1) - P(2) * phase;
+    if (rise == P(1)) return P(2) * phase - P(1);
+    return phase < rise ? P(2) * phase / rise - P(1) : P(1) - P(2) * (phase - rise) / (P(1) - rise);
+}
 }
 
 // Rate handling shared by the sources: a source given a sample rate is a pin;
@@ -94,11 +100,7 @@ public:
     }
     void step() override {
         rate_.require_configured("TriangleGenerator");
-        const P unit = rise_ == P(0) ? P(1)-P(2)*phase_ :
-                       rise_ == P(1) ? P(2)*phase_-P(1) :
-                       phase_ < rise_ ? P(2)*phase_/rise_-P(1) :
-                       P(1)-P(2)*(phase_-rise_)/(P(1)-rise_);
-        output_ = offset_ + amplitude_ * V(unit);
+        output_ = offset_ + amplitude_ * V(detail::ramp_sample(phase_, rise_));
         phase_ = detail::source_phase(phase_ + increment_);
     }
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_.declared(); }
@@ -207,27 +209,30 @@ private:
     std::uint64_t remaining_{};
 };
 
-/// Sine VCO. Frequency input is Hz; phase parameter is radians, as for
-/// AnalogOscillator. Sample n emits its current phase, then advances by f[n]/fs.
+/// Sine VCO with frequency = base_hz + sensitivity_hz_per_volt * input.
+/// Phase is in radians. Sample n emits its current phase, then advances by f[n]/fs.
 template <SignalType Type>
 class ControlledOscillatorT final : public Element {
 public:
     using V = signal_storage_t<Type>;
     using P = detail::source_phase_t<Type>;
-    ControlledOscillatorT(V amplitude = V(1), V offset = V(0), std::optional<double> sample_rate_hz = 1000.0, V phase = V(0))
-        : Element("ControlledOscillator", true), amplitude_(amplitude), offset_(offset), rate_(sample_rate_hz)
+    ControlledOscillatorT(V amplitude = V(1), V offset = V(0), std::optional<double> sample_rate_hz = 1000.0,
+                          V phase = V(0), V base_hz = V(0), V sensitivity_hz_per_volt = V(1))
+        : Element("ControlledOscillator", true), amplitude_(amplitude), offset_(offset), rate_(sample_rate_hz),
+          base_hz_(base_hz), sensitivity_(sensitivity_hz_per_volt)
     {
         detail::require_source_finite(amplitude); detail::require_source_finite(offset);
+        detail::require_source_finite(base_hz); detail::require_source_finite(sensitivity_hz_per_volt);
         phase_ = detail::source_phase(P(phase) / (P(2)*math::pi_v<P>));
         register_input(0, "frequency_hz", Type, nullptr);
         register_output(0, port_names::out, Type, &output_);
     }
     void step() override {
         rate_.require_configured("ControlledOscillator");
-        const auto frequency = read_input<V>(0);
-        if (frequency-frequency != V(0)) throw std::domain_error("ControlledOscillator frequency_hz must be finite.");
+        const P frequency = base_hz_ + sensitivity_ * P(read_input<V>(0));
+        if (frequency - frequency != P(0)) throw std::domain_error("ControlledOscillator requires a finite frequency.");
         output_ = offset_ + amplitude_ * V(math::sin(P(2)*math::pi_v<P>*phase_));
-        phase_ = detail::source_phase(phase_ + detail::source_phase(P(frequency)/P(rate_.hz())));
+        phase_ = detail::source_phase(phase_ + detail::source_phase(frequency/P(rate_.hz())));
     }
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_.declared(); }
     void adopt_rate(const Rate& rate) override { rate_.adopt(rate); }
@@ -235,12 +240,14 @@ private:
     V amplitude_, offset_, output_{};
     SourceRate rate_;
     P phase_{};
+    P base_hz_, sensitivity_;
 };
 
-/// Sampled sine sweep: frequency[n] runs from start_hz to end_hz over
+/// Sampled waveform sweep: frequency[n] runs from start_hz to end_hz over
 /// sweep_time seconds (a positive whole number of samples). Phase follows the
 /// same recurrence as the VCO.
 enum class ChirpSweep { Linear, Logarithmic };
+enum class SweepWaveform { Sine, Pulse, Ramp };
 template <SignalType Type>
 class ChirpGeneratorT final : public Element {
 public:
@@ -248,12 +255,18 @@ public:
     using P = detail::source_phase_t<Type>;
     ChirpGeneratorT(V start_hz = V(1), V end_hz = V(100), double sweep_time = 1.0,
                     std::optional<double> sample_rate_hz = 1000.0, V amplitude = V(1), V offset = V(0),
-                    V phase = V(0), ChirpSweep sweep = ChirpSweep::Linear, bool repeat = false)
+                    V phase = V(0), ChirpSweep sweep = ChirpSweep::Linear, bool repeat = false,
+                    SweepWaveform waveform = SweepWaveform::Sine, double duty = 0.5, double rise_fraction = 0.5)
         : Element("ChirpGenerator", true), start_(start_hz), end_(end_hz), sweep_time_(sweep_time),
-          rate_(sample_rate_hz), amplitude_(amplitude), offset_(offset), sweep_(sweep), repeat_(repeat)
+          rate_(sample_rate_hz), amplitude_(amplitude), offset_(offset), sweep_(sweep), repeat_(repeat),
+          waveform_(waveform), duty_(duty), rise_(rise_fraction)
     {
         detail::require_source_finite(start_hz); detail::require_source_finite(end_hz);
         detail::require_source_finite(amplitude); detail::require_source_finite(offset);
+        if (!std::isfinite(duty) || duty < 0 || duty > 1)
+            throw std::invalid_argument("ChirpGenerator duty must be in [0,1].");
+        if (!std::isfinite(rise_fraction) || rise_fraction < 0 || rise_fraction > 1)
+            throw std::invalid_argument("ChirpGenerator rise_fraction must be in [0,1].");
         phase_ = detail::source_phase(P(phase)/(P(2)*math::pi_v<P>));
         if (sweep_ == ChirpSweep::Logarithmic) {
             if (start_ <= P(0) || end_ <= P(0))
@@ -268,7 +281,7 @@ public:
         const P fraction = P(sample_)/P(count_);
         const P frequency = sample_ == count_ ? end_ : sweep_ == ChirpSweep::Linear ?
             (P(1)-fraction)*start_ + fraction*end_ : math::exp(math::log(start_) + fraction*log_ratio_);
-        output_ = offset_ + amplitude_*V(math::sin(P(2)*math::pi_v<P>*phase_));
+        output_ = offset_ + amplitude_ * V(waveform_sample());
         phase_ = detail::source_phase(phase_ + detail::source_phase(frequency/P(rate_.hz())));
         if (sample_ < count_) ++sample_;
         if (repeat_ && sample_ == count_) sample_ = 0;
@@ -276,6 +289,14 @@ public:
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_.declared(); }
     void adopt_rate(const Rate& rate) override { if (rate_.adopt(rate)) configure(); }
 private:
+    P waveform_sample() const {
+        switch (waveform_) {
+        case SweepWaveform::Sine: return math::sin(P(2) * math::pi_v<P> * phase_);
+        case SweepWaveform::Pulse: return phase_ < duty_ ? P(1) : P(-1);
+        case SweepWaveform::Ramp: return detail::ramp_sample(phase_, rise_);
+        }
+        throw std::logic_error("ChirpGenerator has an invalid waveform.");
+    }
     void configure() {
         count_ = detail::duration_samples(rate_.rate(), sweep_time_, "sweep_time");
         if (!count_) throw std::invalid_argument("ChirpGenerator sweep_time must be at least one sample.");
@@ -287,6 +308,8 @@ private:
     V amplitude_, offset_, output_{};
     ChirpSweep sweep_;
     bool repeat_;
+    SweepWaveform waveform_;
+    P duty_, rise_;
 };
 
 /// Maximal-length PRBS7 / PRBS15, left-shifting Fibonacci LFSR. The

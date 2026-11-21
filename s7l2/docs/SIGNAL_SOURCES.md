@@ -23,9 +23,14 @@ Step zero is the first call to `step()`.
 | `PulseGenerator` | `low=0`, `high=1`, `frequency_hz=1`, `phase=0` cycles, `duty=0.5` |
 | `ImpulseGenerator` | `area=1`, `start_time=0` s |
 | `StepGenerator` | `initial_value=0`, `final_value=1`, `start_time=0` s |
-| `ChirpGenerator` | `start_hz=1`, `end_hz=100`, `sweep_time=1` s, `amplitude=1`, `offset=0`, `phase=0` radians, `sweep=linear`, `end_behavior=hold` |
+| `ChirpGenerator` (Sweep Generator in Studio) | `start_hz=1`, `end_hz=100`, `sweep_time=1` s, `amplitude=1`, `offset=0`, `phase=0` radians, `sweep=linear`, `end_behavior=hold`, `waveform=sine`, `duty=0.5`, `rise_fraction=0.5` |
 | `PRBSGenerator` | `order=7`, `seed=1`, `bit_time=0.001` s, `low=-1`, `high=1` |
-| `ControlledOscillator` | `amplitude=1`, `offset=0`, `phase=0` radians; input port 0: `frequency_hz` |
+| `ControlledOscillator` (Voltage-Controlled Oscillator in Studio) | `amplitude=1`, `offset=0`, `phase=0` radians, `base_hz=0`, `sensitivity_hz_per_volt=1`. Connect the control signal to input port 0 (`frequency_hz`). |
+
+For a fixed sine, use `AnalogOscillator` with `frequency_hz`, `amplitude`,
+`offset`, and `phase` in radians. Constant provides DC, and the `s7noise`
+plugin provides White Noise. The Studio element picker also finds the pulse
+source when searching for “square wave”.
 
 Older documents store `sample_rate_hz` and sample counts (`start_sample`,
 `sweep_samples`, `bit_samples`; `PWM`'s `period_samples`). They still load:
@@ -97,7 +102,7 @@ impulse at 2 ms and publishes its integrated unit step at 3 ms:
 }
 ```
 
-## Frequency-controlled oscillator (VCO)
+## Voltage-controlled oscillator (VCO)
 
 `ControlledOscillator` emits `offset + amplitude * sin(phase)`. Its initial
 phase uses radians, matching `AnalogOscillator`. It emits sample n at the
@@ -107,12 +112,17 @@ frequency reverses rotation. Because the current input updates the next phase,
 its influence first appears in the next output sample. The element conservatively
 declares direct feedthrough; use a causal-memory element to close feedback loops.
 
-Use ordinary `Gain` and `Adder` blocks to implement the voltage-to-frequency
-law `frequency_hz = base_frequency + sensitivity_hz_per_volt * voltage`.
+The frequency is `base_hz + sensitivity_hz_per_volt * input`. With the default
+base of `0` and sensitivity of `1`, the input directly specifies frequency in
+Hz. Connect a voltage signal and set the base and sensitivity for a VCO model.
 
-## Chirp frequency sweeps
+## Frequency sweeps
 
-`ChirpGenerator` emits a sine with a linear or logarithmic frequency sweep.
+The **Sweep Generator** (`ChirpGenerator` in schemas) supports linear and
+logarithmic frequency sweeps. It defaults to `waveform=sine`. Choose `pulse`
+and set `duty=0.5` for a square wave, or choose `ramp` and set
+`rise_fraction=0.5` for a triangle, `1` for a rising sawtooth, or `0` for a
+falling sawtooth. All shapes use `offset ± amplitude` for their output range.
 Its duration is `sweep_time` model seconds, a positive whole number of samples
 `N = sweep_time / dt`. Frequency sample n is:
 

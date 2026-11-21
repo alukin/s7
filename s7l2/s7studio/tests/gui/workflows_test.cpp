@@ -966,7 +966,7 @@ private slots:
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!text || !buttons) { dialog->reject(); editDriver.stop(); return; }
             auto* tabs = dialog->findChild<QTabWidget*>("element.parameterTabs");
-            if (tabs) tabs->setCurrentIndex(1);
+            if (tabs) tabs->setCurrentWidget(text);
             text->setFocus(); QTest::keyClick(text, Qt::Key_A, Qt::ControlModifier);
             QTest::keyClicks(text, "{\"value\":2.5}");
             parametersEdited = true; editDriver.stop();
@@ -1008,9 +1008,20 @@ private slots:
             capture(dialog, "parameter-error");
             initial->setText("0.25");
             tabs->setCurrentIndex(1);
+            auto* control = tabs->currentWidget()->findChild<QLineEdit*>("control.initial_position");
+            auto* dial = tabs->currentWidget()->findChild<QDial*>("control.dial.initial_position");
+            if (!control || !dial || !dial->isVisible() || !dial->isEnabled() || control->text().toDouble() != .25) return false;
+            QTest::keyClick(dial, Qt::Key_Right);
+            if (control->text().toDouble() <= .25) return false;
+            control->setText("0.5");
+            capture(dialog, "integrator-controls");
             auto* json = dialog->findChild<QPlainTextEdit*>("element.parameters");
-            if (!json || !json->toPlainText().contains("2.5E-1")) return false;
+            if (!json) return false;
+            tabs->setCurrentWidget(json);
+            if (!json->toPlainText().contains("5E-1")) return false;
+            json->setPlainText("{\"initial_position\":0.25}");
             tabs->setCurrentIndex(0); capture(dialog, "integrator-parameters");
+            if (initial->text().toDouble() != .25) return false;
             QTest::keyClick(initial, Qt::Key_Tab);
             if (QApplication::focusWidget() == initial) return false;
             checked = true;
@@ -1033,8 +1044,12 @@ private slots:
             {"enabled", "bool", "Enabled", false, {}, {}, {}, false}};
         s7studio::ui::ParameterEditor parameters(metadata, {{"seed", std::uint64_t(18446744073709551615ULL)}});
         boost::json::object values; QString error;
+        auto* advanced = parameters.findChild<QTabWidget*>("element.parameterTabs");
+        advanced->setCurrentIndex(1);
         QVERIFY(parameters.readParameters(values, error));
         QCOMPARE(values.at("seed").as_uint64(), std::uint64_t(18446744073709551615ULL));
+        QVERIFY(!parameters.findChild<QDial*>("control.dial.seed"));
+        advanced->setCurrentIndex(0);
         parameters.findChild<QLineEdit*>("parameter.seed")->setText("-1");
         QVERIFY(!parameters.readParameters(values, error)); QVERIFY(error.contains("at least"));
         parameters.findChild<QLineEdit*>("parameter.seed")->setText("1");
@@ -1042,8 +1057,11 @@ private slots:
         parameters.findChild<QComboBox*>("parameter.enabled")->setCurrentText("true");
         QVERIFY(parameters.readParameters(values, error));
         QCOMPARE(values.at("mode").as_string(), boost::json::string("b")); QVERIFY(values.at("enabled").as_bool());
-        auto* advanced = parameters.findChild<QTabWidget*>("element.parameterTabs"); advanced->setCurrentIndex(1);
-        parameters.findChild<QPlainTextEdit*>("element.parameters")->setPlainText("{");
+        auto* json = parameters.findChild<QPlainTextEdit*>("element.parameters");
+        advanced->setCurrentIndex(1);
+        QCOMPARE(parameters.findChild<QLineEdit*>("control.seed")->text(), QStringLiteral("1"));
+        advanced->setCurrentWidget(json);
+        json->setPlainText("{");
         QVERIFY(!parameters.readParameters(values, error));
         parameters.findChild<QPlainTextEdit*>("element.parameters")->setPlainText("{\"unknown\":true}");
         QVERIFY(!parameters.readParameters(values, error)); QVERIFY(error.contains("unknown parameter"));
@@ -1055,7 +1073,8 @@ private slots:
         s7::ElementMetadata strings; strings.type_name = "strings";
         strings.parameters = {{"label", "string", "Label", "default", {}, {}, {}, false}};
         s7studio::ui::ParameterEditor invalid(strings, {{"label", 123}});
-        QCOMPARE(invalid.findChild<QTabWidget*>("element.parameterTabs")->currentIndex(), 1);
+        QCOMPARE(invalid.findChild<QTabWidget*>("element.parameterTabs")->currentWidget(),
+                 invalid.findChild<QPlainTextEdit*>("element.parameters"));
         QVERIFY(!invalid.readParameters(values, error)); // never coerced to the string "123"
     }
     void editingIntegrity() {

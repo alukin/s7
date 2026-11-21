@@ -399,12 +399,16 @@ void register_builtin_elements(ElementRegistry& registry)
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
                 if constexpr (signal_type_info(T).kind == SignalKind::Float) {
                     using V = signal_storage_t<T>;
+                    const auto shape = ctx.get_string("waveform");
+                    const auto waveform = shape == "pulse" ? SweepWaveform::Pulse :
+                                          shape == "ramp" ? SweepWaveform::Ramp : SweepWaveform::Sine;
                     return std::make_unique<ChirpGeneratorT<T>>(
                         param_value<T>(ctx, "start_hz", V(1)), param_value<T>(ctx, "end_hz", V(100)),
                         duration_param(ctx, "sweep_time", "sweep_samples", 1000, 1.0), std::nullopt,
                         param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
                         param_value<T>(ctx, "phase", V(0)), ctx.get_string("sweep") == "linear" ? ChirpSweep::Linear : ChirpSweep::Logarithmic,
-                        ctx.get_string("end_behavior") == "repeat");
+                        ctx.get_string("end_behavior") == "repeat", waveform,
+                        ctx.get_real("duty"), ctx.get_real("rise_fraction"));
                 } else return unsupported_type(ctx);
             });
         },
@@ -456,7 +460,8 @@ void register_builtin_elements(ElementRegistry& registry)
                                 rate, duration_param(ctx, "start_time", "start_sample", 1000, 0.0));
                         return std::make_unique<ControlledOscillatorT<T>>(
                             param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
-                            rate, param_value<T>(ctx, "phase", V(0)));
+                            rate, param_value<T>(ctx, "phase", V(0)), param_value<T>(ctx, "base_hz", V(0)),
+                            param_value<T>(ctx, "sensitivity_hz_per_volt", V(1)));
                     } else {
                         return unsupported_type(ctx);
                     }
@@ -516,7 +521,8 @@ void register_builtin_elements(ElementRegistry& registry)
                     return std::make_unique<AnalogOscillatorT<T>>(param_value<T>(ctx, "amplitude", V(1)),
                                                                   param_value<T>(ctx, "frequency_hz", V(1)),
                                                                   std::nullopt, // follows its domain's rate
-                                                                  param_value<T>(ctx, "phase", V(0)));
+                                                                  param_value<T>(ctx, "phase", V(0)),
+                                                                  param_value<T>(ctx, "offset", V(0)));
                 } else {
                     return unsupported_type(ctx);
                 }

@@ -20,11 +20,15 @@ public:
     void showError(const QString& error);
 private:
     struct Field { s7::ParameterSpec spec; QWidget* editor; QCheckBox* enabled; };
-    bool readForm(boost::json::object& result, QString& error) const;
-    void loadForm(const boost::json::object& params);
+    enum Tab { Parameters, Controls, AdvancedJson };
+    QWidget* buildForm(std::vector<Field>& fields, bool controls);
+    bool readTab(int index, boost::json::object& result, QString& error) const;
+    bool validate(boost::json::object& params, QString& error) const;
+    void loadForm(const std::vector<Field>& fields, const boost::json::object& params);
     std::optional<s7::ElementMetadata> metadata_;
     boost::json::object original_;
     std::vector<Field> fields_;
+    std::vector<Field> controls_;
     QTabWidget* tabs_;
     QPlainTextEdit* json_;
     QLabel* error_;

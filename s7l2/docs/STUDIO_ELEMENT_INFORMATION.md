@@ -19,6 +19,13 @@ scroll independently; the splitter is adjustable and dialog buttons stay outside
 it. Information is resizable, read-only and selectable, with no external content
 loading. Missing documentation is labelled explicitly.
 
+The **Controls** tab builds an instrument-style panel from the same parameter
+metadata. Real numeric fields have a relative dial and an exact text field.
+The dial uses the declared bounds when available. Enum and boolean fields use
+selectors, and exact integers, arrays and complex values use text fields.
+Edits carry between **Parameters**, **Controls** and **Advanced JSON**. The
+dialog applies them through the same metadata validation and undo path.
+
 ## Runtime parameter inventory
 
 The following keys were checked against factories in
@@ -55,20 +62,20 @@ keys must be supplied even when metadata provides a suggested value.
 | TrapezoidIntegrator | initial_value, mode (dt from the run) | Implicit versus sampled timing and feedback restrictions |
 | SymplecticIntegrator | initial_position, initial_velocity (dt from the run) | Velocity first; position-only conservative bound has timestep limits |
 | Trig | function | Radian angle functions, real floating types |
-| ChirpGenerator | start_hz, end_hz, sweep_time (s), amplitude, offset, phase, sweep, end_behavior | Positive logarithmic endpoints; phase in radians |
+| ChirpGenerator | start_hz, end_hz, sweep_time (s), amplitude, offset, phase, sweep, end_behavior, waveform, duty, rise_fraction | Sweep Generator in Studio; sine, pulse or ramp output; positive logarithmic endpoints; phase in radians |
 | PRBSGenerator | order, seed, bit_time (s), low, high | Orders 7/15; seed fits selected order |
 | TriangleGenerator | amplitude, offset, frequency_hz, phase, rise_fraction | Phase in cycles; rise endpoints produce sawtooths |
 | PulseGenerator | low, high, frequency_hz, duty, phase | Phase in cycles; duty in [0,1] |
 | ImpulseGenerator | start_time (s), area | One-sample height = area / dt |
 | StepGenerator | start_time (s), initial_value, final_value | Transition at start_time, a whole number of samples |
-| ControlledOscillator | amplitude, offset, phase | Frequency is an input signal; phase in radians |
+| ControlledOscillator | amplitude, offset, phase, base_hz, sensitivity_hz_per_volt | Phase in radians; frequency is base plus sensitivity times the control input |
 | Switch | none | off/on/control are signals |
 | HysteresisRelay | lower_threshold, upper_threshold, low_value, high_value, initial_on | Ordered thresholds, retained state between them |
 | ControlledIntegrator | initial_value, lower_limit, upper_limit, reset_mode | Reset priority, enable hold, bounded state, next-step publication |
 | PhaseWrap | period, lower | Omitted: typed 2*pi and -pi; half-open interval |
 | FrequencyMeter | (rate from the run) | Rising crossings; invalid until two crossings |
 | PWM | period (s) | Duty input latched at carrier boundary; period is 2 to 65504 whole samples |
-| AnalogOscillator | amplitude, frequency_hz, phase | Sine source; phase in radians |
+| AnalogOscillator | amplitude, frequency_hz, offset, phase | Sine source with DC offset; phase in radians |
 | FirFilter | taps, overflow, A, design_rate_hz | Nonempty typed taps; current sample first; zero history; refused at a rate other than its design rate |
 | IirFilter | b0, b1, a1, design_rate_hz | Subtract a1 feedback; zero previous input/output; refused at a rate other than its design rate |
 | ReImToComplex, ComplexToReIm, ComplexToMagnitudePhase | none | Component type relationships; phase in radians |

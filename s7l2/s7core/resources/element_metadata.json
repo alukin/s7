@@ -10,7 +10,7 @@
       "description": "Outputs a fixed value on every causal step; has no inputs.",
       "category": "sources",
       "version": "1.0.0",
-      "tags": [],
+      "tags": ["DC"],
       "input_ports": [],
       "output_ports": [
         {
@@ -1991,8 +1991,8 @@
     },
     {
       "type_name": "ChirpGenerator",
-      "display_name": "Chirp Generator",
-      "description": "Phase-continuous linear or logarithmic sine frequency sweep",
+      "display_name": "Sweep Generator",
+      "description": "Phase-continuous linear or logarithmic frequency sweep with sine, pulse (including square), or ramp output",
       "category": "sources",
       "version": "1.0.0",
       "tags": [],
@@ -2105,6 +2105,34 @@
             "hold",
             "repeat"
           ]
+        },
+        {
+          "name": "waveform",
+          "type": "enum",
+          "description": "Output waveform. Use pulse with duty 0.5 for square, or ramp with rise_fraction 0.5 for triangle.",
+          "default": "sine",
+          "required": false,
+          "enum_values": ["sine", "pulse", "ramp"]
+        },
+        {
+          "name": "duty",
+          "type": "real",
+          "description": "Fraction of a pulse period spent high. Used for pulse.",
+          "default": 0.5,
+          "required": false,
+          "min": 0,
+          "max": 1,
+          "enum_values": []
+        },
+        {
+          "name": "rise_fraction",
+          "type": "real",
+          "description": "Fraction of a ramp period spent rising. Use 0 or 1 for falling or rising sawtooth.",
+          "default": 0.5,
+          "required": false,
+          "min": 0,
+          "max": 1,
+          "enum_values": []
         }
       ],
       "type_variables": [
@@ -2370,11 +2398,11 @@
     },
     {
       "type_name": "PulseGenerator",
-      "display_name": "PulseGenerator",
+      "display_name": "Pulse Generator",
       "description": "Periodic rectangular pulse source Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
       "category": "sources",
       "version": "1.0.0",
-      "tags": [],
+      "tags": ["square wave"],
       "input_ports": [],
       "output_ports": [
         {
@@ -2675,15 +2703,15 @@
     },
     {
       "type_name": "ControlledOscillator",
-      "display_name": "ControlledOscillator",
-      "description": "Phase-continuous sine oscillator controlled by frequency in Hz Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "display_name": "Voltage-Controlled Oscillator (VCO)",
+      "description": "Phase-continuous sine oscillator. Frequency equals base_hz plus sensitivity_hz_per_volt times the control input.",
       "category": "sources",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
         {
           "name": "frequency_hz",
-          "description": "Instantaneous frequency in Hz; negative frequency reverses phase. This is a signal input, not a JSON parameter.",
+          "description": "Control signal. With the default base and sensitivity, it directly specifies frequency in Hz. Negative resulting frequency reverses phase.",
           "type": "F64",
           "optional": false,
           "type_rule": "T"
@@ -2699,6 +2727,22 @@
         }
       ],
       "parameters": [
+        {
+          "name": "base_hz",
+          "type": "value",
+          "description": "Frequency at zero control voltage, in Hz.",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sensitivity_hz_per_volt",
+          "type": "value",
+          "description": "Frequency change per volt of control input, in Hz/V.",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
         {
           "name": "type",
           "type": "type",
@@ -3362,10 +3406,10 @@
     {
       "type_name": "AnalogOscillator",
       "display_name": "Analog Oscillator",
-      "description": "Sinusoidal source, computed in its type",
+      "description": "Sine wave source with configurable frequency, amplitude, offset, and phase",
       "category": "sources",
       "version": "1.0.0",
-      "tags": [],
+      "tags": ["sine wave"],
       "input_ports": [],
       "output_ports": [
         {
@@ -3398,6 +3442,14 @@
           "type": "value",
           "description": "Frequency in Hz",
           "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "offset",
+          "type": "value",
+          "description": "DC offset added to the sine wave.",
+          "default": 0,
           "required": false,
           "enum_values": []
         },
