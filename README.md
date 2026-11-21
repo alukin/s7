@@ -1,4 +1,4 @@
-# S7 — Signals and systems for learning, research and engineering
+# S7 — Signals and systems for engineering, research and learning
 
 > “… everything simple is true and everything complicated is untrue.”
 >
