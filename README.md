@@ -98,6 +98,18 @@ build profiles and known limitations. The
 and [hardware I/O guide](s7l2/docs/HARDWARE_IO.md) define the supported
 execution envelopes.
 
+## Education
+
+S7 supports hands-on learning with original, executable diagrams and guided
+experiments aligned with freely available [MIT OpenCourseWare](https://ocw.mit.edu/)
+materials in signals and systems, signal processing, and control. The development
+tree includes **24 core teaching labs** with independent numerical checks;
+additional SDR and audio laboratory tracks are planned. These are independent
+S7 exercises, not official or MIT-endorsed course materials. See the
+[education overview and MIT-aligned curriculum](s7l2/education/README.md)
+for course references, lab guides, verification criteria and current status,
+or go directly to the [hands-on labs](s7l2/education/index.md).
+
 ## Try a first experiment
 
 The easiest entry point is the original teaching laboratory
@@ -113,12 +125,8 @@ specifies where information from a previous step is retained.
 3. Predict the output samples, run the diagram, inspect the signals in Scope,
    and change a parameter. Compare the new trace with your prediction.
 
-The full [learning route](s7l2/education/index.md) covers signals,
-convolution, Fourier analysis, numerical integration, filters, and control.
-The labs are original S7 teaching material aligned with topics in MIT
-courses—not official MIT coursework or an MIT-endorsed project. Each lab
-is also an opportunity to test S7's numerical semantics, rather than
-merely demonstrate a picture.
+Each exercise is also a test of S7's numerical semantics, rather than
+merely a visual demonstration.
 
 For a larger system, explore the
 [example diagrams and experiment guides](s7l2/examples/README.md).
