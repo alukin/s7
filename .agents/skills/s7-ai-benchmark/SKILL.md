@@ -8,7 +8,7 @@ description: Evaluate S7 Codex skills, scripts, prompt configurations and agent 
 Use when comparing Codex workflows or deciding whether a skill, context strategy or multi-agent step actually pays for itself.
 
 1. Read tools/ai/README.md and inspect the versioned tasks in tools/ai/benchmark_tasks.json.
-2. Select comparable runs: same task, source SHA, acceptance checks, model configuration and host profile. Run each variant in a separate worktree. Do not use an agent's self-reported success as a substitute for independent acceptance checks.
+2. Capture a redacted environment profile with `python3 tools/ai/env_probe.py --output <outside-Git.json>` before each controlled experiment. Pass it via `benchmark.py record --environment <file>` so incompatible environments are not averaged together. Select comparable runs: same task, source SHA, acceptance checks, model configuration and host profile. Run each variant in a separate worktree. Do not use an agent's self-reported success as a substitute for independent acceptance checks.
 3. Use python3 tools/ai/benchmark.py list to choose tasks. Manually run Codex using the variants (for example default vs focused skills vs skills+scripts); the benchmark utility does not invoke Codex.
 4. Capture elapsed wall-clock time, total attempts and corrective iterations, accepted result, actual independent evidence paths, and input/output tokens only if usage telemetry makes them available. Do not estimate missing usage or present unrun experiments as results.
 5. Record with python3 tools/ai/benchmark.py record --results <outside-Git.jsonl> --task ... --variant ... --model ... --status ... --evidence ..., then compare with benchmark.py report.
