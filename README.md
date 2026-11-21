@@ -1,9 +1,22 @@
-# S7 — Design, verify, and execute causal systems
+# S7 — Signals and systems for learning, research and engineering
 
-**S7 is an open-source engineering workbench for signal processing, dynamic
-systems, control, and distributed causal computation.** Build a system as a
-diagram of connected elements, make its state and dependencies explicit,
-execute the model, and check its behavior against theory or measurements.
+> “… everything simple is true and everything complicated is untrue.”
+>
+> — Ukrainian philosopher **Hryhorii Skovoroda** (Григорій Сковорода),
+> quoted in William McC. Siebert's *Circuits, Signals, and Systems*,
+> [p. v](https://books.google.com/books?id=zBTUiIrb2WIC&pg=PR5) (excerpt).
+
+S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
+[*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
+understanding a system through its signals, interconnected blocks, state and
+feedback. S7 turns that way of thinking into an open-source tool for
+**students, researchers, scientists and engineers** to build models, run
+experiments and inspect their results.
+
+S7 is an engineering workbench for signal processing, dynamic systems,
+control, and distributed causal computation. Build a system as a diagram
+of connected elements, make its state and dependencies explicit, execute
+the model, and check its behavior against theory or measurements.
 
 **The diagram is the specification.** Today, S7 validates diagrams and runs
 them through a dynamic reference runtime. The [roadmap](s7l2/docs/RELEASE_ROADMAP.md)
@@ -173,15 +186,11 @@ user interface. The present S7 project carries that early diagram-based
 engineering idea forward with modern runtimes, numerical verification, and
 distributed computation.
 
-S7's starting point is the block-diagram view of physical systems in
-**William McC. Siebert's**
-[*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/).
-Its opening quotation from Ukrainian philosopher **Hryhorii Skovoroda**
-captures a design ambition that still matters here:
+That early S7 history and Siebert's book are part of the project's
+identity, not merely background references. The epigraph at the top
+expresses the goal of making complex behavior understandable through
+simple, explicit connections.
 
-> “… everything simple is true and everything complicated is untrue.”
-
-The quotation appears on [p. v of Siebert's book](https://books.google.com/books?id=zBTUiIrb2WIC&pg=PR5).
 S7 also draws on work in signals and systems, dataflow, formal modeling,
 and distributed computation: among others, **Dennis Freeman, Sanjoy
 Mahajan, Alan Oppenheim, Alan Willsky, S. Hamid Nawab, Edward A. Lee,
