@@ -1,6 +1,6 @@
 # S7 — A visual workbench for signals and systems
 
-**S7 is an open-source workbench for designing, executing and verifying causal computational systems—from signals, dynamics and feedback control to distributed processing across networked nodes.**
+**S7 is an open-source visual workbench for engineering, research and learning. It lets you design, execute and verify causal computational systems—from signals, dynamics and feedback control to distributed processing across networked nodes.**
 
 > “… everything simple is true and everything complicated is untrue.”
 >
