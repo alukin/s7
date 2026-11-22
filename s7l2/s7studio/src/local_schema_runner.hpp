@@ -24,6 +24,7 @@
 #include <vector>
 
 #include <s7/transport.hpp>
+#include <s7/hardware_live_run.hpp>
 
 namespace s7studio {
 
@@ -40,6 +41,7 @@ public:
     void resume() override;
     void stop() override;
     void reset() override;
+    void setHardwareFactory(s7::hardware::CreateLiveRun factory) { hardwareFactory_ = factory; }
 
     // Commands and snapshot access belong to the QObject owner thread.
     [[nodiscard]] RunState state() const override { return state_.load(); }
@@ -49,6 +51,7 @@ public:
     [[nodiscard]] long completedTicks() const { return completedTicks_.load(); }
     [[nodiscard]] bool isRunning() const override;
     [[nodiscard]] bool isPaused() const override;
+    [[nodiscard]] bool canPause() const override { return !hardwarePaced_; }
 
     // UI thread: takes the Scope samples queued since the last call.
     [[nodiscard]] auto takeScopeSamples() -> ScopeSampleBatch;
@@ -64,10 +67,11 @@ signals:
     void scopeSamplesAvailable();
 
 private:
-    void emitScopeSamples();
+    void emitScopeSamples(const s7::NodeRuntime&);
     void requestStop();
     void prepareRuntime(const RunConfiguration& configuration);
     void executeRunLoop(std::shared_ptr<const RunConfiguration> configuration);
+    void executeHardwareRun(const RunConfiguration& configuration);
     void finalizeRun(std::uint64_t id, bool success, const std::string& error);
     void publishState(RunState state, std::uint64_t id);
     void postRunEvent(std::uint64_t id, std::function<void()> event);
@@ -77,6 +81,10 @@ private:
 
     std::shared_ptr<s7::Schema> schema_;
     std::unique_ptr<s7::NodeRuntime> runtime_;
+    s7::hardware::CreateLiveRun hardwareFactory_{};
+    std::unique_ptr<s7::hardware::LiveRun> hardwareRun_;
+    std::stop_source hardwareStop_;
+    bool hardwarePaced_{};
     s7::transport::RuntimeNetEndpointPtr netEndpoint_;
     std::thread worker_;
     std::vector<RunProbe> probes_;

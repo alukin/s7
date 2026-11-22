@@ -98,6 +98,13 @@ target_link_libraries(s7studio_run_provenance PUBLIC s7studio_observation s7core
 s7_enable_project_warnings(s7studio_run_provenance)
 target_link_libraries(s7studio_diagram PUBLIC s7studio_run_provenance)
 
+add_library(s7studio_local_runner STATIC src/local_schema_runner.cpp src/local_schema_runner.hpp)
+target_include_directories(s7studio_local_runner PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/s7hardware/include ${PROJECT_SOURCE_DIR}/s7transport/include)
+target_link_libraries(s7studio_local_runner PUBLIC s7studio_run_provenance s7observe Threads::Threads)
+set_target_properties(s7studio_local_runner PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_local_runner)
+
 add_library(s7studio_results STATIC
     src/scope_recording.cpp src/scope_recording.hpp
     src/observation/scope_results.cpp src/observation/scope_results.hpp
@@ -207,8 +214,6 @@ add_library(s7studio_app OBJECT
     src/model_run_controller.hpp
     src/json_utils.hpp
     src/local_runtime_v2.hpp
-    src/local_schema_runner.cpp
-    src/local_schema_runner.hpp
     src/element_picker_panel.cpp
     src/element_picker_panel.hpp
     src/headless_nodes_panel.cpp
@@ -296,6 +301,7 @@ target_include_directories(s7studio_app PUBLIC
 )
 
 target_link_libraries(s7studio_app PUBLIC
+    s7studio_local_runner
     s7studio_diagram
     s7studio_viewers
     Qt6::Core
@@ -403,11 +409,9 @@ set_tests_properties(s7studio_scope_run PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
 
 s7_add_test_executable(s7studio_coupled_pendulum_test
     tests/coupled_pendulum_test.cpp
-    src/local_schema_runner.cpp
-    src/local_schema_runner.hpp
 )
 target_include_directories(s7studio_coupled_pendulum_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_coupled_pendulum_test PRIVATE s7studio_diagram s7studio_observation Threads::Threads)
+target_link_libraries(s7studio_coupled_pendulum_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_observation Threads::Threads)
 target_compile_definitions(s7studio_coupled_pendulum_test PRIVATE
     S7_PENDULUM_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/double_pendulum")
 set_target_properties(s7studio_coupled_pendulum_test PROPERTIES AUTOMOC ON)
@@ -416,10 +420,9 @@ set_tests_properties(s7studio_coupled_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PL
 
 s7_add_test_executable(s7studio_nonlinear_pendulum_test
     tests/nonlinear_pendulum_test.cpp
-    src/local_schema_runner.cpp src/local_schema_runner.hpp
 )
 target_include_directories(s7studio_nonlinear_pendulum_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_nonlinear_pendulum_test PRIVATE s7studio_diagram s7studio_viewers Threads::Threads)
+target_link_libraries(s7studio_nonlinear_pendulum_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_viewers Threads::Threads)
 target_compile_definitions(s7studio_nonlinear_pendulum_test PRIVATE
     S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum"
     S7_SINGLE_PENDULUM_STUDIO_REPORT_DIR="${CMAKE_CURRENT_BINARY_DIR}/nonlinear_pendulum")
@@ -429,10 +432,9 @@ set_tests_properties(s7studio_nonlinear_pendulum PROPERTIES ENVIRONMENT "QT_QPA_
 
 s7_add_test_executable(s7studio_scope_lifecycle_test
     tests/scope_lifecycle_test.cpp
-    src/local_schema_runner.cpp src/local_schema_runner.hpp
 )
 target_include_directories(s7studio_scope_lifecycle_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_scope_lifecycle_test PRIVATE s7studio_diagram s7studio_viewers Threads::Threads)
+target_link_libraries(s7studio_scope_lifecycle_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_viewers Threads::Threads)
 target_compile_definitions(s7studio_scope_lifecycle_test PRIVATE
     S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum")
 set_target_properties(s7studio_scope_lifecycle_test PROPERTIES AUTOMOC ON)
@@ -660,8 +662,8 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Test)
 s7_add_test_executable(s7studio_run_lifecycle_test
-    tests/run_lifecycle_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
-target_link_libraries(s7studio_run_lifecycle_test PRIVATE s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
+    tests/run_lifecycle_test.cpp src/model_run_controller.cpp)
+target_link_libraries(s7studio_run_lifecycle_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
 set_target_properties(s7studio_run_lifecycle_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_run_lifecycle COMMAND s7studio_run_lifecycle_test)
 set_tests_properties(s7studio_run_lifecycle PROPERTIES TIMEOUT 60)
@@ -681,28 +683,28 @@ add_test(NAME s7studio_observation_source COMMAND s7studio_observation_source_te
 set_tests_properties(s7studio_observation_source PROPERTIES TIMEOUT 60)
 
 s7_add_test_executable(s7studio_observation_capture_test
-    tests/observation_capture_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp)
-target_link_libraries(s7studio_observation_capture_test PRIVATE s7studio_diagram s7studio_results Qt6::Test Threads::Threads)
+    tests/observation_capture_test.cpp)
+target_link_libraries(s7studio_observation_capture_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_results Qt6::Test Threads::Threads)
 set_target_properties(s7studio_observation_capture_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_observation_capture_test)
 add_test(NAME s7studio_observation_capture COMMAND s7studio_observation_capture_test)
 set_tests_properties(s7studio_observation_capture PROPERTIES TIMEOUT 60)
 
 s7_add_test_executable(s7studio_model_time_test
-    tests/model_time_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
+    tests/model_time_test.cpp src/model_run_controller.cpp)
 target_include_directories(s7studio_model_time_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
 target_compile_definitions(s7studio_model_time_test PRIVATE S7_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-target_link_libraries(s7studio_model_time_test PRIVATE s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
+target_link_libraries(s7studio_model_time_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
 set_target_properties(s7studio_model_time_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_model_time_test)
 add_test(NAME s7studio_model_time COMMAND s7studio_model_time_test)
 set_tests_properties(s7studio_model_time PROPERTIES TIMEOUT 180)
 
 s7_add_test_executable(s7studio_run_provenance_test
-    tests/run_provenance_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp)
+    tests/run_provenance_test.cpp)
 target_include_directories(s7studio_run_provenance_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
 target_compile_definitions(s7studio_run_provenance_test PRIVATE S7_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-target_link_libraries(s7studio_run_provenance_test PRIVATE s7studio_diagram s7studio_results s7noise Qt6::Test Threads::Threads)
+target_link_libraries(s7studio_run_provenance_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_results s7noise Qt6::Test Threads::Threads)
 set_target_properties(s7studio_run_provenance_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_run_provenance_test)
 add_test(NAME s7studio_run_provenance COMMAND s7studio_run_provenance_test)
@@ -715,8 +717,8 @@ target_link_libraries(s7studio_operational_acceptance PRIVATE s7studio_app)
 
 # Bounded live acquisition and prototype interaction, including real runner routing.
 s7_add_test_executable(s7studio_live_oscilloscope_test tests/live_oscilloscope_test.cpp
-    src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
-target_link_libraries(s7studio_live_oscilloscope_test PRIVATE s7studio_diagram s7studio_viewers Qt6::Test Threads::Threads)
+    src/model_run_controller.cpp)
+target_link_libraries(s7studio_live_oscilloscope_test PRIVATE s7studio_local_runner s7studio_diagram s7studio_viewers Qt6::Test Threads::Threads)
 set_target_properties(s7studio_live_oscilloscope_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_live_oscilloscope_test)
 add_test(NAME s7studio_live_oscilloscope COMMAND s7studio_live_oscilloscope_test)

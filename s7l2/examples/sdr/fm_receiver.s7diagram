@@ -1,13 +1,16 @@
 {
   "id": "fm_receiver",
-  "description": "Mono broadcast FM capture from SoapySDR. Run with s7hw and render the recorded mono audio as shown in the guide.",
-  "dt": 8.333333333333333e-07,
+  "description": "Receive 88.7 MHz FM from an AD93xx radio through SoapySDR and play live 48 kHz stereo audio.",
+  "dt": 1.4880952380952381e-06,
   "document_kind": "s7.diagram",
   "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": -1
+  },
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 400,
-    "height_mm": 180
+    "width_mm": 480,
+    "height_mm": 220
   },
   "schema": {
     "name": "fm_receiver",
@@ -18,438 +21,74 @@
         "params": {
           "type": "C32",
           "backend": "soapy",
-          "device": "driver=replace-me,serial=replace-me",
+          "device": "driver=plutosdr,uri=ip:analog.local",
           "channels": [
             "0"
           ],
           "frame_rate": [
-            1200000,
+            672000,
             1
           ],
-          "block_frames": 4096,
+          "block_frames": 8192,
           "queue_frames": 32768,
-          "options": "{\"frequency_hz\":\"100000000\"}"
+          "options": "{\"frequency_hz\":\"88700000\",\"bandwidth_hz\":\"500000\",\"antenna\":\"A_BALANCED\",\"gain_mode\":\"auto\",\"rate_tolerance_ppm\":\"2\"}"
         }
       },
       {
         "id": "channel",
-        "type": "FirFilter",
+        "type": "Resampler",
         "params": {
-          "type": "C32",
-          "taps": [
-            [
-              -0.000505021198,
-              0
-            ],
-            [
-              -0.000522116028,
-              0
-            ],
-            [
-              -0.000341712105,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              0.000407206796,
-              0
-            ],
-            [
-              0.000735772246,
-              0
-            ],
-            [
-              0.000829788896,
-              0
-            ],
-            [
-              0.000582090009,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              -0.000756406553,
-              0
-            ],
-            [
-              -0.001395911526,
-              0
-            ],
-            [
-              -0.001590028029,
-              0
-            ],
-            [
-              -0.001117030991,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              0.001431914561,
-              0
-            ],
-            [
-              0.002611764808,
-              0
-            ],
-            [
-              0.002935435715,
-              0
-            ],
-            [
-              0.002033094236,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              -0.002532293144,
-              0
-            ],
-            [
-              -0.004555398409,
-              0
-            ],
-            [
-              -0.005053112508,
-              0
-            ],
-            [
-              -0.003457029307,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              0.004213623585,
-              0
-            ],
-            [
-              0.007510571262,
-              0
-            ],
-            [
-              0.008264562389,
-              0
-            ],
-            [
-              0.005615859978,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              -0.006779864784,
-              0
-            ],
-            [
-              -0.012053751333,
-              0
-            ],
-            [
-              -0.013251509033,
-              0
-            ],
-            [
-              -0.009012472667,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              0.010969202643,
-              0
-            ],
-            [
-              0.019656180428,
-              0
-            ],
-            [
-              0.021848962371,
-              0
-            ],
-            [
-              0.015081304688,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              -0.019194897388,
-              0
-            ],
-            [
-              -0.035542319482,
-              0
-            ],
-            [
-              -0.041234034039,
-              0
-            ],
-            [
-              -0.030119124489,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              0.04608420826,
-              0
-            ],
-            [
-              0.100111486296,
-              0
-            ],
-            [
-              0.150910126825,
-              0
-            ],
-            [
-              0.187087715848,
-              0
-            ],
-            [
-              0.20018632235,
-              0
-            ],
-            [
-              0.187087715848,
-              0
-            ],
-            [
-              0.150910126825,
-              0
-            ],
-            [
-              0.100111486296,
-              0
-            ],
-            [
-              0.04608420826,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              -0.030119124489,
-              0
-            ],
-            [
-              -0.041234034039,
-              0
-            ],
-            [
-              -0.035542319482,
-              0
-            ],
-            [
-              -0.019194897388,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              0.015081304688,
-              0
-            ],
-            [
-              0.021848962371,
-              0
-            ],
-            [
-              0.019656180428,
-              0
-            ],
-            [
-              0.010969202643,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              -0.009012472667,
-              0
-            ],
-            [
-              -0.013251509033,
-              0
-            ],
-            [
-              -0.012053751333,
-              0
-            ],
-            [
-              -0.006779864784,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              0.005615859978,
-              0
-            ],
-            [
-              0.008264562389,
-              0
-            ],
-            [
-              0.007510571262,
-              0
-            ],
-            [
-              0.004213623585,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              -0.003457029307,
-              0
-            ],
-            [
-              -0.005053112508,
-              0
-            ],
-            [
-              -0.004555398409,
-              0
-            ],
-            [
-              -0.002532293144,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              0.002033094236,
-              0
-            ],
-            [
-              0.002935435715,
-              0
-            ],
-            [
-              0.002611764808,
-              0
-            ],
-            [
-              0.001431914561,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              -0.001117030991,
-              0
-            ],
-            [
-              -0.001590028029,
-              0
-            ],
-            [
-              -0.001395911526,
-              0
-            ],
-            [
-              -0.000756406553,
-              0
-            ],
-            [
-              -0.0,
-              0
-            ],
-            [
-              0.000582090009,
-              0
-            ],
-            [
-              0.000829788896,
-              0
-            ],
-            [
-              0.000735772246,
-              0
-            ],
-            [
-              0.000407206796,
-              0
-            ],
-            [
-              0.0,
-              0
-            ],
-            [
-              -0.000341712105,
-              0
-            ],
-            [
-              -0.000522116028,
-              0
-            ],
-            [
-              -0.000505021198,
-              0
-            ]
+          "type": "C32"
+        }
+      },
+      {
+        "id": "demod",
+        "type": "FmDemodulator",
+        "params": {
+          "sample_rate_hz": 336000,
+          "deviation_hz": 75000
+        }
+      },
+      {
+        "id": "stereo",
+        "type": "FmStereoDecoder",
+        "params": {
+          "sample_rate_hz": 336000,
+          "deemphasis_us": 50
+        }
+      },
+      {
+        "id": "left",
+        "type": "Resampler",
+        "params": {
+          "type": "F32"
+        }
+      },
+      {
+        "id": "right",
+        "type": "Resampler",
+        "params": {
+          "type": "F32"
+        }
+      },
+      {
+        "id": "playback",
+        "type": "AudioSink",
+        "params": {
+          "type": "F32",
+          "backend": "pipewire",
+          "device": "default",
+          "channels": [
+            "0",
+            "1"
           ],
-          "design_rate_hz": 1200000
-        }
-      },
-      {
-        "id": "phase",
-        "type": "FmDiscriminator",
-        "params": {}
-      },
-      {
-        "id": "deviation",
-        "type": "Gain",
-        "params": {
-          "type": "F64",
-          "factor": 2.5464790894703255
-        }
-      },
-      {
-        "id": "record",
-        "type": "RecordingSink",
-        "params": {
-          "type": "F64",
-          "file_path": "fm-baseband.s7b",
-          "sample_rate_hz": 1200000,
-          "format": "compact-binary"
+          "frame_rate": [
+            48000,
+            1
+          ],
+          "block_frames": 512,
+          "queue_frames": 32768,
+          "options": "{\"underrun\":\"rebuffer\"}"
         }
       }
     ],
@@ -463,20 +102,38 @@
       {
         "from_element": "channel",
         "from_port": 0,
-        "to_element": "phase",
+        "to_element": "demod",
         "to_port": 0
       },
       {
-        "from_element": "phase",
+        "from_element": "demod",
         "from_port": 0,
-        "to_element": "deviation",
+        "to_element": "stereo",
         "to_port": 0
       },
       {
-        "from_element": "deviation",
+        "from_element": "stereo",
         "from_port": 0,
-        "to_element": "record",
+        "to_element": "left",
         "to_port": 0
+      },
+      {
+        "from_element": "stereo",
+        "from_port": 1,
+        "to_element": "right",
+        "to_port": 0
+      },
+      {
+        "from_element": "left",
+        "from_port": 0,
+        "to_element": "playback",
+        "to_port": 0
+      },
+      {
+        "from_element": "right",
+        "from_port": 0,
+        "to_element": "playback",
+        "to_port": 1
       }
     ]
   },
@@ -492,7 +149,7 @@
           2,
           19
         ],
-        "title": "SoapySDR RX"
+        "title": "SoapySDR RX · 88.7 MHz"
       },
       {
         "id": "channel",
@@ -500,31 +157,47 @@
           16,
           19
         ],
-        "title": "120 kHz I/Q low-pass"
+        "title": "Channel IF · 336 kHz"
       },
       {
-        "id": "phase",
+        "id": "demod",
         "position": [
           30,
           19
         ],
-        "title": "FM discriminator"
+        "title": "FM multiplex · ±75 kHz"
       },
       {
-        "id": "deviation",
+        "id": "stereo",
         "position": [
           44,
           19
         ],
-        "title": "±75 kHz → ±1"
+        "title": "Pilot stereo · 50 µs"
       },
       {
-        "id": "record",
+        "id": "left",
         "position": [
-          58,
+          59,
+          15
+        ],
+        "title": "Left · 48 kHz"
+      },
+      {
+        "id": "right",
+        "position": [
+          59,
+          24
+        ],
+        "title": "Right · 48 kHz"
+      },
+      {
+        "id": "playback",
+        "position": [
+          73,
           19
         ],
-        "title": "Record demodulated FM"
+        "title": "Stereo playback"
       }
     ],
     "wires": [
@@ -557,7 +230,7 @@
         },
         "to": {
           "port": [
-            "phase",
+            "demod",
             "in",
             0
           ]
@@ -568,14 +241,14 @@
         "id": "w2",
         "from": {
           "port": [
-            "phase",
+            "demod",
             "out",
             0
           ]
         },
         "to": {
           "port": [
-            "deviation",
+            "stereo",
             "in",
             0
           ]
@@ -586,16 +259,70 @@
         "id": "w3",
         "from": {
           "port": [
-            "deviation",
+            "stereo",
             "out",
             0
           ]
         },
         "to": {
           "port": [
-            "record",
+            "left",
             "in",
             0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "stereo",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "right",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "left",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "playback",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "right",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "playback",
+            "in",
+            1
           ]
         },
         "bends": []
@@ -613,7 +340,7 @@
           "width": 1100,
           "height": 210,
           "font_size": 17,
-          "text": "**SoapySDR mono FM receiver**  \nChoose your device and station in SoapySDR RX. The 1.2 MS/s graph filters complex I/Q, measures the phase change and records the normalized multiplex.  \nCapture explicitly with `s7hw`, then use the audio conversion in the [FM receiver guide](qrc:/s7studio/help/examples/sdr/FM_RECEIVER.md)."
+          "text": "**Live FM stereo · 88.7 MHz**  \nThe SoapySDR source tunes Українське Радіо — Чернігівська хвиля on RX channel 0. The decoder tracks the 19 kHz pilot and blends to mono when the pilot fades.  \nPress F5 in Studio to listen continuously and Shift+F5 to stop. See the [FM receiver guide](qrc:/s7studio/help/examples/sdr/FM_RECEIVER.md) for device and station settings."
         }
       }
     ]

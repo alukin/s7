@@ -5,6 +5,7 @@
 #define S7RUNTIME_INCLUDE_S7_PLUGIN_LOADER_HPP
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <filesystem>
 #include <iostream>
@@ -56,6 +57,7 @@ public:
 
     // Get the full loaded plugin metadata.
     [[nodiscard]] std::vector<LoadedPluginInfo> loaded_plugin_info() const;
+    [[nodiscard]] void* loaded_symbol(std::string_view plugin, const char* symbol) const;
 
     // Removes every plugin's element types from the registry it registered
     // into, then unloads the libraries. Elements created from them must be

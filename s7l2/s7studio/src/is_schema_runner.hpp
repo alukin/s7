@@ -77,6 +77,7 @@ public:
     [[nodiscard]] virtual RunState state() const = 0;
     [[nodiscard]] virtual bool isRunning() const = 0;
     [[nodiscard]] virtual bool isPaused() const = 0;
+    [[nodiscard]] virtual bool canPause() const { return true; }
 };
 
 } // namespace s7studio

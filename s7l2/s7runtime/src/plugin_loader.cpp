@@ -371,6 +371,13 @@ std::vector<std::string> PluginLoader::loaded_plugins() const {
     return names;
 }
 
+void* PluginLoader::loaded_symbol(std::string_view name, const char* symbol) const {
+    for (const auto& plugin : loaded_plugins_) {
+        if (plugin.info.name == name) return resolve_symbol(plugin.handle, symbol);
+    }
+    return nullptr;
+}
+
 std::vector<PluginLoader::LoadedPluginInfo> PluginLoader::loaded_plugin_info() const {
     std::vector<LoadedPluginInfo> info;
     info.reserve(loaded_plugins_.size());

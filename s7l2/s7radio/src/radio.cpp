@@ -3,6 +3,7 @@
 #include "radio.hpp"
 #include <s7/element_registry.hpp>
 #include <s7/float_types.hpp>
+#include <algorithm>
 #include <numbers>
 
 namespace s7::radio {
@@ -73,6 +74,78 @@ private:
     double phase_scale_;
     double phase_{};
     std::complex<float> output_{};
+};
+
+class FmStereoDecoder final : public Element {
+public:
+    FmStereoDecoder(Rate rate, double deemphasis_us)
+        : Element("FmStereoDecoder", true), rate_(rate),
+          rotation_(math::cos(turn * 19000 / rate.to_hz()), math::sin(turn * 19000 / rate.to_hz())),
+          pilot_alpha_(1 - math::exp(-turn * 30 / rate.to_hz())),
+          blend_alpha_(1 - math::exp(-1 / (0.05 * rate.to_hz()))),
+          dc_decay_(math::exp(-turn * 30 / rate.to_hz())),
+          deemphasis_alpha_(1 - math::exp(-1e6 / (deemphasis_us * rate.to_hz()))),
+          notch_decay_(math::exp(-turn * 1000 / rate.to_hz())) {
+        if (rate.to_hz() < 160000 || (deemphasis_us != 50 && deemphasis_us != 75))
+            throw std::invalid_argument("FM stereo requires at least 160 kHz and 50 or 75 µs de-emphasis");
+        register_input(0, "multiplex", SignalType::F64, nullptr);
+        register_output(0, "left", SignalType::F32, &left_.output);
+        register_output(1, "right", SignalType::F32, &right_.output);
+    }
+
+    std::optional<Rate> declared_rate() const override { return rate_; }
+
+    void step() override {
+        const double input = read_input<double>(0);
+        if (math::isnan(input) || math::isinf(input))
+            throw std::domain_error("FM stereo requires a finite multiplex sample");
+        dc_blocked_ = dc_decay_ * dc_blocked_ + input - previous_;
+        previous_ = input;
+
+        // Coherent detection rejects the mono and stereo sidebands. The pilot
+        // phasor uses a cosine reference. Its squared negative imaginary part
+        // recovers the ITU-R BS.450 sine-phase 38 kHz subcarrier.
+        pilot_baseband_ += pilot_alpha_ * (dc_blocked_ * std::conj(oscillator_) - pilot_baseband_);
+        pilot_ += pilot_alpha_ * (pilot_baseband_ - pilot_);
+        const double power = std::norm(pilot_);
+        const double strength = 2 * math::sqrt(power);
+        const auto phasor = oscillator_ * pilot_;
+        oscillator_ *= rotation_;
+        if (++oscillator_steps_ == 4096) {
+            oscillator_ /= math::sqrt(std::norm(oscillator_));
+            oscillator_steps_ = 0;
+        }
+        const double target = std::clamp((strength - 0.02) / 0.02, 0.0, 1.0);
+        blend_ += blend_alpha_ * (target - blend_);
+        const double difference = power > 1e-8
+            ? -4 * dc_blocked_ * phasor.real() * phasor.imag() / power : 0;
+        left_.filter(dc_blocked_ + blend_ * difference, rotation_.real(), notch_decay_, deemphasis_alpha_);
+        right_.filter(dc_blocked_ - blend_ * difference, rotation_.real(), notch_decay_, deemphasis_alpha_);
+    }
+
+private:
+    struct Channel {
+        // Remove the pilot and the RDS image at 19 kHz before audio resampling.
+        void filter(double input, double cosine, double radius, double alpha) {
+            const double notch = input - 2 * cosine * input1 + input2
+                + 2 * radius * cosine * notch1 - radius * radius * notch2;
+            input2 = input1;
+            input1 = input;
+            notch2 = notch1;
+            notch1 = notch;
+            deemphasized += alpha * (radius * notch - deemphasized);
+            output = static_cast<float>(deemphasized);
+        }
+        double input1{}, input2{}, notch1{}, notch2{}, deemphasized{};
+        float output{};
+    };
+
+    Rate rate_;
+    std::complex<double> rotation_, oscillator_{1, 0}, pilot_baseband_{}, pilot_{};
+    unsigned oscillator_steps_{};
+    double pilot_alpha_, blend_alpha_, dc_decay_, deemphasis_alpha_, notch_decay_;
+    double previous_{}, dc_blocked_{}, blend_{};
+    Channel left_, right_;
 };
 
 class AmModulator final : public Element {
@@ -172,6 +245,23 @@ void register_elements(ElementRegistry& registry) {
     registry.register_element(ElementDescriptor("FmDemodulator", [](const ElementCreationContext& ctx) {
         return std::make_unique<FmDiscriminator>(fm_rate(ctx), ctx.get_real("deviation_hz"));
     }, fm_demod));
+
+    auto stereo = fm_demod;
+    stereo.type_name = "FmStereoDecoder";
+    stereo.display_name = "FM Stereo Decoder";
+    stereo.description = "Recovers left and right audio from a normalized broadcast FM multiplex. "
+        "Tracks the 19 kHz stereo pilot, blends to mono as the pilot fades and applies audio de-emphasis. "
+        "Resample both outputs to the audio device rate.";
+    stereo.input_ports = {{"multiplex", "Normalized FM multiplex", SignalType::F64}};
+    stereo.output_ports = {{"left", "Left audio", SignalType::F32}, {"right", "Right audio", SignalType::F32}};
+    stereo.parameters.front().default_value = 300000;
+    stereo.parameters.front().min_value = 160000;
+    stereo.parameters.back() = {.name = "deemphasis_us", .type = "real",
+        .description = "Broadcast de-emphasis time constant, 50 or 75 microseconds",
+        .default_value = 50, .min_value = 50, .max_value = 75, .enum_values = {}};
+    registry.register_element(ElementDescriptor("FmStereoDecoder", [](const ElementCreationContext& ctx) {
+        return std::make_unique<FmStereoDecoder>(fm_rate(ctx), ctx.get_real("deemphasis_us"));
+    }, stereo));
 
     auto am = modulator_metadata("AmModulator", "AM Modulator",
         "Full-carrier double-sideband AM at zero IF. A normalized message in [-1, 1] produces "

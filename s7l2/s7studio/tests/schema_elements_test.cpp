@@ -112,7 +112,7 @@ int main(int argc,char** argv) {
         require(groupFor("SdrSource") == "Radio" && groupFor("SdrSink") == "Radio" &&
                 groupFor("FmDiscriminator") == "Radio" && groupFor("AmModulator") == "Radio" &&
                 groupFor("FmModulator") == "Radio" && groupFor("AmDemodulator") == "Radio" &&
-                groupFor("FmDemodulator") == "Radio", "Studio discovers SDR and Radio plugins on startup");
+                groupFor("FmDemodulator") == "Radio" && groupFor("FmStereoDecoder") == "Radio", "Studio discovers SDR and Radio plugins on startup");
         require(groupFor("FirFilter") == "Signal Processing" && groupFor("Resampler") == "Signal Processing",
                 "Generic filtering and resampling remain in Signal Processing");
         auto* library = window.findChild<QRadioButton*>("elements.byLibrary");
@@ -124,8 +124,11 @@ int main(int argc,char** argv) {
         category->click();
         Window fm;
         fm.openPath(QString::fromUtf8(S7_FM_EXAMPLE));
-        require(fm.currentDocument().as_object().at("schema").as_object().at("elements").as_array().size() == 5,
-                "Studio opens all five elements in the FM receiver diagram");
+        const auto fmDocument = fm.currentDocument();
+        require(fmDocument.as_object().at("schema").as_object().at("elements").as_array().size() == 7,
+                "Studio opens all seven elements in the FM receiver diagram");
+        require(fmDocument.as_object().at("studio_run").as_object().at("runtime_seconds").to_number<double>() == -1.0,
+                "The FM receiver defaults to continuous playback");
 #endif
         int schema_count=0,primitive_count=0;
         for(int i=0;i<tree->topLevelItemCount();++i) {

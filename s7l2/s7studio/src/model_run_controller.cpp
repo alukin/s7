@@ -142,7 +142,7 @@ auto ModelRunController::actionState() const -> RunActionState
 
     const auto lifecycle = runner_->state();
     state.runEnabled = !runIsActive(lifecycle);
-    state.pauseEnabled = lifecycle == RunState::Running;
+    state.pauseEnabled = lifecycle == RunState::Running && runner_->canPause();
     state.resumeEnabled = lifecycle == RunState::Paused;
     state.stopEnabled = lifecycle == RunState::Running || lifecycle == RunState::Pausing
         || lifecycle == RunState::Paused;

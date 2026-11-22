@@ -66,6 +66,25 @@ int main(){
         assert(stream->emergency_output_frames()==2);
         assert(stream->write(b,4,Deadline::max()).status==Status::Underflow);
     }
+    {
+        auto r=request(Direction::Playback);
+        r.options={{"underrun","rebuffer"}};
+        auto stream=provider->prepare(r);
+        std::int16_t values[]={1,2,3,4,5,6,7,8};
+        auto b=std::as_bytes(std::span(values));
+        assert(stream->write(b,4,Deadline::max()).frames==4);
+        stream->start();
+        std::int16_t output[8];
+        PaStreamCallbackTimeInfo time{};
+        active->callback(nullptr,output,4,&time,paOutputUnderflow,active->user);
+        assert(std::memcmp(output,values,sizeof(values))==0);
+        active->callback(nullptr,output,4,&time,paOutputUnderflow,active->user);
+        for (const auto value:output) assert(value==0);
+        assert(stream->emergency_output_frames()==4);
+        assert(stream->write(b,4,Deadline::max()).status==Status::Ok);
+        active->callback(nullptr,output,4,&time,0,active->user);
+        assert(std::memcmp(output,values,sizeof(values))==0);
+    }
     assert(initialized==0 && opened==0);wrong_rate=true;
     rejects([&]{provider->prepare(request(Direction::Capture));});assert(initialized==0 && opened==0);wrong_rate=false;
     auto bad=request(Direction::Capture);bad.channels={"1","0"};rejects([&]{provider->prepare(bad);});assert(initialized==0);

@@ -35,11 +35,13 @@ public:
     SoapyStream(Descriptor d,SoapySDR::Device* device,SoapySDR::Stream* stream)
         : Stream(std::move(d)),device_(device),stream_(stream),
           planar_(descriptor().actual.block_frames*descriptor().actual.frame_bytes()),
-          pending_(descriptor().actual.block_frames*descriptor().actual.frame_bytes()) {
+          pending_(descriptor().actual.direction==Direction::Playback
+              ? descriptor().actual.block_frames*descriptor().actual.frame_bytes() : 0) {
         const auto& r=descriptor().actual;
         const auto plane=r.block_frames*signal_type_info(r.type).storage_bytes;
         // plane offsets must preserve alignment for driver-typed accesses.
-        for (std::size_t c=0;c<r.channels.size();++c) pointers_.push_back(planar_.bytes().data()+c*plane);
+        pointers_.resize(r.channels.size());
+        for (std::size_t c=0;c<r.channels.size();++c) pointers_[c]=planar_.bytes().data()+c*plane;
         for (auto* p:pointers_) const_pointers_.push_back(p);
     }
     ~SoapyStream() override {
@@ -51,6 +53,7 @@ public:
 protected:
     void do_start() override {
         check(device_->activateStream(stream_)); active_=true;
+        native_limit_=device_->getStreamMTU(stream_);
         if (pending_frames_) {
             std::size_t sent=0;
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(1);
@@ -77,6 +80,7 @@ protected:
 private:
     Transfer transfer(std::byte* dst,const std::byte* src,std::size_t n,Deadline deadline,std::stop_token st) {
         const auto& r=descriptor().actual;
+        if (native_limit_) n=std::min(n,native_limit_);
         const auto stride=signal_type_info(r.type).storage_bytes;
         auto check_ci12=[&](const std::byte* data) {
             if (r.type!=SignalType::CI12) return;
@@ -85,7 +89,14 @@ private:
                 throw std::invalid_argument("SoapySDR CI12 value outside significant-bit range");
         };
         if (src && r.type==SignalType::CI12) for (std::size_t i=0;i<n*r.channels.size();++i) check_ci12(src+i*stride);
-        if (src) for (std::size_t c=0;c<r.channels.size();++c) for (std::size_t i=0;i<n;++i)
+        const auto* data=dst ? dst : src;
+        const auto alignment=r.type==SignalType::C32 ? alignof(float) : alignof(std::int16_t);
+        const bool direct=r.channels.size()==1 && reinterpret_cast<std::uintptr_t>(data)%alignment==0;
+        if (r.channels.size()==1) {
+            pointers_[0]=direct ? dst : planar_.bytes().data();
+            const_pointers_[0]=direct ? src : planar_.bytes().data();
+        }
+        if (src && !direct) for (std::size_t c=0;c<r.channels.size();++c) for (std::size_t i=0;i<n;++i)
             std::memcpy(static_cast<std::byte*>(pointers_[c])+i*stride,src+(i*r.channels.size()+c)*stride,stride);
         while (true) {
             if (cancelled() || st.stop_requested()) return {0,Status::Cancelled,0,{}};
@@ -99,7 +110,9 @@ private:
             if (count==SOAPY_SDR_TIMEOUT) continue; // Does not discard/restart the native stream.
             if (count<0) return {0,status(count),0,{},count};
             if (static_cast<std::size_t>(count)>n || count==0) return {0,Status::BackendError,0,{}};
-            if (dst) for (std::size_t c=0;c<r.channels.size();++c) for (int i=0;i<count;++i) {
+            if (dst && direct && r.type==SignalType::CI12)
+                for (int i=0;i<count;++i) check_ci12(dst+static_cast<std::size_t>(i)*stride);
+            if (dst && !direct) for (std::size_t c=0;c<r.channels.size();++c) for (int i=0;i<count;++i) {
                 auto* sample=static_cast<std::byte*>(pointers_[c])+static_cast<std::size_t>(i)*stride;
                 check_ci12(sample);
                 std::memcpy(dst+(static_cast<std::size_t>(i)*r.channels.size()+c)*stride,sample,stride);
@@ -118,6 +131,7 @@ private:
     }
     SoapySDR::Device* device_{};
     SoapySDR::Stream* stream_{};
+    std::size_t native_limit_{};
     Buffer planar_,pending_;
     std::vector<void*> pointers_;
     std::vector<const void*> const_pointers_;
@@ -142,7 +156,20 @@ public:
         r.validate();
         if (r.backend!=id() || r.device=="default" || r.device.empty()) throw std::invalid_argument("SoapySDR requires an explicit device selector (driver=...,serial=...)");
         if (r.type!=SignalType::C32 && r.type!=SignalType::CI12 && r.type!=SignalType::CI16) throw std::invalid_argument("SoapySDR supports C32, qualified native CI12/CI16");
+        double rate_tolerance_ppm=0;
         for (const auto& [key,value]:r.options) {
+            if (key=="rate_tolerance_ppm") {
+                rate_tolerance_ppm=number(value);
+                if (r.direction!=Direction::Capture || rate_tolerance_ppm<0)
+                    throw std::invalid_argument("SoapySDR rate_tolerance_ppm must be nonnegative and is RX-only");
+                continue;
+            }
+            if (key=="gain_mode") {
+                if (r.direction!=Direction::Capture || (value!="auto" && value!="manual") ||
+                    (value=="auto" && r.options.contains("gain_db")))
+                    throw std::invalid_argument("SoapySDR gain_mode must be auto or manual on RX; auto is incompatible with gain_db");
+                continue;
+            }
             if (key!="frequency_hz" && key!="bandwidth_hz" && key!="gain_db" && key!="antenna") throw std::invalid_argument("unknown SoapySDR option: "+key);
             if (key!="antenna") {
                 const auto v=number(value);
@@ -170,18 +197,34 @@ public:
                 const auto formats=device->getStreamFormats(direction,channel);
                 if (std::find(formats.begin(),formats.end(),format)==formats.end()) throw std::invalid_argument("SoapySDR application format unsupported");
                 device->setSampleRate(direction,channel,r.rate.to_hz());
-                if (device->getSampleRate(direction,channel)!=r.rate.to_hz()) throw std::invalid_argument("SoapySDR nominal rate differs from graph");
-                for (const auto& [key,value]:r.options) {
-                    if (key=="antenna") { device->setAntenna(direction,channel,value); if (device->getAntenna(direction,channel)!=value) throw std::invalid_argument("antenna readback mismatch"); }
+                const auto actual_rate=device->getSampleRate(direction,channel);
+                if (!std::isfinite(actual_rate) || actual_rate<=0 ||
+                    std::abs(actual_rate-r.rate.to_hz())/r.rate.to_hz()*1e6>rate_tolerance_ppm)
+                    throw std::invalid_argument("SoapySDR channel "+text+
+                    " nominal rate differs from graph: requested "+r.rate.to_string()+", got "+std::to_string(actual_rate)+" Hz");
+                d.backend_details["channel."+text+".sample_rate_hz"]=std::to_string(actual_rate);
+                // Tune before setting gain, since tuning may change the device's gain range.
+                for (const auto* key:{"antenna","frequency_hz","bandwidth_hz","gain_mode","gain_db"}) {
+                    const auto option=r.options.find(key);
+                    if (option==r.options.end()) continue;
+                    const auto& [name,value]=*option;
+                    if (name=="antenna") { device->setAntenna(direction,channel,value); if (device->getAntenna(direction,channel)!=value) throw std::invalid_argument("antenna readback mismatch"); }
+                    else if (name=="gain_mode") {
+                        const bool automatic=value=="auto";
+                        if (!device->hasGainMode(direction,channel)) throw std::invalid_argument("SoapySDR selectable gain mode unsupported");
+                        device->setGainMode(direction,channel,automatic);
+                        if (device->getGainMode(direction,channel)!=automatic) throw std::invalid_argument("SoapySDR gain mode readback mismatch");
+                    }
                     else {
                         const auto v=number(value); double actual=0;
-                        if (key=="frequency_hz") { device->setFrequency(direction,channel,v); actual=device->getFrequency(direction,channel); }
-                        if (key=="bandwidth_hz") { device->setBandwidth(direction,channel,v); actual=device->getBandwidth(direction,channel); }
-                        if (key=="gain_db") {
+                        if (name=="frequency_hz") { device->setFrequency(direction,channel,v); actual=device->getFrequency(direction,channel); }
+                        if (name=="bandwidth_hz") { device->setBandwidth(direction,channel,v); actual=device->getBandwidth(direction,channel); }
+                        if (name=="gain_db") {
                             if (device->hasGainMode(direction,channel)) device->setGainMode(direction,channel,false);
                             device->setGain(direction,channel,v); actual=device->getGain(direction,channel);
                         }
-                        if (actual!=v) throw std::invalid_argument("SoapySDR control readback mismatch: "+key);
+                        if (actual!=v) throw std::invalid_argument("SoapySDR channel "+text+" "+name+
+                            " readback mismatch: requested "+value+", got "+std::to_string(actual));
                     }
                 }
                 d.backend_details["channel."+text+".frequency_hz"]=std::to_string(device->getFrequency(direction,channel));

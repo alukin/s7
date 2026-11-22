@@ -1,8 +1,7 @@
 # SDR examples
 
-- [Mono FM receiver](fm_receiver.s7diagram) filters SoapySDR I/Q, demodulates
-  broadcast FM, and records the result. Follow the [capture and audio
-  guide](FM_RECEIVER.md) to make a 48 kHz mono WAV.
+- [Live stereo FM receiver](fm_receiver.s7diagram) tunes 88.7 MHz with SoapySDR
+  and plays 48 kHz stereo audio. See the [tuning and playback guide](FM_RECEIVER.md).
 - [Basic SoapySDR capture](sdr_receive.json) checks the receive path and
   reports frame counts. Replace the device selector before running it.
   C32 explicitly requests driver conversion.

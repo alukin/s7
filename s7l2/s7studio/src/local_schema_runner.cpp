@@ -66,6 +66,8 @@ void LocalSchemaRunner::publishState(RunState expected, std::uint64_t id)
 
 void LocalSchemaRunner::releaseRuntime()
 {
+    hardwareRun_.reset();
+    hardwarePaced_ = false;
     runtime_.reset();
     schema_.reset();
     if (netEndpoint_ && s7::RuntimeNetContext::endpoint() == netEndpoint_)
@@ -92,6 +94,7 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     completedTicks_.store(0);
     pauseRequested_.store(false);
     stopRequested_.store(false);
+    hardwareStop_ = std::stop_source{};
     state_.store(RunState::Preparing);
     configuration_ = std::make_shared<const RunConfiguration>(RunConfiguration{id, schemaJson, dt, ticks, std::move(probes)});
     totalTicks_ = ticks;
@@ -143,17 +146,26 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     s7::RuntimeNetContext::set_endpoint(netEndpoint_);
     auto prepared = prepareRunProvenance(configuration);
     schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(prepared.effectiveSchema));
-    schema_->set_rate(s7::Rate::from_seconds(configuration.dt));
+    const auto rate = s7::Rate::from_seconds(configuration.dt);
+    schema_->set_rate(rate);
     runtime::validateSchema(*schema_);
     auto graph = s7::Compiler::compile(*schema_);
-    runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
-    runtime_->set_model_time_rate(s7::Rate::from_seconds(configuration.dt));
+    if (hardwareFactory_) hardwareRun_.reset(hardwareFactory_(graph, rate));
+    hardwarePaced_ = static_cast<bool>(hardwareRun_);
+    if (!hardwarePaced_) {
+        if (std::ranges::any_of(graph.elements, [](const auto& entry) {
+            const auto type = entry.second->type_name();
+            return type == "AudioSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrSink";
+        })) throw std::runtime_error("Studio hardware execution requires the matching S7 hardware plugins.");
+        runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
+        runtime_->set_model_time_rate(rate);
+    }
     if (recording_) recording_->setProvenance(prepared.provenance);
     std::map<std::string, std::size_t> groups;
     std::vector<QVector<observation::LiveChannel>> liveChannels;
     std::map<std::pair<std::string, int>, std::size_t> uniqueReads;
     std::size_t liveCount = 0;
-    s7::ObservationService observation(*runtime_);
+    s7::ObservationService observation(hardwarePaced_ ? hardwareRun_->runtime() : *runtime_);
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {
         if (probe.name.empty() || !names.insert(probe.name).second || probe.port < 0)
@@ -186,7 +198,7 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     for (const auto& [name, index] : groups) {
         auto source = std::make_shared<observation::LiveAcquisition>(configuration.id, configuration.dt,
             std::move(liveChannels[index]), prepared.provenance,
-            s7::Rate::from_seconds(configuration.dt).numerator, s7::Rate::from_seconds(configuration.dt).denominator);
+            rate.numerator, rate.denominator);
         if (configuration.ticks > 0) source->setPlannedDuration(static_cast<double>(configuration.ticks)*configuration.dt);
         liveSources_.insert(QString::fromStdString(name), source);
         liveRoutes_[index].source = source;
@@ -200,6 +212,11 @@ void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> c
     std::string error;
     const auto id = configuration->id;
     try {
+        if (hardwarePaced_) {
+            executeHardwareRun(*configuration);
+            finalizeRun(id, true, {});
+            return;
+        }
         constexpr auto progressInterval = std::chrono::milliseconds(50);
         auto nextProgress = std::chrono::steady_clock::now();
         for (long step = 0; configuration->ticks < 0 || step < configuration->ticks; ++step) {
@@ -216,7 +233,7 @@ void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> c
             if (stopRequested_.load()) break;
             runtime_->step();
             completedTicks_.store(step + 1);
-            emitScopeSamples();
+            emitScopeSamples(*runtime_);
             if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
                 const long completed = step + 1;
                 postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
@@ -236,10 +253,49 @@ void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> c
     finalizeRun(id, success, error);
 }
 
-void LocalSchemaRunner::emitScopeSamples()
+void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration)
 {
-    if (!runtime_ || probes_.empty()) return;
-    s7::ObservationService observation(*runtime_);
+    // The worker owns stream preparation, transfer and teardown. Stop uses
+    // only a token so it can race safely with any of those operations.
+    auto run = std::move(hardwareRun_);
+    const auto stop = hardwareStop_.get_token();
+    if (!configuration.ticks || stop.stop_requested()) return;
+    const auto description = QString::fromStdString(run->prepare());
+    const auto id = configuration.id;
+    postRunEvent(id, [this, description] {
+        emit logMessage(QStringLiteral("[runtime] device-paced run using %1").arg(description));
+    });
+    auto& runtime = run->runtime();
+    const auto trackTicks = [this](std::uint64_t frames) {
+        completedTicks_.store(static_cast<long>(std::min<std::uint64_t>(frames, std::numeric_limits<long>::max())));
+    };
+    auto nextProgress = std::chrono::steady_clock::now();
+    const auto frames = configuration.ticks < 0 ? std::numeric_limits<std::uint64_t>::max()
+                                               : static_cast<std::uint64_t>(configuration.ticks);
+    try {
+        run->execute(frames, stop, [&](std::uint64_t completed) {
+            if (!probes_.empty()) emitScopeSamples(runtime);
+            if (completed != 1 && completed % 1024 != 0) return;
+            trackTicks(completed);
+            const auto now = std::chrono::steady_clock::now();
+            if (now < nextProgress) return;
+            const auto ticks = completedTicks_.load();
+            postRunEvent(id, [this, ticks] { emit ticksProgress(ticks, totalTicks_); });
+            nextProgress = now + std::chrono::milliseconds(50);
+        });
+    } catch (...) {
+        trackTicks(runtime.step_count());
+        throw;
+    }
+    trackTicks(runtime.step_count());
+    const auto completed = completedTicks_.load();
+    postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
+}
+
+void LocalSchemaRunner::emitScopeSamples(const s7::NodeRuntime& runtime)
+{
+    if (probes_.empty()) return;
+    s7::ObservationService observation(runtime);
     bool notify = false;
     const auto id = configuration_->id;
     std::int64_t step = 0;
@@ -296,7 +352,7 @@ void LocalSchemaRunner::pause()
 {
     {
         std::lock_guard lock(controlMutex_);
-        if (state() != RunState::Running) return;
+        if (state() != RunState::Running || !canPause()) return;
         pauseRequested_.store(true);
         state_.store(RunState::Pausing);
     }
@@ -326,6 +382,7 @@ void LocalSchemaRunner::requestStop()
         pauseRequested_.store(false);
         state_.store(RunState::Stopping);
     }
+    hardwareStop_.request_stop();
     controlChanged_.notify_all();
     publishState(RunState::Stopping, generation_.load());
 }

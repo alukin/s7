@@ -67,6 +67,11 @@ std::vector<long double> design_anti_aliasing(const Rate& input, const Rate& out
 
 Position input_position(const std::uint64_t step, const Rate& input, const Rate& output)
 {
+    if (input.denominator==1 && output.denominator==1 && input.numerator && output.numerator &&
+        step<=std::numeric_limits<std::uint64_t>::max()/input.numerator) {
+        const auto scaled=step*input.numerator;
+        return {scaled/output.numerator, static_cast<long double>(scaled%output.numerator)/output.numerator};
+    }
     const uint256_t numerator = uint256_t(step) * input.numerator * output.denominator;
     const uint256_t denominator = uint256_t(input.denominator) * output.numerator;
     const uint256_t index = numerator / denominator;
@@ -77,6 +82,12 @@ Position input_position(const std::uint64_t step, const Rate& input, const Rate&
 
 std::uint64_t samples_through(const std::uint64_t step, const Rate& rate, const Rate& model)
 {
+    if (rate.denominator==1 && model.denominator==1 && rate.numerator && model.numerator &&
+        step<=std::numeric_limits<std::uint64_t>::max()/rate.numerator) {
+        const auto count=step*rate.numerator/model.numerator;
+        if (count==std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error("Rate domain sample count overflow.");
+        return count+1;
+    }
     const uint256_t count = uint256_t(step) * rate.numerator * model.denominator / (uint256_t(rate.denominator) * model.numerator);
     if (count >= std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error("Rate domain sample count overflow.");
     return count.convert_to<std::uint64_t>() + 1;

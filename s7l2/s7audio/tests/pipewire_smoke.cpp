@@ -101,11 +101,38 @@ int main(){
         assert(stream->write(std::as_bytes(std::span(values)),3,Deadline::max()).status==Status::Underflow);
     }
     {
+        auto r=request(Direction::Playback);
+        r.options={{"underrun","rebuffer"}};
+        auto stream=provider->prepare(r);
+        const float values[]={1,2,3,4,5,6,7,8};
+        const auto stereo=std::span(values);
+        assert(stream->write(std::as_bytes(stereo.first(2)),1,Deadline::max()).status==Status::Ok);
+        stream->start();
+        current->buffer.requested=4;
+        const auto process=[] { current->events->process(current->user); };
+        process();
+        assert(current->samples[0]==1 && current->samples[1]==2 && current->samples[2]==0);
+        assert(stream->emergency_output_frames()==3);
+        assert(stream->write(std::as_bytes(stereo.first(6)),3,Deadline::max()).status==Status::Ok);
+        process();
+        for (int i=0;i<8;++i) assert(current->samples[i]==0);
+        assert(stream->emergency_output_frames()==7);
+        assert(stream->write(std::as_bytes(stereo.last(2)),1,Deadline::max()).status==Status::Ok);
+        process();
+        for (int i=0;i<8;++i) assert(current->samples[i]==values[i]);
+        assert(stream->emergency_output_frames()==7);
+        current->events->state_changed(current->user,PW_STREAM_STATE_STREAMING,PW_STREAM_STATE_UNCONNECTED,"fake disconnect");
+        assert(stream->write(std::as_bytes(stereo),4,Deadline::max()).status==Status::Disconnected);
+    }
+    {
         auto stream=provider->prepare(request(Direction::Capture));stream->start();Buffer b(32);
         current->events->state_changed(current->user,PW_STREAM_STATE_STREAMING,PW_STREAM_STATE_UNCONNECTED,"fake disconnect");
         assert(stream->read(b.bytes(),4,Deadline::max()).status==Status::Disconnected);
     }
     assert(loops==0 && streams==0);wrong_format=true;rejects([&]{provider->prepare(request(Direction::Capture));});
+    auto capture=request(Direction::Capture);
+    capture.options={{"underrun","rebuffer"}};
+    rejects([&]{provider->prepare(capture);});
     assert(loops==0 && streams==0 && queued>=4);
     std::cout<<"production PipeWire adapter passed fake API negotiation, buffer bounds, discontinuity, output and cleanup tests\n";
 }

@@ -4,6 +4,8 @@ add_library(s7radio STATIC src/radio.cpp)
 set_target_properties(s7radio PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(s7radio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7radio PUBLIC s7core)
+# The demodulator and stereo decoder run at the IF sample rate in live graphs.
+target_compile_options(s7radio PRIVATE "${S7_REALTIME_COMPILE_OPTIONS}")
 s7_enable_project_warnings(s7radio)
 
 add_library(s7radio_plugin MODULE src/plugin.cpp)

@@ -9,10 +9,8 @@ spectral/wavelet analysis plugins. SDR elements and device providers are exclude
 The `licenses` directory contains licensing information and dependency provenance;
 `build-profile.json` records this build's selected features.
 
-Sound elements can be edited and validated in Studio. Device-paced sound runs
-currently use the explicit `s7hw` runner; Studio/service hardware activation is
-not implemented yet. From a terminal in this directory, check the examples
-without opening an audio device:
+Sound elements can be edited and run in Studio. Use `s7hw` to run device-paced
+audio from a terminal. Check the examples offline with these commands.
 
 ```text
 s7hw.exe --check share/s7/examples/hardware/portaudio_capture.json

@@ -29,6 +29,10 @@ public:
         std::memcpy(data+first*stride_,bytes_.data(),(n-first)*stride_);
         read_.store(rd+n,std::memory_order_release); return n;
     }
+    // Only the consumer calls this. Its read position cannot change under it.
+    std::uint64_t readable() const noexcept {
+        return write_.load(std::memory_order_acquire)-read_.load(std::memory_order_relaxed);
+    }
 private:
     void copy_in(const std::byte* d,std::uint64_t w,std::size_t n) noexcept {
         const auto first=std::min<std::uint64_t>(n,capacity_-w%capacity_);
@@ -48,9 +52,18 @@ private:
 static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
 static_assert(std::atomic<Status>::is_always_lock_free);
 
+inline std::size_t playback_refill_frames(const Request& request) {
+    const auto policy=request.options.find("underrun");
+    if (policy==request.options.end()) return 0;
+    if (request.direction!=Direction::Playback || (policy->second!="fault" && policy->second!="rebuffer"))
+        throw std::invalid_argument("Audio underrun must be fault or rebuffer on playback");
+    return policy->second=="rebuffer" ? std::max(request.block_frames,request.queue_frames/2) : 0;
+}
+
 class CallbackStream : public Stream {
 public:
-    explicit CallbackStream(Descriptor d) : Stream(std::move(d)), ring_(descriptor().actual) {}
+    explicit CallbackStream(Descriptor d) : Stream(std::move(d)),
+        refill_frames_(playback_refill_frames(descriptor().actual)), ring_(descriptor().actual) {}
     std::uint64_t emergency_output_frames() const noexcept override { return emergency_.load(); }
     void fault(Status s,int native_error=0) noexcept {
         std::uint64_t expected=0;
@@ -68,15 +81,29 @@ public:
         if (callback_status()!=Status::Ok || cancelled()) return;
         if (ring_.push(nullptr,n)!=n) fault(Status::Overflow);
     }
+    void playback_underflow() noexcept {
+        // A native underflow can describe a previous device period. With
+        // recovery enabled, play queued PCM if it is available now.
+        if (!refill_frames_) fault(Status::Underflow);
+    }
     void playback(void* p,std::size_t n) noexcept {
         if (!p) { fault(Status::BackendError); return; }
-        if (n>std::numeric_limits<std::size_t>::max()/descriptor().actual.frame_bytes()) { fault(Status::BackendError); return; }
+        const auto& request=descriptor().actual;
+        const auto stride=request.frame_bytes();
+        if (n>std::numeric_limits<std::size_t>::max()/stride) { fault(Status::BackendError); return; }
         std::size_t count=0;
-        if (callback_status()==Status::Ok && !cancelled()) count=ring_.pop(static_cast<std::byte*>(p),n);
+        if (callback_status()==Status::Ok && !cancelled()) {
+            if (refilling_ && ring_.readable()>=std::min(request.queue_frames,std::max(refill_frames_,n)))
+                refilling_=false;
+            if (!refilling_) count=ring_.pop(static_cast<std::byte*>(p),n);
+        }
         if (count<n) {
-            std::memset(static_cast<std::byte*>(p)+count*descriptor().actual.frame_bytes(),0,(n-count)*descriptor().actual.frame_bytes());
+            std::memset(static_cast<std::byte*>(p)+count*stride,0,(n-count)*stride);
             emergency_.fetch_add(n-count,std::memory_order_relaxed);
-            if (!cancelled()) fault(Status::Underflow);
+            if (!cancelled()) {
+                playback_underflow();
+                refilling_=refill_frames_!=0;
+            }
         }
     }
 protected:
@@ -114,7 +141,9 @@ private:
         // never hide queued frames just because the producer failed later.
         return {done,src?callback_status():Status::Ok,0,{},src?callback_error():0};
     }
+    const std::size_t refill_frames_;
     Ring ring_;
+    bool refilling_{}; // Only the playback callback changes this state.
     std::atomic<std::uint64_t> fault_{}; // Status and native code published together.
     std::atomic<std::uint64_t> emergency_{};
 };

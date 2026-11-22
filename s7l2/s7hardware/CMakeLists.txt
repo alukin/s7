@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: LGPL-3.0-or-later
 add_library(s7hardware SHARED src/hardware.cpp src/registry.cpp src/provider_module.cpp src/backend_call.cpp)
+# A hardware boundary moves one frame per graph tick, even in Debug builds.
+set_property(SOURCE src/hardware.cpp APPEND PROPERTY COMPILE_OPTIONS "${S7_REALTIME_COMPILE_OPTIONS}")
 target_link_libraries(s7hardware PUBLIC s7core Threads::Threads)
 target_include_directories(s7hardware PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 set_target_properties(s7hardware PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 0)

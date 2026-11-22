@@ -38,7 +38,7 @@ int main(int argc,char** argv) {
 #if defined(S7_WITH_SDR)
                     <<"/RF TX"
 #endif
-                    <<". One hardware boundary and rate domain.\n"
+                    <<". Capture can drive a lower-rate AudioSink through Resamplers.\n"
                     <<"Completion aborts the stream; playback counts mean accepted frames, not DAC presentation.\n"; return 0;
             } else if (arg=="--check" || arg=="--run" || arg=="--devices") {
                 if (!mode.empty()) throw std::invalid_argument("choose one mode");
@@ -92,6 +92,11 @@ int main(int argc,char** argv) {
         const auto& d=run.descriptor();
         std::cout<<"prepared backend="<<d.actual.backend<<" device="<<d.actual.device<<" rate="<<d.actual.rate.to_string()
             <<" session="<<d.session_id<<" format="<<s7::signal_type_info(d.actual.type).name<<'\n';
+        for (const auto& [key,value]:d.backend_details) {
+            if (key.ends_with(".sample_rate_hz") || key.ends_with(".frequency_hz"))
+                std::cout<<key<<'='<<value<<'\n';
+        }
+        std::cout<<std::flush;
         std::signal(SIGINT,[](int){interrupted.store(true,std::memory_order_relaxed);});
         std::signal(SIGTERM,[](int){interrupted.store(true,std::memory_order_relaxed);});
         std::stop_source stop;
@@ -104,7 +109,8 @@ int main(int argc,char** argv) {
         const auto result=run.execute(frames,std::chrono::milliseconds(1000),stop.get_token());
         controller.request_stop();
         std::cout<<"status="<<s7::hardware::to_string(result.status)<<" graph_frames="<<result.graph_frames
-                 <<" transferred_frames="<<result.transferred_frames<<" emergency_output_frames="<<result.emergency_output_frames
+                 <<" transferred_frames="<<result.transferred_frames<<" playback_frames="<<result.playback_frames
+                 <<" emergency_output_frames="<<result.emergency_output_frames
                  <<" native_error="<<result.native_error<<'\n';
         return result.status==s7::hardware::Status::Ok?0:2;
     } catch (const std::exception& e) { std::cerr<<"s7hw: "<<e.what()<<'\n'; return 1; }

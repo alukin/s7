@@ -109,6 +109,11 @@ void step_times() {
     const auto audio = s7::Rate::from_hz(44100);
     for (std::uint64_t step : {0ull, 1ull, 44100ull, 123456789ull})
         require(audio.step_time_ns(step) == std::llround(static_cast<long double>(step) * 1e9L / 44100), "Step time drifted");
+    const auto capture = s7::Rate::from_hz(1'200'000);
+    for (const std::uint64_t step : {18'446'744'073ull, 18'446'744'074ull}) {
+        require(capture.step_time_ns(step) == static_cast<std::int64_t>((step * 2500 + 1) / 3),
+                "Step time changed at integer fast-path boundary");
+    }
     for (std::int64_t time : {std::int64_t{0}, std::int64_t{1}, std::int64_t{22675}, std::int64_t{22676}, std::int64_t{1'000'000'000}}) {
         const auto step = audio.first_step_at_ns(time);
         require(audio.step_time_ns(step) >= time && (step == 0 || audio.step_time_ns(step - 1) < time), "First step at time");

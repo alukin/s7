@@ -22,6 +22,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # only with GNU extensions enabled.
 set(CMAKE_CXX_EXTENSIONS ON)
 
+# Give selected real-time DSP sources optimization in standard development builds.
+set(S7_REALTIME_COMPILE_OPTIONS "$<$<OR:$<CONFIG:Debug>,$<STREQUAL:$<CONFIG>,>>:-O2>")
+
 function(s7_enable_project_warnings target_name)
 	if (NOT TARGET ${target_name})
 		return()
@@ -155,6 +158,8 @@ add_subdirectory(s7io)
 if(S7_BUILD_SDR)
     add_subdirectory(s7radio)
     add_subdirectory(s7sdr)
+    target_link_libraries(s7audio_plugin PRIVATE s7sdr)
+    target_compile_definitions(s7audio_plugin PRIVATE S7_WITH_SDR=1)
 endif()
 add_executable(s7hw s7hardware/tools/s7hw.cpp)
 target_link_libraries(s7hw PRIVATE s7audio s7io)

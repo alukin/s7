@@ -10,6 +10,7 @@
 #include <s7/core.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/resampler.hpp>
+#include <limits>
 
 #include <cmath>
 #include <functional>
@@ -107,6 +108,29 @@ void anti_aliasing() {
     up.adopt_rate(s7::Rate::from_hz(4000));
     up.adopt_input_rate(s7::Rate::from_hz(1000));
     require(up.filter_delay() == 0, "Raising the rate adds no filter");
+}
+
+void batched_history() {
+    const auto in = s7::Rate::from_hz(8000), out = s7::Rate::from_hz(1200);
+    const auto signal = [](std::uint64_t i) { return std::sin(0.027 * i); };
+    const auto expected = resample(2, in, out, signal, 400);
+    s7::Resampler resampler(2);
+    double input = 0;
+    const s7::InputBinding binding = &input;
+    resampler.bind_inputs(std::span(&binding, 1));
+    resampler.adopt_rate(out);
+    resampler.adopt_input_rate(in);
+    for (std::size_t batch = 0; batch < 4; ++batch) {
+        for (std::size_t i = 0; i < 700; ++i) {
+            input = signal(batch * 700 + i);
+            resampler.capture_input();
+        }
+        for (std::size_t j = 0; j < 100; ++j) {
+            resampler.step();
+            const auto actual = *static_cast<const double*>(resampler.outputs()[0]);
+            require(actual == expected[batch * 100 + j], "Resampling changed with batched input or history compaction");
+        }
+    }
 }
 
 // A C++ source pinned at a rate, emitting its own step index.
@@ -235,16 +259,29 @@ void nested_resampler() {
         require(runtime.real_output_of("inner") == static_cast<double>(2 * k / 3), "Nested domains follow the parent's steps");
     }
 }
+void integer_rate_positions() {
+    const auto capture = s7::Rate::reduced(1200000, 1);
+    const auto audio = s7::Rate::reduced(48000, 1);
+    const auto last_fast_tick = std::numeric_limits<std::uint64_t>::max() / capture.numerator;
+    for (const auto tick : {std::uint64_t{0}, std::uint64_t{123}, last_fast_tick, last_fast_tick+1}) {
+        require(s7::resampling::samples_through(tick, capture, audio) == tick*25+1,
+                "Audio ticks schedule the wrong number of capture samples");
+        const auto pos = s7::resampling::input_position(tick, capture, audio);
+        require(pos.index == tick*25 && pos.fraction == 0, "Audio sample position changed at integer fast-path boundary");
+    }
+}
 } // namespace
 
 int main() try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
     interpolation_orders();
     anti_aliasing();
+    batched_history();
     rate_domains();
     equal_rates_pass_through();
     feedback_across_domains();
     nested_resampler();
+    integer_rate_positions();
     std::cout << "Resampler orders, anti-aliasing, rate domain scheduling, pass-through and feedback rules passed\n";
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

@@ -40,7 +40,6 @@ public:
     PaStreamOwner(const Request& r,std::shared_ptr<Context> context,PaDeviceIndex index)
         : CallbackStream(describe(r,index)), context_(std::move(context)) {
         detail::validate_audio(r);
-        if (!r.options.empty()) throw std::invalid_argument("PortAudio v1 has no backend options");
         const auto* info=Pa_GetDeviceInfo(index);
         if (!info) throw std::invalid_argument("PortAudio device unavailable");
         const bool capture=r.direction==Direction::Capture;
@@ -69,7 +68,7 @@ private:
         const bool capture=s.descriptor().actual.direction==Direction::Capture;
         if (capture && (flags&paInputOverflow)) s.fault(Status::Overflow);
         if (capture && (flags&paInputUnderflow)) s.fault(Status::ContinuityLost);
-        if (!capture && (flags&paOutputUnderflow)) s.fault(Status::Underflow);
+        if (!capture && (flags&paOutputUnderflow)) s.playback_underflow();
         if (!capture && (flags&paOutputOverflow)) s.fault(Status::ContinuityLost);
         if (capture) s.capture(in,frames); else s.playback(out,frames);
         return s.cancelled()?paAbort:paContinue;
@@ -95,7 +94,9 @@ public:
     std::unique_ptr<Stream> prepare(const Request& r) override {
         if (r.backend!=id()) throw std::invalid_argument("PortAudio backend mismatch");
         detail::validate_audio(r);
-        if (!r.options.empty()) throw std::invalid_argument("PortAudio v1 has no backend options");
+        if (std::ranges::any_of(r.options, [](const auto& option) { return option.first!="underrun"; }))
+            throw std::invalid_argument("PortAudio supports the underrun option on playback");
+        detail::playback_refill_frames(r);
         auto context=std::make_shared<Context>();
         const auto index=select_device(r);
         return std::make_unique<PaStreamOwner>(r,std::move(context),index);

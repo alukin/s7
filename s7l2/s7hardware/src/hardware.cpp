@@ -130,75 +130,234 @@ void Boundary::step() {
     else for (std::size_t i=0; i<input_count(); ++i) std::memcpy(frame+i*stride,input_binding(i),stride);
     ++cursor_;
 }
-Boundary& validate_graph(const ExecutableGraph& g) {
-    Boundary* boundary=nullptr;
+namespace {
+struct Profile {
+    Boundary* primary{};
+    Boundary* audio{};
+    std::uint64_t audio_divisor{};
+};
+
+Profile profile(const ExecutableGraph& g) {
+    Profile result;
+    Boundary* playback=nullptr;
     for (const auto& [id, e] : g.elements) {
         if (auto* b = dynamic_cast<Boundary*>(e.get())) {
-            if (boundary) throw std::invalid_argument("hardware v1 requires one boundary: independent/duplex clocks are not yet qualified");
-            boundary=b;
+            auto*& slot = b->request().direction == Direction::Capture ? result.primary : playback;
+            if (slot) throw std::invalid_argument("hardware run supports at most one capture and one playback boundary");
+            slot=b;
         }
     }
-    if (!boundary) throw std::invalid_argument("hardware run has no boundary");
-    if (g.domains.size()!=1 || g.domains[0].rate != boundary->request().rate)
-        throw std::invalid_argument("hardware v1 requires one matching rate domain");
-    return *boundary;
+    if (!result.primary) {
+        if (!playback) throw std::invalid_argument("hardware run has no boundary");
+        if (g.domains.size()!=1 || g.domains.front().rate!=playback->request().rate)
+            throw std::invalid_argument("playback-only hardware run requires one matching rate domain");
+        result.primary=playback;
+        return result;
+    }
+
+    const auto rate=result.primary->request().rate;
+    // Every other domain must be downstream of capture and no faster than it.
+    std::vector<bool> downstream(g.domains.size(), false);
+    for (std::size_t i=0;i<g.domains.size();++i) downstream[i]=g.domains[i].rate==rate;
+    for (bool changed=true;changed;) {
+        changed=false;
+        for (const auto& [input, output]:g.domain_links) {
+            if (downstream[input] && !downstream[output]) downstream[output]=changed=true;
+        }
+    }
+    for (std::size_t i=0;i<g.domains.size();++i) {
+        const auto other=g.domains[i].rate;
+        if (!downstream[i] || static_cast<uint128_t>(other.numerator)*rate.denominator >
+            static_cast<uint128_t>(rate.numerator)*other.denominator)
+            throw std::invalid_argument("capture hardware run requires matching or slower downstream rate domains");
+    }
+    if (playback) {
+        const auto audio_rate=playback->request().rate;
+        if (playback->type_name()!="AudioSink" || rate.denominator!=1 || audio_rate.denominator!=1 ||
+            rate.numerator % audio_rate.numerator || rate==audio_rate)
+            throw std::invalid_argument("capture can feed one AudioSink at an integer divisor of the capture rate");
+        result.audio=playback;
+        result.audio_divisor=rate.numerator/audio_rate.numerator;
+    }
+    return result;
 }
-Run::Run(ExecutableGraph g, Resolve resolve) : block_(0) {
-    boundary_=&validate_graph(g);
+
+std::unique_ptr<Stream> prepare_stream(Provider* provider, const Request& r) {
+    if (!provider || provider->id()!=r.backend) throw std::invalid_argument("requested hardware provider is unavailable: "+r.backend);
+    BackendCallGuard guard;
+    auto stream=provider->prepare(r);
+    if (!stream) throw std::runtime_error("hardware provider returned no stream");
+    const auto& a=stream->descriptor().actual;
+    if (a.backend!=r.backend || a.device!=r.device || a.direction!=r.direction || a.type!=r.type ||
+        a.rate!=r.rate || a.channels!=r.channels || a.block_frames!=r.block_frames || a.queue_frames!=r.queue_frames) {
+        stream->stop(); throw std::invalid_argument("hardware negotiated descriptor differs from graph request");
+    }
+    return stream;
+}
+}
+
+Boundary& validate_graph(const ExecutableGraph& g) { return *profile(g).primary; }
+
+Run::Run(ExecutableGraph g) : block_(0) {
+    const auto config=profile(g);
+    boundary_=config.primary;
+    audio_sink_=config.audio;
+    audio_divisor_=config.audio_divisor;
     const auto& r=boundary_->request();
     runtime_=std::make_unique<NodeRuntime>(std::move(g));
     runtime_->set_model_time_rate(r.rate);
     block_=Buffer(r.block_frames*r.frame_bytes());
-    provider_=resolve(r.backend);
-    if (!provider_ || provider_->id()!=r.backend) throw std::invalid_argument("requested hardware provider is unavailable: "+r.backend);
-    { BackendCallGuard guard;stream_=provider_->prepare(r); }
-    if (!stream_) throw std::runtime_error("hardware provider returned no stream");
-    const auto& a=stream_->descriptor().actual;
-    if (a.backend!=r.backend || a.device!=r.device || a.direction!=r.direction || a.type!=r.type ||
-        a.rate!=r.rate || a.channels!=r.channels || a.block_frames!=r.block_frames || a.queue_frames!=r.queue_frames) {
-        stream_->stop(); throw std::invalid_argument("hardware negotiated descriptor differs from graph request");
+    if (audio_sink_) {
+        const auto& audio=audio_sink_->request();
+        audio_block_=Buffer(audio.block_frames*audio.frame_bytes());
     }
 }
-Run::~Run() { if (stream_) stream_->stop(); }
-RunStats Run::execute(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token st) {
+
+Run::Run(ExecutableGraph g, Resolve resolve) : Run(std::move(g)) { prepare(std::move(resolve)); }
+
+void Run::prepare(Resolve resolve) {
+    if (stream_) throw std::logic_error("hardware run already prepared");
+    std::unique_ptr<Provider> audio_provider;
+    std::unique_ptr<Stream> audio_stream;
+    if (audio_sink_) {
+        const auto& audio=audio_sink_->request();
+        audio_provider=resolve(audio.backend);
+        audio_stream=prepare_stream(audio_provider.get(), audio);
+    }
+    const auto& r=boundary_->request();
+    auto provider=resolve(r.backend);
+    stream_=prepare_stream(provider.get(), r);
+    provider_=std::move(provider);
+    audio_provider_=std::move(audio_provider);
+    audio_stream_=std::move(audio_stream);
+}
+
+const Descriptor& Run::descriptor() const {
+    if (!stream_) throw std::logic_error("hardware run is not prepared");
+    return stream_->descriptor();
+}
+
+Run::~Run() {
+    if (stream_) stream_->stop();
+    if (audio_stream_) audio_stream_->stop();
+}
+
+void Run::step_to(RunStats& stats, std::uint64_t end, const StepObserver& observe) {
+    while (stats.graph_frames<end) {
+        runtime_->step();
+        ++stats.graph_frames;
+        if (observe) observe(stats.graph_frames);
+    }
+}
+
+RunStats Run::execute_capture(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token st,
+                              const StepObserver& observe) {
+    RunStats stats;
+    std::stop_callback cancel_capture(st, [this] { cancel(); });
+    const auto interrupted=[&] { return stream_->cancelled(); };
+    const auto finish=[&] {
+        boundary_->on_step_failure();
+        boundary_->unstage();
+        stream_->stop();
+        if (audio_sink_) {
+            audio_sink_->on_step_failure();
+            audio_sink_->unstage();
+            audio_stream_->stop();
+            stats.emergency_output_frames=audio_stream_->emergency_output_frames();
+        }
+    };
+    const auto audio_frames_through=[&](std::uint64_t ticks) {
+        // Tick zero produces the first audio frame. Count subsequent audio
+        // ticks on the same model-time grid used by NodeRuntime.
+        return ticks ? (ticks-1)/audio_divisor_+1 : 0;
+    };
+    const auto prefill=audio_stream_ ? audio_stream_->descriptor().startup_prefill_frames : 0;
+    const auto audio_stride=audio_sink_ ? audio_sink_->request().frame_bytes() : 0;
+    auto block_limit=boundary_->request().block_frames;
+    if (audio_sink_ && (block_limit-1)/audio_divisor_+1 > audio_sink_->request().block_frames)
+        block_limit=audio_sink_->request().block_frames*audio_divisor_;
+
+    try {
+        if (!interrupted()) stream_->start();
+        while (stats.graph_frames<frames && !interrupted()) {
+            const auto limit=static_cast<std::size_t>(std::min<std::uint64_t>(block_limit, frames-stats.graph_frames));
+            const auto input=stream_->read(block_.bytes(),limit,std::chrono::steady_clock::now()+timeout,st);
+            stats.transferred_frames+=input.frames;
+            if (input.frames) {
+                const auto end=stats.graph_frames+input.frames;
+                const auto count=audio_sink_ ? audio_frames_through(end)-audio_frames_through(stats.graph_frames) : 0;
+                if (count) audio_sink_->stage(audio_block_.bytes(),count);
+                boundary_->stage(block_.bytes(),input.frames);
+                step_to(stats,end,observe);
+                boundary_->unstage();
+                if (count) {
+                    audio_sink_->unstage();
+                    const auto deadline=std::chrono::steady_clock::now()+timeout;
+                    for (std::size_t sent=0;sent<count && !interrupted();) {
+                        auto pending=count-sent;
+                        if (stats.playback_frames<prefill) pending=std::min(pending,prefill-stats.playback_frames);
+                        const auto out=audio_stream_->write(audio_block_.bytes().subspan(sent*audio_stride),pending,deadline,st);
+                        sent+=out.frames;
+                        stats.playback_frames+=out.frames;
+                        if (out.status!=Status::Ok || !out.frames) {
+                            stats.status=out.status==Status::Ok ? Status::BackendError : out.status;
+                            stats.native_error=out.native_error;
+                            break;
+                        }
+                        if (audio_stream_->state()==State::Prepared && stats.playback_frames==prefill && !interrupted())
+                            audio_stream_->start();
+                    }
+                }
+            }
+            if (input.status!=Status::Ok || !input.frames) {
+                stats.status=input.status==Status::Ok ? Status::BackendError : input.status;
+                stats.native_error=input.native_error;
+            }
+            if (stats.status!=Status::Ok) break;
+        }
+        if (interrupted()) stats.status=Status::Cancelled;
+        else if (stats.status==Status::Ok && audio_stream_ && audio_stream_->state()==State::Prepared)
+            audio_stream_->start();
+    } catch (...) {
+        finish();
+        throw;
+    }
+    finish();
+    return stats;
+}
+
+RunStats Run::execute(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token st,
+                      const StepObserver& observe) {
+    if (!stream_) throw std::logic_error("hardware run is not prepared");
     if (executed_ || !frames || timeout.count()<=0) throw std::invalid_argument("hardware run is single-use and needs positive frames/timeout");
     executed_=true;
     RunStats stats;
     const auto& r=boundary_->request();
+    if (r.direction==Direction::Capture) return execute_capture(frames,timeout,st,observe);
     bool started=false;
     std::size_t prefilled=0;
     try {
-        if (r.direction==Direction::Capture && !st.stop_requested()) { stream_->start(); started=true; }
         while (stats.graph_frames<frames && !st.stop_requested() && !stream_->cancelled()) {
             auto count=static_cast<std::size_t>(std::min<std::uint64_t>(r.block_frames, frames-stats.graph_frames));
-            if (r.direction==Direction::Playback && !started)
+            if (!started)
                 count=std::min(count,stream_->descriptor().startup_prefill_frames-prefilled);
-            Transfer input;
-            if (r.direction==Direction::Capture) {
-                input=stream_->read(block_.bytes(),count,std::chrono::steady_clock::now()+timeout,st);
-                count=input.frames; stats.transferred_frames+=count;
-            }
             if (count) {
                 boundary_->stage(block_.bytes(),count);
-                for (std::size_t i=0;i<count;++i) { runtime_->step(); ++stats.graph_frames; }
+                step_to(stats,stats.graph_frames+count,observe);
                 boundary_->unstage();
             }
-            if (r.direction==Direction::Playback) {
-                std::size_t sent=0;
-                const auto deadline=std::chrono::steady_clock::now()+timeout;
-                while (sent<count) {
-                    auto out=stream_->write(block_.bytes().subspan(sent*r.frame_bytes()),count-sent,deadline,st);
-                    stats.transferred_frames+=out.frames; sent+=out.frames;
-                    if (out.status!=Status::Ok || !out.frames) { stats.status=out.status==Status::Ok?Status::BackendError:out.status;stats.native_error=out.native_error; break; }
-                }
-                if (stats.status!=Status::Ok) break;
-                if (!started) prefilled+=sent;
-                if (!started && (prefilled==stream_->descriptor().startup_prefill_frames || stats.graph_frames==frames)) {
-                    if (st.stop_requested() || stream_->cancelled()) { stats.status=Status::Cancelled; break; }
-                    stream_->start(); started=true;
-                }
-            } else if (input.status!=Status::Ok || !count) {
-                stats.status=input.status==Status::Ok?Status::BackendError:input.status;stats.native_error=input.native_error; break;
+            std::size_t sent=0;
+            const auto deadline=std::chrono::steady_clock::now()+timeout;
+            while (sent<count) {
+                auto out=stream_->write(block_.bytes().subspan(sent*r.frame_bytes()),count-sent,deadline,st);
+                stats.transferred_frames+=out.frames; sent+=out.frames;
+                if (out.status!=Status::Ok || !out.frames) { stats.status=out.status==Status::Ok?Status::BackendError:out.status;stats.native_error=out.native_error; break; }
+            }
+            if (stats.status!=Status::Ok) break;
+            if (!started) prefilled+=sent;
+            if (!started && (prefilled==stream_->descriptor().startup_prefill_frames || stats.graph_frames==frames)) {
+                if (st.stop_requested() || stream_->cancelled()) { stats.status=Status::Cancelled; break; }
+                stream_->start(); started=true;
             }
         }
         if (st.stop_requested() || stream_->cancelled()) stats.status=Status::Cancelled;

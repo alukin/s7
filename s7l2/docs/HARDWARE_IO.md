@@ -56,9 +56,9 @@ and demodulator to recover the normalized message. The FM discriminator
 reports the raw phase change in radians per sample. Filters and resamplers
 are under **Signal Processing**.
 
-The [mono FM receiver diagram](../examples/sdr/fm_receiver.s7diagram)
-can be edited in Studio and executed with `s7hw`. Follow the
-[capture and audio guide](../examples/sdr/FM_RECEIVER.md) to save a WAV.
+The [stereo FM receiver diagram](../examples/sdr/fm_receiver.s7diagram)
+plays live from Studio's **Run** action or from `s7hw`. See its
+[tuning and playback guide](../examples/sdr/FM_RECEIVER.md).
 
 ## Explicit activation and pacing
 
@@ -88,12 +88,21 @@ cancellation. Transfers have a one-second deadline in this runner; driver
 shutdown is not a hard real-time guarantee. The final report separates graph
 frames, accepted/delivered frames, terminal status and emergency output frames.
 
-Only **one hardware boundary and one exact rate domain** are admitted initially.
-Any number of ordinary graph elements can precede/follow that boundary. Capture
-waits for a block then performs one ordinary graph step per received frame.
-Playback stages scalar graph frames into bounded blocks and waits for device
-queue capacity. No graph code runs in an audio callback and no timer also paces
-the graph. Existing `Delay`, publication and failed-domain behavior remain intact.
+Studio's **Run** action uses the same device-paced runner for capture and audio
+playback when the S7 hardware plugins are installed. Use the hardware's nominal
+rate in **Run Configuration**. Use **Stop** to release the devices and **Run**
+to start a new stream. SDR transmission requires the explicit `s7hw` command.
+
+A capture run steps once per received frame and can feed slower graph domains
+through explicit resamplers. It may also feed one `AudioSink` at an integer
+divisor of the capture rate. The audio provider buffers complete playback frames.
+Capture and playback remain independent hardware clocks.
+The runner does not correct for clock drift. Its report includes the separate
+number of frames accepted by the audio provider.
+
+A playback-only run uses a single rate domain. Playback stages scalar graph
+frames into bounded blocks and waits for device queue capacity. The graph
+runs on its owning thread, paced by device input or playback capacity.
 
 Audio playback prefills its configured `queue_frames` before activation; SDR
 providers prefill one block. A queue bound not divisible by `block_frames` uses
@@ -141,6 +150,13 @@ the adapters make no strict-native PCM guarantee. PortAudio uses its callback
 status flags; PipeWire checks negotiated application parameters, buffer/chunk
 bounds, discontinuity/corruption flags and stream disconnection.
 
+PipeWire and PortAudio playback accept string-valued
+`options.underrun="rebuffer"`. When audio runs short, the callback emits
+silence and resumes once the queue holds at least half its capacity and enough
+frames for the next callback, within the configured capacity. The runner counts
+the silence separately as emergency output. The default `"fault"` policy ends
+the run on underrun.
+
 Native PipeWire capture accepts string-valued `options.capture_sink="true"`
 to explicitly capture a sink monitor (`"false"` or omission selects ordinary
 capture). It is rejected on playback. Explicit targets disable policy fallback;
@@ -153,8 +169,12 @@ require driver-reported native `CS16` plus respectively full-scale 2048 or
 CI12 values are range-checked. Driver channels use canonical zero-based integer
 IDs; they do not establish that RF connectors exist. Supported stopped options
 are `frequency_hz`, `bandwidth_hz`, `gain_db` and `antenna`, applied to all selected
-channels with exact readback checks. Unknown options or rounded requested controls
-fail. Software/library support for a channel does not qualify its physical wiring.
+channels with readback checks. On receivers with selectable gain control, set
+`gain_mode` to `auto` or `manual`. Automatic gain and `gain_db` are mutually
+exclusive. Sample rate readback is exact by default. Receivers can opt into a
+readback tolerance with `rate_tolerance_ppm`; the graph keeps its nominal rate
+and the descriptor reports the driver readback per channel. A transfer respects
+the driver's reported stream MTU when available.
 
 `Descriptor` records the accepted request, randomized session ID, segment and
 configuration/timing revisions, startup prefill, amplitude interpretation and

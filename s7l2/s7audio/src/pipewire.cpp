@@ -15,8 +15,9 @@ public:
     explicit PwStreamOwner(const Request& r) : CallbackStream(detail::audio_descriptor(r)) {
         detail::validate_audio(r);
         for (const auto& [key,value]:r.options) {
+            if (key=="underrun") continue; // Validated by CallbackStream.
             if (key!="capture_sink" || (value!="true" && value!="false") || r.direction!=Direction::Capture)
-                throw std::invalid_argument("PipeWire supports only boolean capture_sink on capture streams");
+                throw std::invalid_argument("PipeWire options are boolean capture_sink on capture and underrun on playback");
         }
         init();
         try {

@@ -283,5 +283,5 @@ nested schemas and optional in-graph analysis plugins.
 
 See the [SDR examples](sdr/README.md).
 
-- [SoapySDR mono FM receiver diagram](sdr/fm_receiver.s7diagram) and
-  [capture and audio guide](sdr/FM_RECEIVER.md).
+- [SoapySDR stereo FM receiver diagram](sdr/fm_receiver.s7diagram) and
+  [tuning and playback guide](sdr/FM_RECEIVER.md).

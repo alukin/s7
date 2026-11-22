@@ -12,8 +12,9 @@
 #include "s7/float_types.hpp"
 #include "s7/rate.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -101,6 +102,13 @@ public:
 
     void capture_input() override
     {
+        // Reclaim the consumed prefix in one move. Keep any samples the
+        // scheduler delivered ahead of the next output tick.
+        if (samples_.size() == samples_.capacity() && first_ > 0 && first_ >= samples_.size() / 2) {
+            std::move(samples_.begin() + first_, samples_.end(), samples_.begin());
+            samples_.resize(samples_.size() - first_);
+            first_ = 0;
+        }
         samples_.push_back(read_input<value_type>(0));
         ++captured_;
     }
@@ -144,32 +152,39 @@ private:
     // before the start and never reading past the newest captured sample.
     value_type sample(std::int64_t i) const
     {
-        if (taps_.empty()) return raw(i);
+        if (i >= 0 && static_cast<std::uint64_t>(i) >= captured_)
+            throw std::logic_error("Resampler read an input sample it has not received.");
+        const auto oldest = oldest_sample();
+        const auto offset = i > oldest ? static_cast<std::size_t>(i - oldest) : 0;
+        const auto* first = samples_.data() + first_;
+        const auto* current = first + offset;
+        const auto tap_count = taps_.size();
+        if (!tap_count) return *current;
+        const auto* taps = taps_.data();
+        const auto available = i < oldest ? 0 : std::min(tap_count, offset + 1);
         value_type sum{};
-        for (std::size_t k = 0; k < taps_.size(); ++k) sum = sum + raw(i - static_cast<std::int64_t>(k)) * taps_[k];
+        for (std::size_t k = 0; k < available; ++k)
+            sum = sum + current[-static_cast<std::ptrdiff_t>(k)] * taps[k];
+        for (std::size_t k = available; k < tap_count; ++k)
+            sum = sum + *first * taps[k];
         return sum;
     }
-    value_type raw(std::int64_t i) const
+    std::int64_t oldest_sample() const
     {
-        const auto newest = static_cast<std::int64_t>(captured_) - 1;
-        if (i > newest) throw std::logic_error("Resampler read an input sample it has not received.");
-        if (i < 0) i = 0;
-        const auto oldest = static_cast<std::int64_t>(captured_ - samples_.size());
-        if (i < oldest) i = oldest; // older samples were only kept as the start value
-        return samples_[static_cast<std::size_t>(i - oldest)];
+        return static_cast<std::int64_t>(captured_ - (samples_.size() - first_));
     }
-    void discard_before(const std::int64_t i)
+    void discard_before(std::int64_t i)
     {
-        while (!samples_.empty() && static_cast<std::int64_t>(captured_ - samples_.size()) < i && samples_.size() > 1) {
-            samples_.pop_front();
-        }
+        const auto oldest = oldest_sample();
+        if (i > oldest) first_ += std::min(static_cast<std::size_t>(i - oldest), samples_.size() - first_ - 1);
     }
 
     int order_;
     double attenuation_db_;
     std::optional<Rate> input_rate_, output_rate_;
     std::vector<weight_type> taps_;
-    std::deque<value_type> samples_;
+    std::vector<value_type> samples_;
+    std::size_t first_{};
     std::uint64_t captured_{}, step_{};
     value_type output_{};
 };

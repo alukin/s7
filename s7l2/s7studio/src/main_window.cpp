@@ -796,6 +796,8 @@ void MainWindow::buildUi()
     for (const auto& candidate : developmentPluginCandidates()) {
         pluginLoader_->load_plugin(candidate, registry);
     }
+    runner_->setHardwareFactory(reinterpret_cast<s7::hardware::CreateLiveRun>(
+        pluginLoader_->loaded_symbol("s7audio", s7::hardware::live_run_symbol)));
 
     elementPickerPanel_ = new ui::ElementPickerPanel(registry, this);
     connect(elementPickerPanel_, &ui::ElementPickerPanel::elementRequested,
@@ -2059,7 +2061,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     auto* frequencySpin = new QDoubleSpinBox(&dialog);
     frequencySpin->setObjectName(QStringLiteral("run.frequency"));
     frequencySpin->setDecimals(6);
-    frequencySpin->setRange(0.001, 1'000'000.0);
+    frequencySpin->setRange(0.001, std::max(1'000'000.0, document_.frequencyHz()));
     frequencySpin->setSingleStep(10.0);
     frequencySpin->setValue(std::max(0.001, document_.frequencyHz()));
     const double initialDisplayedFrequency = frequencySpin->value();

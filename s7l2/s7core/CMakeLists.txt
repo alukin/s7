@@ -30,6 +30,11 @@ add_library(s7core SHARED
     src/platform.cpp
 )
 
+# Keep the step scheduler and its hot DSP implementations viable for live I/O
+# in a Debug Studio build. Debug symbols and assertions remain enabled.
+set_property(SOURCE src/runtime.cpp src/rate.cpp src/resampler.cpp src/builtin_element_registry.cpp
+    APPEND PROPERTY COMPILE_OPTIONS "${S7_REALTIME_COMPILE_OPTIONS}")
+
 if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 23)
         message(FATAL_ERROR "Windows builds require Clang 22: Clang 23 changes the F128 calling convention and is not supported by the current ABI adapter.")

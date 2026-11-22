@@ -15,8 +15,19 @@ namespace s7 {
 
 std::int64_t Rate::step_time_ns(const std::uint64_t step) const
 {
+    constexpr auto max=std::numeric_limits<std::uint64_t>::max();
+    constexpr std::uint64_t ns_per_second=1'000'000'000;
+    if (numerator && denominator<=max/ns_per_second) {
+        const auto scale=denominator*ns_per_second;
+        if (scale && step<=(max-numerator/2)/scale) {
+            const auto rounded=(step*scale+numerator/2)/numerator;
+            if (rounded>static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+                throw std::overflow_error("Model time exceeds the signed 64-bit nanosecond range.");
+            return static_cast<std::int64_t>(rounded);
+        }
+    }
     using boost::multiprecision::uint256_t;
-    const uint256_t scaled = uint256_t(step) * denominator * 1'000'000'000u;
+    const uint256_t scaled = uint256_t(step) * denominator * ns_per_second;
     const uint256_t rounded = (scaled + numerator / 2) / numerator;
     if (rounded > std::numeric_limits<std::int64_t>::max()) {
         throw std::overflow_error("Model time exceeds the signed 64-bit nanosecond range.");

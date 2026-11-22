@@ -2,6 +2,64 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include <s7/audio.hpp>
 #include <s7/element_plugin.hpp>
+#include <s7/hardware_live_run.hpp>
+#if defined(S7_WITH_SDR)
+#include <s7/sdr.hpp>
+#endif
+#include <algorithm>
+
+namespace {
+using namespace s7::hardware;
+
+std::unique_ptr<Provider> resolve(std::string_view name) {
+    const auto audio = s7::audio::backends();
+    if (std::ranges::find(audio, name) != audio.end()) return s7::audio::provider(name);
+#if defined(S7_WITH_SDR)
+    const auto sdr = s7::sdr::backends();
+    if (std::ranges::find(sdr, name) != sdr.end()) return s7::sdr::provider(name);
+#endif
+    throw std::invalid_argument("hardware backend unavailable: " + std::string(name));
+}
+
+class PublicLiveRun final : public LiveRun {
+public:
+    explicit PublicLiveRun(s7::ExecutableGraph graph) : run_(std::move(graph)) {}
+    s7::NodeRuntime& runtime() noexcept override { return run_.runtime(); }
+    std::string prepare() override {
+        run_.prepare(resolve);
+        const auto& d = run_.descriptor();
+        auto description = d.actual.backend + " " + d.actual.device + " at " + d.actual.rate.to_string();
+        for (const auto& [key, value] : d.backend_details) {
+            if (key.ends_with(".frequency_hz") || key.ends_with(".sample_rate_hz"))
+                description += ", " + key + "=" + value;
+        }
+        return description;
+    }
+    void execute(std::uint64_t frames, std::stop_token stop, const Run::StepObserver& observe) override {
+        const auto stats = run_.execute(frames, std::chrono::seconds(1), stop, observe);
+        if (stats.status == Status::Ok || (stats.status == Status::Cancelled && stop.stop_requested())) return;
+        auto error = std::string("Hardware run: ") + to_string(stats.status);
+        if (stats.native_error) error += " (driver code " + std::to_string(stats.native_error) + ")";
+        throw std::runtime_error(error);
+    }
+private:
+    Run run_;
+};
+}
+
+extern "C" s7::hardware::LiveRun* s7_create_live_run_v1(s7::ExecutableGraph& graph, s7::Rate rate) {
+    const bool has_hardware = std::ranges::any_of(graph.elements, [](const auto& entry) {
+        return dynamic_cast<const Boundary*>(entry.second.get()) != nullptr;
+    });
+    if (!has_hardware) return nullptr;
+    const auto& boundary = validate_graph(graph);
+    if (boundary.request().direction == Direction::Playback && boundary.type_name() != "AudioSink")
+        throw std::invalid_argument("Use s7hw for explicit SDR transmission.");
+    if (boundary.request().rate != rate)
+        throw std::invalid_argument("Set the model step rate to the hardware rate of " + boundary.request().rate.to_string() + ".");
+    return new PublicLiveRun(std::move(graph));
+}
+
 extern "C" const S7PluginInfo* s7_plugin_query() {
     static const S7PluginInfo info{S7_PLUGIN_API_VERSION,2,"s7audio","0.1.0","S7 Project"}; return &info;
 }

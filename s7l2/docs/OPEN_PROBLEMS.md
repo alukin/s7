@@ -1,5 +1,19 @@
 # S7 Open Problems
 
+## Live SDR and audio performance
+
+The FM receiver at 672 kS/s now sustains 48 kHz stereo on the tested LAN radios.
+Further optimization remains open. Profile the device reads, scalar graph
+scheduling, resampling and audio callbacks separately to see where the time
+goes. Evaluate block-oriented processing and overlapping capture with graph
+execution while preserving causal ordering, bounded queues and explicit
+continuity reporting.
+
+Use the [FM receiver](../examples/sdr/FM_RECEIVER.md) as a repeatable benchmark
+in Studio and headless runs. Measure CPU time per second of audio, throughput
+headroom, underruns and stop latency under sustained load and with observers
+enabled. Include long runs to expose drift between the RF and audio clocks.
+
 ## Mixed observer/full-viewer load — 0.1.1 qualification
 
 The original synthetic published-source check with 12 selected observers, four

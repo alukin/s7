@@ -147,28 +147,43 @@ public:
     explicit Sink(Request, std::string_view name = "HardwareSink");
 };
 
-struct RunStats { std::uint64_t graph_frames{}, transferred_frames{}, emergency_output_frames{}; Status status{Status::Ok}; int native_error{}; };
+struct RunStats {
+    std::uint64_t graph_frames{}, transferred_frames{}, playback_frames{}, emergency_output_frames{};
+    Status status{Status::Ok};
+    int native_error{};
+};
 // Offline profile validation; does not resolve providers or open devices.
 Boundary& validate_graph(const ExecutableGraph&);
-// v1 deliberately accepts exactly one hardware boundary and one rate domain.
-// The owner waits for device data/capacity, then runs N ordinary scalar steps.
-// No wall-clock scheduler, graph work in callbacks, or independent-clock FIFO.
+// A capture-driven run may also feed one lower-rate AudioSink. The audio
+// provider buffers complete frames and reports underruns/other device faults.
+// The graph uses nominal rates; it does not synchronize physical clocks.
 class Run {
 public:
     using Resolve = std::function<std::unique_ptr<Provider>(std::string_view)>;
+    using StepObserver = std::function<void(std::uint64_t)>;
+    // Offline construction. The execution owner prepares and releases streams.
+    explicit Run(ExecutableGraph);
     Run(ExecutableGraph, Resolve);
     ~Run();
+    void prepare(Resolve);
     RunStats execute(std::uint64_t frames, std::chrono::milliseconds transfer_timeout,
-                     std::stop_token = {});
-    const Descriptor& descriptor() const noexcept { return stream_->descriptor(); }
+                     std::stop_token = {}, const StepObserver& = {});
+    const Descriptor& descriptor() const;
     NodeRuntime& runtime() noexcept { return *runtime_; }
-    void cancel() noexcept { stream_->cancel(); }
+    void cancel() noexcept {
+        if (stream_) stream_->cancel();
+        if (audio_stream_) audio_stream_->cancel();
+    }
 private:
-    std::unique_ptr<Provider> provider_;
-    std::unique_ptr<Stream> stream_;
-    Boundary* boundary_{};
+    RunStats execute_capture(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token,
+                             const StepObserver&);
+    void step_to(RunStats&, std::uint64_t end, const StepObserver&);
+    std::unique_ptr<Provider> provider_, audio_provider_;
+    std::unique_ptr<Stream> stream_, audio_stream_;
+    Boundary* boundary_{}, *audio_sink_{};
     std::unique_ptr<NodeRuntime> runtime_;
-    Buffer block_;
+    Buffer block_, audio_block_{0};
+    std::uint64_t audio_divisor_{};
     bool executed_{};
 };
 

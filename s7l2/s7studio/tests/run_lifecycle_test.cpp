@@ -3,6 +3,39 @@
 
 #include "lifecycle_test_support.hpp"
 
+namespace {
+struct HardwareTrace {
+    std::thread::id preparedOn;
+    std::atomic<bool> closedOnWorker{};
+};
+HardwareTrace hardwareTrace;
+
+class TestHardwareRun final : public s7::hardware::LiveRun {
+public:
+    TestHardwareRun(s7::ExecutableGraph graph, s7::Rate rate) : runtime_(std::move(graph)) {
+        runtime_.set_model_time_rate(rate);
+    }
+    ~TestHardwareRun() override {
+        hardwareTrace.closedOnWorker.store(hardwareTrace.preparedOn == std::this_thread::get_id());
+    }
+    s7::NodeRuntime& runtime() noexcept override { return runtime_; }
+    std::string prepare() override {
+        hardwareTrace.preparedOn = std::this_thread::get_id();
+        return "test hardware";
+    }
+    void execute(std::uint64_t, std::stop_token stop, const s7::hardware::Run::StepObserver& observe) override {
+        runtime_.step();
+        observe(1);
+        std::mutex mutex;
+        std::condition_variable_any condition;
+        std::unique_lock lock(mutex);
+        condition.wait(lock, stop, [] { return false; });
+    }
+private:
+    s7::NodeRuntime runtime_;
+};
+}
+
 class LifecycleTest : public QObject {
     Q_OBJECT
     std::shared_ptr<Gate> gate_;
@@ -187,6 +220,32 @@ private slots:
         QCOMPARE(gate_->inStep.load(), 0);
         QVERIFY(!gate_->destroyedInStep.load());
         QCoreApplication::sendPostedEvents();
+    }
+    void hardwareStopsAndReleasesOnWorker() {
+        using enum s7studio::RunState;
+        hardwareTrace.preparedOn = {};
+        hardwareTrace.closedOnWorker.store(false);
+        runner_->setHardwareFactory([](s7::ExecutableGraph& graph, s7::Rate rate) -> s7::hardware::LiveRun* {
+            return new TestHardwareRun(std::move(graph), rate);
+        });
+        s7studio::ui::ModelRunController controller(runner_.get());
+        QSignalSpy completed(runner_.get(), &s7studio::LocalSchemaRunner::runCompleted);
+        runner_->run(schema(), .001, -1, probes_);
+        gate_->allow();
+        QTRY_COMPARE(runner_->completedTicks(), 1L);
+        QVERIFY(hardwareTrace.preparedOn != std::this_thread::get_id());
+        QVERIFY(!controller.actionState().pauseEnabled);
+        runner_->pause();
+        QCOMPARE(runner_->state(), Running);
+        QVERIFY(controller.actionState().stopEnabled);
+        runner_->stop();
+        QTRY_COMPARE(completed.count(), 1);
+        QVERIFY(completed.front().at(0).toBool());
+        QCOMPARE(runner_->state(), Stopped);
+        QVERIFY(hardwareTrace.closedOnWorker.load());
+        auto samples = runner_->takeScopeSamples();
+        QCOMPARE(samples.samples.size(), std::size_t{1});
+        QCOMPARE(samples.samples.front().step, 1L);
     }
     void rapidTransitions() {
         using enum s7studio::RunState;

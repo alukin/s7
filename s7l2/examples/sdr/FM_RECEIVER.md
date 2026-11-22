@@ -1,33 +1,49 @@
 # Listen to a local FM station with SoapySDR
 
-Open the [FM receiver diagram](fm_receiver.s7diagram) in Studio. Save a working
-copy after editing **SoapySDR RX**. Set its `device` to the selector from
-`s7hw --devices soapy` and set `frequency_hz` in the string-valued `options`
-object to a strong local station. Connect a receive antenna. This example
-requires a driver and radio that can deliver one C32 channel at exactly
-1.2 MS/s. The saved 100 MHz tuning is an example.
+Open the [FM stereo receiver](fm_receiver.s7diagram) in Studio. It is tuned to
+**88.7 MHz**, Українське Радіо — Чернігівська хвиля,
+on RX channel 0 of the LibreSDR at `ip:analog.local`. The AD93xx project's
+`FM_TEST_NOTES.md` records a strong signal and stable 19 kHz stereo pilot at
+this frequency. Its second tested station, Армія FM at **100.6 MHz**, was weaker.
 
-The RX source produces tuned complex I/Q. A symmetric 97-tap Hamming FIR
-isolates the station around zero frequency. The FM discriminator measures the
-signed phase change between adjacent I/Q samples. Gain converts radians per
-sample to full-scale units at ±75 kHz deviation. The recording still contains
-the mono baseband, pilot and stereo components at the SDR sample rate.
+1. Connect an FM antenna to the receiver's RX input. Build with SoapySDR and
+   PipeWire enabled and install the SoapySDR module for your radio.
+   This setup uses [SoapyPlutoSDR](https://github.com/pothosware/SoapyPlutoSDR).
+2. To use the second LAN receiver, change **SoapySDR RX** → `device` to
+   `driver=plutosdr,uri=ip:analog1.local`. For a different radio, use
+   `s7hw --devices soapy` and adapt the antenna, bandwidth and gain options to
+   those the driver supports. Tune by changing the string-valued
+   `options.frequency_hz` in Hz.
+3. **Stereo playback** uses the default PipeWire output. Edit the sink's `device`
+   to select a specific PipeWire node, or choose the `portaudio` backend and
+   select a stereo device with `s7hw --devices portaudio`.
 
-Use the device-paced hardware runner from a directory where you can write
-`fm-baseband.s7b`. After capture, convert to 48 kHz mono audio with FFmpeg.
-The resampler rejects the pilot and higher components. De-emphasis follows
-resampling. Choose `50fm` or `75fm` to match your station.
+In Studio, press **F5** and accept **Run Configuration** with the **672,000 Hz**
+model step rate. The diagram starts in **Run continuously until stopped** mode.
+Press **Shift+F5** to stop playback. The radio paces the graph.
+
+To listen from the command line, run these commands from the repository
+directory. Press Ctrl+C to stop sooner.
 
 ```sh
-s7hw --check fm_receiver.s7diagram
-s7hw --run fm_receiver.s7diagram --frames 12000000
-ffmpeg -f f64le -ar 1200000 -ac 1 -skip_initial_bytes 40 -i fm-baseband.s7b \
-  -af 'aresample=48000:cutoff=0.63,highpass=f=30,aemphasis=type=50fm' \
-  -c:a pcm_s16le fm-audio.wav
+build-release/s7hw --check examples/sdr/fm_receiver.s7diagram
+build-release/s7hw --run examples/sdr/fm_receiver.s7diagram --frames 40320000
 ```
 
-The 40-byte offset applies to the supplied compact-binary recording with an
-empty description. Keep the recording format and description unchanged for
-this command. Studio edits the graph. Capture runs through `s7hw`, which
-currently supports one hardware boundary at one rate. Listen to the resulting
-WAV with your audio player. This graph receives only and produces mono audio.
+Use `s7hw` directly if installed. The check runs offline. The run configures
+the receiver and sends live audio to the selected output. The frame count
+is in RF samples. Hardware tuning changes can persist after the run.
+
+The graph filters and downsamples tuned I/Q from 672 kS/s to a 336 kHz
+complex IF. The FM demodulator normalizes the phase change to ±75 kHz.
+The [stereo multiplex decoder](https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.450-4-201910-I%21%21PDF-E.pdf)
+recovers the 38 kHz difference channel from the 19 kHz pilot, blends to mono
+when the pilot fades, and applies 50 µs de-emphasis. Matching anti-alias
+resamplers feed the left and right channels to a 48 kHz audio sink.
+
+Both LAN radios report 671,999 samples/s when asked for 672 kS/s. The
+diagram explicitly allows a 2 ppm readback difference. The graph and audio
+device use nominal rates. The 32,768-frame playback queue absorbs short-term
+jitter. If it empties, the sink plays silence while the queue refills, then
+resumes playback. A device disconnection or loss of SDR stream continuity
+still ends the run with an error.
