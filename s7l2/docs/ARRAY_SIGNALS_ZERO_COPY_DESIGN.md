@@ -1,6 +1,6 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer direction 2026-11-23. Proposed, not implemented or release-qualified.**
+**Design notes — maintainer-approved scope; 2026-11-23 independent-review reconciliation. D1–D7 remain OPEN for maintainer approval, not implemented or release-qualified.**
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) is the live release acceptance record; these notes define the reusable architecture and the narrow first slice. The [source-based migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [five-hour Codex session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe what must change and a bounded delivery order. **Existing scalar elements stay intact; vector behavior uses new elements.** No code, tests or hardware qualifications are claimed by adding these documents.
 
 ## 1. Motivation and boundaries
@@ -79,7 +79,7 @@ Avoid per-step heap allocation and unbounded retained observer frames. Make pool
 ## 4. Shape, schema and Studio semantics
 
 - Add optional shape rules alongside existing numeric PortSpec/type inference. A scalar has shape []; a shaped output carries concrete extents in the 0.2.0 slice. Reject overflow, rank/extent mismatch, invalid strides/planes and unsupported element types before running. Do not silently broadcast or flatten.
-- Serialize a stable, versioned shape/layout contract in diagram/schema metadata. Preserve old diagrams and scalar wire IDs; do not claim remote wire compatibility merely by adding a local shape. Local array connections are the 0.2.0 target.
+- Serialize versioned logical type/rank/extents and required format/capabilities in diagram/schema metadata, not incidental host padding, offsets, pointers or storage identity. Preserve old diagrams and scalar wire IDs; do not claim remote wire compatibility merely by adding a local shape. Local array connections are the 0.2.0 target.
 - Show one wire per **whole array**, with a label such as C32[1024] or U8[240,320,3], and validation details in Studio. It is neither 1024 scalar wires nor an implicit network packet bundle.
 - Keep execution cadence distinct from underlying sample rate and frame PTS. The existing scalar Resampler does not automatically become a block rate converter. A Delay of array-valued signals delays an entire array value, not one sample inside it.
 - Observation and viewer configuration is read-only diagram presentation metadata, not executable elements in the functional graph.
@@ -109,7 +109,50 @@ The initial implementation and qualification is a **mandatory new 0.2.0 scope am
 - **Distributed:** existing NetFrameSource/Sink and packet wire profiles are not equivalent to a general tensor transport. Specify schema/shape/layout/capability, partial progress, clock, buffer ownership, backpressure and boundaries separately before claiming remote array support.
 - **Testing principle:** compare saved diagrams against independent references, examine numerical and presentation results, inject failures and resource pressure, and record the actual candidate SHA, tested profiles, exclusions and limits.
 
-## 7. Open design decisions (implementation review)
+## 7. Independent-review architectural reconciliation (2026-11-23)
+
+The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section is **planning guidance, not an accepted ADR or implemented API**. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
+
+### Publication, rollback and ownership (F1–F4, F11–F12)
+
+Array slots must distinguish **previous externally committed handles**, **current direct-feedthrough candidates** visible only to downstream graph evaluation, **previous valid causal-memory staging** eligible for the present evaluation, and **next staged causal-memory candidates** for a later evaluation. Compiled array inputs bind to **stable producer slots**, not movable payload addresses; RAII leases must never be `memcpy`-snapshotted in scalar `MemoryOutput`, `CausalOutput`, `TrialRegion` or observation storage. Acquire writable **unpublished** storage without modifying a shared/published/rollback-protected payload. Handle swaps, fan-out, pass-through, staging and rollback should incur no payload-byte copies; FFT, Gain, UI rasterization, transport or layout materialization can compute/copy into separate storage. Maintain a per-boundary copy/allocation ledger.
+
+Before evaluation, retain the previous external snapshot and valid memory staging. Direct elements can consume their current candidates in causal order; causal-memory elements stage a candidate for the *next* publication boundary. On success publish a coherent set of output handles and advance the domain's committed position/staging; on fault restore the previous externally visible handles and valid staging and do **not** advance that domain's step. Retained observers still see the old immutable bytes. The exact no-throw commit/resource-reservation algorithm requires **D2 approval** and tests for late direct, early/late memory, multiple-output, mixed scalar/array, consecutive retry and retained observer faults.
+
+**The atomic boundary is one rate-domain evaluation, not an entire multi-rate run.** If another domain already completed its step, it may remain advanced when a later domain fails (ADR-022). Neither private element state nor irrevocable I/O or network output is rolled back by ADR-021. When replay is unsafe, latch/report an explicit fault. Array participation in implicit/coupled numerical trials is rejected **before execution**, pending a separate reviewed trial contract.
+
+A bounded producer pool needs an **execution-critical reserve independent of optional viewers**. A slow/paused Waterfall or Video Player cannot hold the last available producer candidate. Define maximum retained bytes/frames, eviction/drop and discontinuity counters, admission, cancellation and recovery **before AV04** (D3). Optional observation is newest/bounded presentation with skips, never graph backpressure; authoritative/lossless recording is a separately admitted backpressure/failure profile. Synchronous borrowed views are compile-lifetime bounded; asynchronous clients and printing retain explicit charged immutable leases. Existing `s7transport` lease accounting can inform implementation, but `FrameTransport` copies incoming bytes and is not a writable-array producer API. Add a distinct committed-array Observation source/mailbox: do not feed arrays through scalar `ObservationSample::storage[32]`, scalar `ObservationSource::Sample::double`, Scope or journal.
+
+### Shapes, nested schemas, Studio and provenance (F5–F10)
+
+Require **exact numeric type, concrete positive rank/extents and required semantic format** at compilation; reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. The first profile is F32[N]/C32[N] and U8[H,W] grayscale or U8[H,W,3] interleaved RGB (the last dimension alone does not confer RGB meaning). Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio; old scalar metadata/files must survive unchanged. Persist **logical descriptors and required storage capabilities**, not incidental CPU padding or addresses. DSP is contiguous; U8 row padding is supported only if explicitly declared and independently tested. Explicit adapters and measured copies are required for layout conversion.
+
+**Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **Standalone array-valued `Schema::step()` is deferred/unsupported pending D7**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
+
+One C32[N] value is **one causal `step()`**, not N graph steps. Distinguish graph **rational model-time rate-domain cadence** (ADR-022), physical sample rate, valid sample count and block duration, first physical sample index, block/frame/row sequence, optional source clock/timestamp and video PTS. Define optional provenance fields, absence, forwarding, reset, discontinuity and delay behavior **per producer/transform** before AV11/AV12 (D6). Never derive physical samples/PTS from graph `step_count()` or use scalar `Resampler` as a hidden in-block resampler. Missing source sample rate means unknown physical frequency axis; Waterfall gaps and Video Player skipped-frame IDs must be visible.
+
+Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
+
+### Plugin ABI is a maintainer decision (F4)
+
+Plugin API v1 exposes C symbols but shares **C++** `ElementRegistry`/`ElementDescriptor` and element layouts ([plugin interface](PLUGIN_INTERFACE.md)). D1 must choose **proved old-binary ABI preservation** or **an intentional plugin API bump with clear early rejection** plus rebuilt installed-SDK/out-of-tree `s7spectral` tests. Recompiling a plugin proves source compatibility, **not** binary compatibility. Do not mutate ABI-sensitive `Element`/`Port`/metadata layouts without the D1 decision.
+
+### Open decision register — explicit maintainer approval required
+
+| ID | Unresolved selection (do not infer acceptance) | Gate |
+| --- | --- | --- |
+| D1 | Preserve tested old plugin binary ABI **or** version bump, reject old binaries and requalify installed SDK/plugin. | AV02 invasive headers, AV05, release SDK |
+| D2 | Approve candidate/staging/committed transition table and fallible resource reservation before nonthrowing **per-domain** commit. | AV05b/AV06/AV07 |
+| D3 | Approve producer reserve, optional viewer retention limits, drops/counters, cancellation and separate lossless recording profile. | AV04/AV13 |
+| D4 | Approve logical descriptor/schema version, fixed ranks/format, stride capabilities and validation bounds. | AV01/AV02/AV12 |
+| D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
+| D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. | AV11/AV12/AV15/AV16 |
+| D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
+
+**All D1–D7 are OPEN.** Record approved answers in an ADR/decision log before executing blocked cards. This proposal is not approval of invasive semantic or ABI changes. See the [revised AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+
+## 8. Earlier design questions (superseded by D1–D7 above)
+
 
 1. Shape rule representation and serialization version; which symbolic shape variables become mandatory after 0.2.0.
 2. Slot/handle API preserving current scalar plugin ABI and compile-time type inference, without broad virtual dispatch in the inner loop.

@@ -96,7 +96,7 @@ slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) maps
 existing elements, runtime, Studio, observation and I/O affected by vectors;
 the [session-sized Codex work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) specifies
 AV00–AV18, dependency order, tests and handoffs for sessions capped at five
-hours. Existing scalar elements remain unchanged; vector elements are new.
+hours (with suffix sessions for high-risk tasks). Existing scalar elements remain unchanged; vector elements are new. Review D1–D7 decisions require separate maintainer approval.
 These features and their G1/V, G4/W, G4/V checks are planned, not
 implemented/qualified; production camera, codecs, GStreamer/FFmpeg, full
 tensor/spatial processing and remote arrays remain later work.
@@ -169,6 +169,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [ARRAY_SIGNALS_ZERO_COPY_DESIGN.md](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md) | Shared shaped-array port, storage/lease/publication and zero-copy design; mandatory minimal 0.2.0 array + Waterfall + Video Player slice |
 | [ARRAY_VECTOR_MIGRATION_INVENTORY.md](ARRAY_VECTOR_MIGRATION_INVENTORY.md) | Source-based inventory of core/runtime, existing scalar elements, new vector variants, Studio/observation and deferred media/network changes |
 | [ARRAY_VECTOR_CODEX_WORKPLAN.md](ARRAY_VECTOR_CODEX_WORKPLAN.md) | AV00–AV18 small Codex sessions, five-hour hard budget, dependency/test/PR handoff rules |
+| [ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) | Source-based independent architectural findings F1–F12 and proposed fixes; decision gates D1–D7 **not accepted**; reconciled in design, inventory, AV plan and release gates |
 | [STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md) | Mandatory 0.2.0 printing of diagrams and viewer outputs, PDF/printer acceptance matrix |
 | [RELEASE_ROADMAP.md](RELEASE_ROADMAP.md) | Hardware, native compilation, coherence, ARM deployment beta, GA |
 | [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Mandatory hardware, SDR/audio/video labs, GStreamer and H8 capture/replay |

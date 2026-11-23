@@ -116,10 +116,9 @@ The mandatory [array signals / zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.
 defines one logical signal model for scalars and shaped arrays, preserving
 existing optimized scalar storage and causal evaluation. Its **0.2.0 slice** is
 local, fixed-shape, CPU-buffered and bounded, not generic tensor/network/media
-production support. Add **G1/V**: rank-1 numeric vector ports/wires and minimal
+production support. Add **G1/V** (after maintainer approval of the open D1–D4/D7 architectural decisions): rank-1 numeric vector ports/wires and minimal
 rank-2/3 U8 whole-frame values for deterministic viewer tests, immutable
-leased buffer fan-out, shape/type checks, compiled bindings and tested
-all-or-nothing output publication with normal causal memory. Existing scalar
+leased buffer fan-out, shape/type checks, compiled bindings and tested **per-rate-domain** publication/rollback of output handles and prior valid causal-memory staging (ADR-021/022). Existing scalar
 graphs, schema/nested bindings, numerical trials and zero-copy claims require
 regression or explicit supported-profile restrictions.
 
@@ -136,9 +135,17 @@ FFmpeg/GStreamer, arbitrary media formats or remote array transport into
 0.2.0.
 
 Both viewers must be included in print/PDF snapshot and installed-package
-qualification under G4/P. The [live work plan](RELEASE_0.2.0_WORKPLAN.md)
+qualification under G4/P **P08/P09**, alongside the separately required existing **P01–P07** printing cases. The [live work plan](RELEASE_0.2.0_WORKPLAN.md)
 is authoritative for acceptance, evidence and remaining work.
 Adding this requirement is not evidence of completion.
+
+### Array architecture acceptance boundaries (2026-11-23 independent review)
+
+The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) requires a clarified **per-rate-domain**, not global multi-rate, fault/commit guarantee consistent with ADR-021 and ADR-022. Current scalar snapshot and private-state/external-I/O rollback limits remain unchanged. Array slots require explicit stable binding, no byte-copy of owning leases, staged causal-memory restoration and mixed scalar/array regression. Optional viewers must have bounded independent retention and never starve admitted producers; loss-intolerant recording is a separate profile.
+
+The minimal profile is **concrete exact** F32/C32 rank-1 and U8 grayscale/RGB rank-2/3 CPU descriptors. Reject symbolic shape inference, array coupled/implicit numerical trials, unsupported standalone array `Schema::step()`, implicit block resampling and unsupported image layouts. Flattened nested array ports *are* mandatory and must be validated with saved diagrams. Graph `step()` evaluates **one whole array**; graph-domain rate is not physical source sample rate, sample index, frame sequence or PTS. Never fabricate absent timestamps/frequency axes. The existing scalar plugin API v1's C++ layout compatibility must be decided (retain proven binary ABI or bump/reject old binaries) **before invasive header changes**.
+
+The seven architectural choices **D1–D7 remain OPEN for maintainer approval** in [the design decision register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). The [bounded task DAG](ARRAY_VECTOR_CODEX_WORKPLAN.md) is a proposed delivery plan, not authorization for ABI or semantics changes. FFT/PSD requires an independent DFT/PSD oracle and audited backend/SDK; Studio must reject incompatible ordinary **and observer** array port shapes/formats. No G1/V, G4/W, G4/V or G4/P gate is closed by this documentation change.
 
 ## Acceptance gates
 

@@ -54,6 +54,14 @@ must either implement the same printing contract or be explicitly
 identified in a maintainer-reviewed release exclusion. Do not confuse
 CSV/data export or screenshot tools with printable PDF/printer output.
 
+## P08/P09 array-snapshot retention and coherence (independent-review amendment)
+
+The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md), [array design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#7-independent-review-architectural-reconciliation-2026-11-23) and [revised AV plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) require P08/P09 to print a **successfully committed** immutable array/viewer snapshot, not an in-flight direct candidate or mutable writable buffer. Snapshot capture retains the required leases under an explicit **bounded print-job budget** independent of the graph producer's execution-critical reserve. Do not hold optional viewer frames indefinitely: cancel/close/error releases reservations. A temporarily unavailable retained snapshot must be signaled, never silently substituted with a later frame.
+
+For Waterfall (P08), atomically capture the presented selected row range, frequency and time axis definitions, range/palette, sample-rate provenance **if known**, row/frame IDs, discontinuities and skipped-presentation markers. Missing physical sample rate cannot be printed as invented hertz. For Video Player (P09), pin the selected complete U8 grayscale or RGB frame with its exact identity, supported stride/layout, aspect/fit and any valid PTS (not graph-derived). Neither path advances the model or pauses acquisition. A cross-domain report must identify the contributing domain evaluation positions; **no global multi-rate atomicity is claimed** by P08/P09. Retained snapshots must not starve the next producer candidate.
+
+AV17a/b implements/qualifies **only the new P08/P09 integration** and package assets; **P01–P07 remain a separate mandatory G4/P workstream**. AV18c requires the complete P01–P09 candidate-specific matrix. Validate actual PDF page content and rendered image pixels/axes, failed/cancelled jobs, print lifecycle, nonzero paper content and optional device output. Report Qt/media raster materialization as a copy/transfer rather than claiming end-to-end zero-copy. All D1–D7 decisions remain unapproved until the maintainer records them.
+
 ## Layout and behavior
 
 - Studio exposes **Export as PDF**, **Print**, and appropriate page/

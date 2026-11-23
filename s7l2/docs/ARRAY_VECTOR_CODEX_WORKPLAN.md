@@ -1,9 +1,10 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status: implementation plan, 2026-11-23. No implementation, test pass or release gate closure is claimed by this plan.**
+**Status: implementation plan revised after the 2026-11-23 independent review. No D1–D7 acceptance, implementation, test pass or release gate closure is claimed.**
 Approved direction: **preserve scalar element classes and their fast bindings**. Introduce new vector elements that share a small, reusable array/lease/port substrate. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
 Companion documents:
+- [Independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) — findings F1–F12 and proposed, unapproved fixes.
 - [Migration/source inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) — impacted code and explicit preserve/defer classification.
 - [Array signals design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md) — conceptual model and causal/ownership contracts.
 - [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) — authoritative live release gate status; this file is the **Codex implementation decomposition**, not a competing status matrix.
@@ -52,48 +53,102 @@ Next AVxx dependency:
 
 A standalone implementation session is **not complete** if its promised tests are not exercised. A timeboxed partial result should be honestly marked WIP and handed off; it is not a successful release acceptance.
 
-## Dependency map
+## Binding dependency DAG and review gates (supersedes original linear ordering)
+
+**AVxx identifies a work family, not automatically one five-hour session.** Each suffix `a/b/c/d` below is a separate **maximum five-hour Codex allocation including tests, independent oracle review and handoff**. Stop and record WIP rather than joining adjacent suffixes to exceed the limit. No public array element is advertised before AV06b's fault/ownership gate; no viewer is called complete before headless data and visual oracle evidence.
 
 ~~~text
-AV00 baseline/invariants
-   |
-AV01 shape + descriptors
-   |
-AV02 metadata + schema declarations
-   |
-AV03 shape inference + connection validation
-   |
-AV04 CPU views, leases and bounded pools
-   |
-AV05 array slot, Element bindings and compiled direct pipeline
-   |
-AV06 handle-safe direct publication/rollback
-   |
-AV07 vector causal-memory staging/Delay
-   |
-AV08 nested schemas + serialization/round-trip
-   |
-AV09 minimal vector elements and fixture diagrams
-   +-----------+
-   |           |
-AV10 FFT      AV13 observation lease source
-   |           |
-AV11 PSD       +------ AV14 Studio routing/metadata
-   |                         |
-   +---------------+---------+
-                   |
-             AV15 Waterfall
-                   |
-          AV12 U8 video fixture
-                   |
-             AV16 Video Player
-                   |
-          AV17 printing/packages
-                   |
-          AV18 final qualification
+AV00 baseline, source SHA, D1–D7 decision register
+  +-- [D4] --> AV01 descriptors --> AV02 metadata --> AV03 exact shape/type checks
+  |                                       |                 |
+  |                              [D1 before ABI edits]    |
+  +-- [D3] --> AV04 CPU producer pools/leases <-------------+
+                                              |
+                                     AV05a stable slot API
+                                              |
+                                     AV05b compiled fan-out
+                                              |
+                                     [D2] AV06a candidate/commit
+                                              |
+                                     AV06b faults/retry (safety gate)
+                                              |
+                          +-------------------+--------------------+
+                          |                   |                    |
+                    AV07a memory         AV09a internal       AV13a headless
+                          |              fixture only        observation
+                    AV07b Delay              |                    |
+                          |                  |                  AV13b GUI
+                   [D7] AV08a flattened     |                  mailbox
+                          |                  |                    |
+                    AV08b persistence --------+----------+         |
+                          |                              |         |
+                    AV09b public source/Pass/Gain         |         |
+                          |                              |         |
+                      +---+-----------+                  |         |
+                      |               |                  |         |
+                  [D5] AV10a      [D6] AV12 U8           AV14a pin+shape
+                       |               |                  |
+                    AV10b FFT          |                  AV14b registry/routing <--- AV13b
+                       |               |                  |
+                   [D5/D6] AV11a       |                  |
+                       |               |                  |
+                    AV11b PSD          |                  |
+                       |               |                  |
+                       +---------- AV15a/b Waterfall <----+
+                                       (independent)
+                    AV12 ------------ AV16a/b Video <-----+
+                                                 |
+                       AV15b + AV16b --> AV17a P08/P09
+                                             |
+                                           AV17b packaging
+                                             |
+                                    AV18a/b/c/d evidence
 ~~~
 
-The schematic is a **review order**, not a claim that every branch can be developed concurrently. AV12 depends on AV09 and the fixed-shape rank-2/3 contract, not mathematically on Waterfall; once the shared array observation boundary (AV13–AV14) is accepted, Waterfall and Video Player GUI implementations may proceed in separate branches. AV10/AV11 and AV13 may be prepared in parallel **only if no overlapping core/metadata files** are being edited. Timebox each AVxx separately.
+The ASCII layout denotes prerequisites **by the explicit table below**, not a requirement to finish Waterfall before starting AV12 or Video. AV04 can begin after AV01 and D3 while AV02/AV03 proceed separately; AV05 convergence requires both validation and leases. AV09a is an **internal** test fixture allowed immediately after AV06b, independently of AV07/AV08; AV09b *public* registration requires AV07b/AV08b. AV13a can start after AV06b, without FFT/Waterfall or public AV09. AV14a may begin after shape metadata and flattened schema, while AV14b requires headless + Studio observation delivery. Shared ABI/core headers must be merged sequentially or explicitly coordinated. **AV12 is NOT downstream of AV15**; AV15 and AV16 are parallel presentation tracks.
+
+### Mandatory per-family task split and evidence (review-driven superseding execution cards)
+
+The descriptive AV00–AV18 cards below remain feature-level context. **This table defines actual per-session dependency, boundary and minimum acceptance.** A suffix cannot be combined with another task without re-planning a new, still bounded reviewable session; failed tests block publication. Source/test paths must be rechecked against the chosen base SHA.
+
+| Session | Required predecessor / decision | One bounded deliverable and acceptance |
+| --- | --- | --- |
+| **AV00** | Current main | Freeze base SHA, source/CTest inventory, old plugin binary and installed SDK, scalar dispatch time/allocations on specified host/build, ADR-021/022/024 fault/rate baselines, review D1–D7 with maintainer; evidence ledger (no code). |
+| **AV01** | AV00 + **D4** | Validated concrete rank/extents/byte/stride CPU descriptors; test positive/zero/invalid extent, overflow before allocation, out-of-bounds/padding and scalar rank-zero unchanged. |
+| **AV02** | AV01 + **D1 if headers change ABI** | Metadata JSON parser -> registry -> catalog -> serialized schema version; old scalar metadata and diagrams still load, malformed format/rank rejected; SDK compatibility decision recorded. |
+| **AV03** | AV02 | Compiler/headless exact numeric type/rank/extents/format matching, scalar/vector negative, no symbolic/broadcast/reshape, forbidden array coupled-trial and invalid-cycle cases; old scalar compile. |
+| **AV04** | AV01 + **D3** (parallel to AV02/03) | Headless candidate writable pool, read leases, stale-generation/cancel safety, execution-reserved bytes vs optional retention budget; tiny-pool slow-viewer/stalled-consumer producer-progress and bounded skip tests. |
+| **AV05a** | AV03 + AV04 + **D1** | Stable array output slot/input binding and typed lifetime rules; unit tests for slot swap, borrow/retained lease, mixed scalar+array ports, no byte-copied owner. No public vector registration. |
+| **AV05b** | AV05a + **D2 contract approved** | Real Compiler/NodeRuntime source -> pass-through -> dual consumers, same payload identity and instrumented zero wire copies; negative shape checks, scalar CTest and before/after scalar benchmark. Experimental/internal only. |
+| **AV06a** | AV05b + **D2** | Per-domain direct candidate vs externally committed snapshot machinery, fallible admission before nonthrowing commit; smoke mixed scalar+array outputs and observer invisibility until commit. |
+| **AV06b** | AV06a | Late direct and multi-output exceptions, repeated retries, retained observers, exhausted pool, later-domain fault/committed-prefix checks vs unfaulted oracle; no payload copy on handle rollback. **Unlocks internal array fixtures.** |
+| **AV07a** | AV06b | Causal-memory previous valid and next staged handle phases; first/last memory-fault retries preserve previous staging and scalar semantics. |
+| **AV07b** | AV07a | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, original sample provenance retained, no implicit sample-level delay. |
+| **AV08a** | AV07b + **D7** | Flattened nested exposed-port slot aliases, direct/Delay inline-vs-nested oracle, mismatch and placeholder-byte negative cases. Standalone array Schema unsupported unless D7 adds separately scoped work. |
+| **AV08b** | AV08a | Schema+Studio save/open/save, shape/format/required layout capability round-trip, legacy scalar diagrams, exposed aliasing and invalid ranks. No remote profile work. |
+| **AV09a** | AV06b | Minimal **internal-only** deterministic array source/forwarding headless fixture; repeated steps, copy/alloc ledger and fault injection, not public library. May precede AV07/AV08. |
+| **AV09b** | AV07b + AV08b + AV09a | Public new VectorConstant/PassThrough/Gain and saved compiled diagrams, independent elementwise oracle, preallocated reference profile, mixed status scalar port, no scalar element rewrite. |
+| **AV10a** | AV09b + **D5 backend decision** | Audit 4 existing FFT paths, select C32/C64 conversions/scratch, out-of-tree plugin/SDK/linkage and supported transform lengths; an independent DFT fixture. No duplicate FFT engine by default. |
+| **AV10b** | AV10a | Whole-vector FFT C32[N] and/or explicitly approved conversion, impulse/DC/+/- tone/two-tone/inverse and normalization/bin-order tests vs independent DFT; tracked copies/allocations, plugin load smoke. |
+| **AV11a** | AV10b + **D5/D6** | Written PSD/window/floor/power/bin-order, sample-rate/first-index/provenance contract, valid unknown-rate and gap policy; reference frequency-axis/PSD oracle. |
+| **AV11b** | AV11a | Headless PSD/magnitude element and saved array path; DC, zero/floor, signed bins, tones, power/tolerance, shape/rate mismatch and discontinuity tests. |
+| **AV12** | AV09b + **D4/D6**, independent of AV15 | Deterministic U8 [H,W]/[H,W,3] frame fixture with frame ID and explicit layout capability; exact independent checkerboard/moving-bar pixel oracle, padded rows **if supported**, invalid shape/format and headless saved diagram. Split AV12a/b if this cannot fit five hours. |
+| **AV13a** | AV06b + **D3** | Headless committed-array Observation API, coherent domain snapshots, retained lease after advancement, cancellation and tiny-pool no-starvation oracle; preserve scalar Observation/Scope. |
+| **AV13b** | AV13a | Bounded thread-safe stepping-to-Studio mailbox; skip counters, attach/detach/paused/closed slow viewer, sanitizer/lifetime evidence and cross-domain position disclosure. |
+| **AV14a** | AV03 + AV08b | Studio ordinary **and observer** pin numeric/rank/shape/format checking; metadata JSON/catalog/labels, invalid drag/drop and round-trip GUI tests. |
+| **AV14b** | AV14a + AV13b | Waterfall/Video registry, saved bindings, source routing, rebind/open/close lifecycle; legacy scalar Studio behavior unchanged. No rendering claimed. |
+| **AV15a** | AV11b + AV13b + AV14b + **D5/D6** | Bounded deterministic PSD row->image mapping with frequency/time axes, gaps/unknown-rate policy, range/palette reference-pixel oracle. |
+| **AV15b** | AV15a | Actual Waterfall GUI, scale/controls, pause/reopen/rebind/skip evidence and reviewed screenshot/image comparisons; printing input contract ready, no model-state changes. |
+| **AV16a** | AV12 + AV13b + AV14b | U8 grayscale/RGB frame->image adapter; exact pixel/stride/aspect oracle, bounded newest-frame and explicit unsupported-format/skip behavior. |
+| **AV16b** | AV16a | Actual Video Player UI and status/controls, pause/close/reopen/rebind/screenshots independently reviewed; no device/codec or model pause. |
+| **AV17a** | AV15b + AV16b | **P08/P09 only** coherent retained snapshots printed to PDF/printer, axes/legend/row gaps and exact video frame identity/pixels, cancel/error/no-step-advance; separate existing **P01–P07** workstream still mandatory. |
+| **AV17b** | AV17a | Viewer help, registry/resources and installed/relocated package/SDK smoke, actual PDF visual inspection and print matrix integration. No claim that P01–P07 were implemented here. |
+| **AV18a** | AV17b | Candidate-SHA headless graph, negative shape, nested, rollback, independent FFT/PSD/frame oracles and G1/V evidence ledger. |
+| **AV18b** | AV17b | Candidate-SHA bounded pool/copies/allocations, scalar benchmark comparison, sanitizer and multi-rate fault evidence; explicit results/skips. |
+| **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
+| **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK/old-binary ABI policy, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
+
+**Decision blockers:** D1–D7 all remain **OPEN** in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). AV00 collects proposals, not approvals. No agent should infer that design notes authorize ABI or causal model changes. Architectural decision documents must record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
@@ -131,7 +186,7 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 ### AV04 — CPU buffer leases and bounded pool
 
-**Depends:** AV01, AV03 for integration assumptions.
+**Depends:** AV01 + D3; independent of AV02/AV03 until AV05 convergence.
 
 **Scope:** a headless \`s7core\` CPU lease/pool, read-only typed access, writable candidate acquisition, stable memory lifetime, bounded capacity, immutable publication contract. Resource exhaustion must be explicit. No Studio, hardware or GPU support. Design borrowed view versus retained lease so compiled synchronous fan-out has no mandatory atomic increments per wire.
 
@@ -147,7 +202,7 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 ### AV06 — Direct array candidate publication and faults
 
-**Depends:** AV05.
+**Depends:** AV05b + D2; split into AV06a/AV06b according to the binding table.
 
 **Scope:** extend direct-output publication to stage/commit array **handles** atomically at the logical step boundary. Downstream direct elements see current candidates. External Observation sees last committed output. A fault after a producing element restores prior published slots and leaves retained observers intact. Do not make coupled numerical trial regions array-capable.
 
@@ -195,7 +250,7 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 ### AV12 — Deterministic U8 whole-frame source (rank 2/3)
 
-**Depends:** AV09, AV08. May occur before AV15 if files do not conflict.
+**Depends:** AV09b + D4/D6. Independent of AV10/AV11/AV15; may proceed on its own branch after a stable runtime.
 
 **Scope:** separate new frame fixture source producing known grayscale [H,W] and RGB [H,W,3] arrays through real graph ports with deterministic frame identity. Support compact CPU layout first; specify any padded row-stride fixture and ensure validation matches actual layout. Define presentation-relevant frame identity separately from model clock and media timestamps. No camera, codec or FFmpeg/GStreamer.
 
@@ -203,7 +258,7 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 ### AV13 — Read-only array Observation API, bounded delivery
 
-**Depends:** AV06, AV09. Can proceed independently of AV10, with separate touched files.
+**Depends:** AV06b + D3. AV13a headless observation can start before public AV09; AV13b Studio mailbox follows AV13a, without needing FFT or Waterfall.
 
 **Scope:** add lease-backed committed array observations to \`s7observe\`; adapt Studio's stepping-thread-to-GUI transfer using a **new** bounded frame/array mailbox or compatible source. Do **not** copy a vector into \`ObservationSample::storage[32]\` or \`ObservationSource::Sample::double\`. Keep scalar observation and Scope unchanged. A consumer may skip presentation with visible counters, never silently drop authoritative graph values.
 
@@ -211,7 +266,7 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 ### AV14 — Studio metadata, wiring and observer registration
 
-**Depends:** AV08, AV13.
+**Depends:** AV14a on AV03/AV08b; AV14b on AV14a + AV13b. Observer pin checking must not wait for rendering.
 
 **Scope:** show correct array shape on pins/wire labels, validate incompatible drag-connections, register Waterfall/Video Player viewer types and editor metadata, keep saved observer bindings/settings. Provide a minimal no-op or test presentation adapter only; full renderers belong to AV15/AV16. Avoid modifying \`external/\` libraries.
 
@@ -247,11 +302,11 @@ The schematic is a **review order**, not a claim that every branch can be develo
 
 **Scope:** run complete relevant headless, Studio, plugin SDK, nested schema, package and performance suites on a named candidate; independent vector FFT/PSD and video pixel oracles, resource-pressure/failure injection, scalar benchmark comparisons and supported platform matrix. Verify **no mandatory 0.2.0 gate** was silently replaced by a synthetic smoke case. Update authoritative [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) with reproducible actual evidence or blockers.
 
-**Accept:** a candidate-specific evidence ledger and explicit pass/fail/skip decision for G1/V, G4/W, G4/V and P08/P09; no claim of full G1–G4 closure unless all other independent release gates are qualified. If it does not fit one session, split independent test matrices into AV18a/AV18b/…; never invent completed results.
+**Accept:** a candidate-specific evidence ledger and explicit pass/fail/skip decision for G1/V, G4/W, G4/V and P08/P09; no claim of full G1–G4 closure unless all other independent release gates are qualified. Use the required AV18a/b/c/d candidate-specific matrices above; never invent completed results, and do not conflate their results with other G1–G4 release work.
 
 ## Per-session sizing and split policy
 
-Each AVxx is **one intended Codex allocation, capped at five hours** (not guaranteed to fit). High-risk cards **AV05–AV08, AV13–AV16** are mandatory split candidates: as soon as an implementation reveals independent subproblems, make \`AV05a\`/ \`AV05b\` etc., each with one testable result. For GUI work, separate headless data delivery from actual renderer/image verification; do not submit "viewer working" based only on successful compilation.
+Each **unsplit AVxx or suffixed AVxxa/AVxxb/AVxxc/AVxxd** is one Codex allocation capped at five hours (not guaranteed to fit). The binding task table above overrides a broad card below when a card would exceed one session. High-risk cards **AV05–AV08, AV13–AV16** are mandatory split candidates: as soon as an implementation reveals independent subproblems, make \`AV05a\`/ \`AV05b\` etc., each with one testable result. For GUI work, separate headless data delivery from actual renderer/image verification; do not submit "viewer working" based only on successful compilation.
 
 Sessions should **not** attempt both a core API migration and a new feature UI in the same allocation. Prefer two smaller passing PRs to one large unreviewed patch. Reserve the last part of the session for tests, diff review and handoff. The user may reorder cards only after resolving their dependencies and updating this document.
 
@@ -281,10 +336,10 @@ or mark release gates passed merely because the task is complete.
 
 ## Merge and release order
 
-- **G1/V foundation:** AV00–AV09, plus AV12 frame fixture and AV13 array observation. Do not claim G1/V until array-causality, nested/persistence, fan-out, real saved diagrams and regression results pass.
-- **G4/W:** AV10/AV11 + AV13/AV14/AV15. Full-bin vector FFT must precede Waterfall qualification.
-- **G4/V:** AV12–AV14 + AV16. A synthetic frame view is a legitimate 0.2.0 viewer test, **not** an H5 production VideoSource.
-- **G4/P:** AV17. P08/P09 are part of the mandatory printing matrix.
+- **G1/V foundation:** AV00–AV09, plus AV12 frame fixture and AV13a/b array observation. Do not claim G1/V until array-causality, nested/persistence, fan-out, real saved diagrams and regression results pass.
+- **G4/W:** AV10a/b, AV11a/b + AV13a/b, AV14a/b, AV15a/b. Full-bin vector FFT must precede Waterfall qualification.
+- **G4/V:** AV12 + AV13a/b, AV14a/b, AV16a/b. A synthetic frame view is a legitimate 0.2.0 viewer test, **not** an H5 production VideoSource.
+- **G4/P:** AV17a/b covers new viewers P08/P09 only; the independent P01–P07 implementation/qualification remains mandatory. P08/P09 are part of the mandatory printing matrix.
 - **Release:** AV18 candidate evidence, **plus all independently required** 0.2.0 gates from the live work plan, not just this array workstream.
 
 ## Deferred backlog after 0.2.0
