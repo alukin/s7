@@ -272,7 +272,7 @@ behavior, not completed acceptance.
    including packaged Studio. Follow
    [STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md).
 
-5. Publish release notes with supported operating systems, tested graph and
+7. Publish release notes with supported operating systems, tested graph and
    rate envelopes, known regressions, unsupported features and reproducible
    test/benchmark provenance, including the qualified education index.
 
