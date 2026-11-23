@@ -70,6 +70,14 @@ labs**:
 | **VID03 — camera to observable output** | Opt-in real webcam -> headless S7 frame source -> bounded processing -> output/viewer, using one **qualified local** platform/profile | Verified actual captured formats and dimensions, counted frame continuity, measured FPS/latency and recovery; disconnect/permissions failure; no camera access in CI |
 | **VID04 — media adapter bridge** | A fixed synthetic/recorded video fixture through one selected **GStreamer appsrc/appsink** profile and independently compared FFmpeg or raw reference | Exact raw/lossless reconstruction, bounded perceptual-codec error metric where lossy, visible actual conversion, EOS/cancel/plugin unavailable, no silently selected fallback |
 
+The 2026-11-23 [array-signals 0.2.0 amendment](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#5-mandatory-020-minimal-vertical-slice-new-scope)
+places local array-valued ports/wires, a basic Waterfall and synthetic/recorded
+U8 Video Player under the 0.2.0 qualification gates. 0.3.0 **reuses and
+extends** those capabilities: real VideoSource/VideoSink, cameras, codec/media
+pipeline adapters, full audio blocks and additional frame transforms still
+need independent H0–H8 qualification. Do not count 0.2.0 viewer tests as
+GS-V1/GS-V2, VID03 or real camera/codec qualification.
+
 The previous [Full HD FFmpeg report](VIDEO_IO_FULL_HD.md) is supporting
 media-pipeline evidence only. Native S7 video-frame ports,
 `VideoSource`/`VideoSink` and the `GStreamer` adapter have **not**
