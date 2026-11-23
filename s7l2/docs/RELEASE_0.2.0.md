@@ -3,6 +3,9 @@
 Scope initially revised **2026-11-18**; on **2026-11-20**, the maintainer
 explicitly promoted diagram and viewer-output printing into **mandatory
 0.2.0 G4**. This change records a requirement, not completed implementation.
+**2026-11-23 amendment:** the maintainer added a narrow local array-valued
+vector port/wire implementation, Waterfall viewer and basic Video Player viewer
+as 0.2.0 requirements; none are claimed implemented or qualified here.
 The original scope revision was agreed on **2026-11-18**. This replaces the
 earlier feature-accumulation plan for 0.2.0; the historical assignments and
 decisions remain available in Git history and in their linked design/research
@@ -107,6 +110,36 @@ observer outputs (PDF and physical printer). The
 viewer/page coverage and negative tests; printing is part of G4, not a
 deferred 0.3.0 feature.
 
+## New 0.2.0 scope — local array ports and basic viewers
+
+The mandatory [array signals / zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md)
+defines one logical signal model for scalars and shaped arrays, preserving
+existing optimized scalar storage and causal evaluation. Its **0.2.0 slice** is
+local, fixed-shape, CPU-buffered and bounded, not generic tensor/network/media
+production support. Add **G1/V**: rank-1 numeric vector ports/wires and minimal
+rank-2/3 U8 whole-frame values for deterministic viewer tests, immutable
+leased buffer fan-out, shape/type checks, compiled bindings and tested
+all-or-nothing output publication with normal causal memory. Existing scalar
+graphs, schema/nested bindings, numerical trials and zero-copy claims require
+regression or explicit supported-profile restrictions.
+
+Add **G4/W**: a read-only Waterfall observer displaying successive whole
+FFT/PSD arrays from deterministic synthetic/recorded IQ data, with accurate
+frequency/time axes, range and bounded history. Add **G4/V**: a basic Studio
+Video Player observing decoded/generated U8 grayscale and RGB frames carried
+on local S7 array wires, with fit, presentation-only pause/resume, frame
+identity/format status and bounded skipping. At least one actual saved S7
+diagram and independent numeric/pixel and UI verification are required for
+each. The test fixture may be synthetic or recorded: this amendment
+**does not** promote video camera providers, file decoding/encoding,
+FFmpeg/GStreamer, arbitrary media formats or remote array transport into
+0.2.0.
+
+Both viewers must be included in print/PDF snapshot and installed-package
+qualification under G4/P. The [live work plan](RELEASE_0.2.0_WORKPLAN.md)
+is authoritative for acceptance, evidence and remaining work.
+Adding this requirement is not evidence of completion.
+
 ## Acceptance gates
 
 All four gates are mandatory on the **same final source revision and candidate
@@ -131,7 +164,10 @@ applies. Required pass/fail criteria and evidence owners are in the
    methods merely by being tested.
 4. Demonstrate repeatable recorded observations that identify the run,
    channels and model steps without modifying execution.
-5. Qualify the approved educational core against **actual saved diagrams**
+5. Verify G1/V vector port/wire type-shape contracts, zero-copy local fan-out,
+   bounded leases, direct/causal-memory publication and fault rollback, and
+   scalar/numerical regression against independent references.
+6. Qualify the approved educational core against **actual saved diagrams**
    and independent reference calculations, explicit initial/sample
    conventions and negative teaching cases. Historical examples and
    screenshots do not establish educational acceptance.
@@ -222,7 +258,11 @@ behavior, not completed acceptance.
 4. Verify educational diagrams, guides and course navigation in
    supported installed/relocated artifacts. Record Studio evidence
    separately from headless numerical passes.
-5. **G4/P — diagram and viewer-output printing:** print diagrams and
+5. Verify the G4/W Waterfall and G4/V Video Player observation workflows
+   against known FFT bins and deterministic video pixels, with saved S7
+   diagrams, attach/rebind/pause/history/drop behavior, visual checks and
+   installed Studio evidence. Neither viewer may affect computation.
+6. **G4/P — diagram and viewer-output printing:** print diagrams and
    supported recorded/live visualizations to PDF and through the system
    print dialog. Preserve document geometry, labels, mathematical symbols,
    axes, legends and a coherent live-data snapshot. Verify page setup,
@@ -277,6 +317,7 @@ deferral does not promise delivery of every item in 0.3.0.
 
 | Deferred item | Boundary |
 | --- | --- |
+| Broader array/media/spatial support beyond the local 0.2.0 slice | Multi-plane/GPU frames, full 2D FFT/convolution, audio block processing, spatial topology, arbitrary reshape and distributed array protocols are deferred |
 | Production VideoSource/VideoSink, screen/window capture, codecs and native Windows video | Current [whole-frame FFmpeg experiments](VIDEO_IO_FULL_HD.md) remain evidence, not shipping providers |
 | Remote node-settings read/stage/commit, supervisor restart and Trusted Networks UI | Existing secure deployment/control remains in scope; new administration APIs do not |
 | Certificate viewer, full node/Studio certificate-creation program and renewal UX | Existing independently provisioned mTLS credentials are enough for the release demo |
