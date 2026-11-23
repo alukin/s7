@@ -89,6 +89,13 @@ checks sidebands, phase error, finite-filter states and calibrated spectra.
 is separate from release qualification. Description frames link to offline
 guides and original MIT online teaching materials.
 
+The [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md)
+defines the unified logical scalar/array signal architecture and the narrow
+**0.2.0 vector ports/wires, Waterfall and basic Video Player** release
+slice. These features and their G1/V, G4/W, G4/V checks are planned, not
+implemented/qualified; production camera, codecs, GStreamer/FFmpeg, full
+tensor/spatial processing and remote arrays remain later work.
+
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) remains the single
 [status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
 with the delivered N0–N4 research, existing runtime baseline,
@@ -154,6 +161,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 |---|---|
 | [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
 | [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
+| [ARRAY_SIGNALS_ZERO_COPY_DESIGN.md](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md) | Shared shaped-array port, storage/lease/publication and zero-copy design; mandatory minimal 0.2.0 array + Waterfall + Video Player slice |
 | [STUDIO_PRINTING_0.2.0.md](STUDIO_PRINTING_0.2.0.md) | Mandatory 0.2.0 printing of diagrams and viewer outputs, PDF/printer acceptance matrix |
 | [RELEASE_ROADMAP.md](RELEASE_ROADMAP.md) | Hardware, native compilation, coherence, ARM deployment beta, GA |
 | [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Mandatory hardware, SDR/audio/video labs, GStreamer and H8 capture/replay |
