@@ -87,7 +87,7 @@ not a second simulation/control implementation.
 
 ### New array-valued signals and viewers — mandatory narrow slice (G1/V, G4/W, G4/V)
 
-Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), not an unrelated frame/media runtime.
+Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), the [source-based impact inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and the [Codex work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md), not an unrelated frame/media runtime. **Preserve existing scalar element implementations; add new vector elements.** The Codex plan divides this slice into AV00–AV18 bounded sessions (at most five hours per session, with mandatory split/handoff if too large); it is not evidence that any gate has passed.
 
 1. Implement local array-valued port descriptors, fixed shapes and CPU lease-backed zero-copy connections while preserving scalar native storage, existing numeric SignalType IDs, causal direct-feedthrough and causal-memory commit/rollback; reject unsupported implicit/coupled numerical array trials.
 2. Provide deterministic array source/pass-through and a frame-valued FFT/PSD path with independent complex-IQ numerical oracle. Verify bounded buffers, fan-out identity, lifetime, shape/type mismatch, forced faults, scalar regression and exact saved-diagram headless execution. Do not rely solely on the existing scalar peak-only FFT plugin.
