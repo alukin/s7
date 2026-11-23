@@ -1,6 +1,6 @@
 # S7 Studio printing — mandatory 0.2.0 G4/P acceptance contract
 
-**Maintainer decision: 2026-11-20.**
+**Maintainer decisions: 2026-11-20 (printing); 2026-11-23 (new Waterfall and basic Video Player also require it).**
 Diagram printing and viewer-output printing were previously deferred,
 but are now **mandatory in 0.2.0**, under G4 Studio/package qualification.
 This document defines intended behavior and tests; it does **not**
@@ -45,9 +45,11 @@ system **print** workflows are first-class Studio actions.
 | **P05** | Live oscilloscope Time/Spectrum/XY/Correlation modes | PDF and printer from coherent captured view | One consistent frame/range; live execution and acquisition unaffected |
 | **P06** | Other currently shipped visual analysis/viewer types, including available time-frequency/surface and control-analysis views | PDF and printer using a published view-by-view support matrix | Relevant scales/color legend, units, annotations and meaningful nonblank output |
 | **P07** | Print preview, page setup, cancellation and failures | Supported for diagram and each print class | Selected page geometry actually used; cancel leaves no false success; unwritable PDF/printer failure reported |
+| **P08** | New 0.2.0 Waterfall viewer (committed FFT/PSD array rows) | PDF and printer of one coherent selected time-frequency view | Frequency/time axes, amplitude scale/legend, precise row range and gaps; printing does not pause or change computed values |
+| **P09** | New 0.2.0 basic Video Player (generated/recorded U8 frames) | PDF and printer of an immutable selected displayed whole frame | Exact frame/step identity and geometry, image pixels/color, fit/aspect and no tearing or time advance |
 
 The development team should audit all currently shipped visual viewer
-types and maintain a manifest mapping them to P02–P06. A new viewer
+types and maintain a manifest mapping legacy viewers to P02–P06 and the new viewers to P08–P09. A new viewer
 must either implement the same printing contract or be explicitly
 identified in a maintainer-reviewed release exclusion. Do not confuse
 CSV/data export or screenshot tools with printable PDF/printer output.
@@ -95,13 +97,13 @@ CSV/data export or screenshot tools with printable PDF/printer output.
    labels, contrast and scaling). No physical printer required
    in normal CI; document gaps or explicit approved exclusions.
 
-Keep a test matrix with IDs P01–P07, test commands, platform/Qt
+Keep a test matrix with IDs P01–P09, test commands, platform/Qt
 renderer, candidate commit SHA, expected vs. actual, PDF artifacts
 or appropriately retained check evidence, results and limitations.
 
 ## Release decision and exclusions
 
-All P01–P07 supported profiles and documented mandatory checks
+All P01–P09 supported profiles and documented mandatory checks
 are G4 release requirements for **0.2.0**, not 0.3.0 candidates.
 Printer-specific capability gaps must be clearly identified and
 approved by the maintainer; silently skipping required viewers is
