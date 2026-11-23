@@ -21,6 +21,12 @@ video education track. **Production GStreamer integration for both audio and
 video is an independent mandatory release gate (H6)**, not merely a video
 smoke test or external testing utility.
 
+The 2026-11-23 [array-signal design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md)
+makes local fixed-shape vector ports/wires and simple Waterfall/Video Player
+viewers **0.2.0 deliverables**. This changes the 0.3.0 baseline, not its
+mandatory hardware, camera, codec or GStreamer acceptance gates. A viewer
+showing synthetic frames is not a production video capture/decoder pipeline.
+
 The [0.3.0 qualification work plan](RELEASE_0.3.0_WORKPLAN.md) is the
 authoritative **live gate matrix**, engineering phases, tests, required
 evidence and exclusions. No gate is declared passed merely by this planning
