@@ -1,8 +1,8 @@
 # S7 product and release roadmap — 0.2.0 through 1.0.0
 
-**Maintainer direction, updated 2026-11-20.** Planning, not an assertion
+**Maintainer direction, updated 2026-11-23.** Planning, not an assertion
 of implemented features, completed qualification or tagged releases.
-The 0.2.0 printing requirement supersedes its earlier deferral.
+The 0.2.0 printing requirement supersedes its earlier deferral; a narrow vector-wire plus Waterfall/Video Player slice was added on 2026-11-23.
 
 **Product vision:** S7 is a design and verification environment where the
 saved diagram is the authoritative specification. S7's dynamic reference
@@ -13,7 +13,7 @@ of the execution backend.
 
 | Version | Purpose | Principal outcome | Status |
 | --- | --- | --- | --- |
-| **0.2.0** | **Verify and document** | Numerical/educational validation, useful two-host causal execution, reliable Studio, **mandatory diagram and viewer output printing (G4/P)** to PDF and physical printers; reproducible packages | G1–G4, including G4/P, are mandatory and qualification remains open |
+| **0.2.0** | **Verify and document** | Numerical/educational validation, useful two-host causal execution, reliable Studio, **mandatory array-valued local vector ports/wires, Waterfall and basic Video Player**, plus diagram/viewer printing (G4/P) to PDF and physical printers; reproducible packages | G1–G4, including G4/P, are mandatory and qualification remains open |
 | **0.3.0** | **Bridge to reality** | 24 SDR labs, 12 audio labs, four video smoke tests, mandatory GStreamer audio/video, device pacing, and H8 provider/model/host separation plus deterministic capture/replay | Agreed H0–H8 gates; final qualification open |
 | **0.4.0** | **Compile the model** | Local diagram -> validated/typed causal IR -> efficient C++ source and native executable; differential verification against S7 reference runtime | Preliminary |
 | **0.5.0** | **Distributed coherence** | Explicit physical clock/coherence relationships, timing uncertainty, multi-domain signal processing and distributed sensing experiments | Preliminary |
@@ -25,6 +25,10 @@ of the execution backend.
 **0.2.0 — Reliable engineering workbench.** Establish reproducible
 numerical/causal simulation, 24 MIT-aligned core educational labs,
 a practical two-host engineering experiment and installed Studio.
+The 2026-11-23 amendment requires a small local fixed-shape array-valued
+port/wire capability and independently qualified Waterfall + basic Video
+Player observation, using synthetic or recorded IQ/video frame fixtures;
+see [array design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md).
 Printing is part of Studio's deliverable: print diagrams, Scope and
 other recorded/live visual observer output using coherent snapshots,
 good page layout and testable PDF output. See the
