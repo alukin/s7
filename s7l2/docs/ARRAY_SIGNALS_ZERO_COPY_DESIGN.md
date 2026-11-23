@@ -1,7 +1,7 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
 **Design notes — maintainer direction 2026-11-23. Proposed, not implemented or release-qualified.**
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) is the live release acceptance record; these notes define the reusable architecture and the narrow first slice. No code, tests or hardware qualifications are claimed by adding this document.
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) is the live release acceptance record; these notes define the reusable architecture and the narrow first slice. The [source-based migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [five-hour Codex session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe what must change and a bounded delivery order. **Existing scalar elements stay intact; vector behavior uses new elements.** No code, tests or hardware qualifications are claimed by adding these documents.
 
 ## 1. Motivation and boundaries
 
