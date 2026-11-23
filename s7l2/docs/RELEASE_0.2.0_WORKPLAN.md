@@ -1,6 +1,6 @@
 # S7 0.2.0 work plan — qualification and remaining delivery
 
-**Scope revised 2026-11-18; printing added to G4 by the maintainer on 2026-11-20.** The [release contract](RELEASE_0.2.0.md)
+**Scope revised 2026-11-18; printing added on 2026-11-20; local vector ports/wires, Waterfall and a basic Video Player added as mandatory 0.2.0 targets by the maintainer on 2026-11-23. Planning and qualification remain open.** The [release contract](RELEASE_0.2.0.md)
 supersedes older feature assignments. The primary acceptance example is a
 **useful two-host engineering workflow** — source, processing/model,
 independent numeric validation and observation — not a cross-host feedback
@@ -37,6 +37,7 @@ must not be reported as final-candidate tests.
 | Item / release gate | Status at scope revision | Existing evidence | Required remaining acceptance | Lead |
 | --- | --- | --- | --- | --- |
 | **G1 — Local numerical and semantic regressions** | Implemented baseline; final gate open | [Numerical matrix](NUMERICAL_VALIDATION_MATRIX.md), [integrator review](INTEGRATOR_REVIEW_2026-11-17.md), [0.1.2 notes](RELEASE_0.1.2_NOTES.md) | Complete final-candidate numerical/causality/type/rate/rollback/reference tests, including supported coupled methods; preserve recorded envelopes | Maintainer/Codex |
+| **G1/V — Local vector-valued signal ports and wires** | **New mandatory scope; implementation/qualification open** | [Array/zero-copy architecture](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), scalar runtime and independent FFT/convolution implementations | Rank-1 typed array ports/wires, minimal rank-2/3 U8 frame values, CPU bounded leases, typed shape validation, zero-payload-copy local fan-out, compiled binding, commit/rollback, nested-schema and scalar regression; deterministic saved diagrams and negative tests | Maintainer/Codex |
 | **G1 / EDU — MIT-aligned teaching laboratories** | Curriculum proposed; per-lab qualification open | [course map](../education/COURSE_MAP.md), [existing examples](../examples/README.md), [lab standard](../education/LAB_STANDARD.md) | Create new educational diagrams using older examples only as references; qualify the agreed 24 named core labs with independent oracles, failure/limitation cases, source attribution, Studio workflows and release-package checks; list blocked cases explicitly | Maintainer/Codex |
 | **G2 — Practical two-host engineering workflow** | Headless transport and static scheduler implemented in bounded profiles; end-to-end demo open | [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027), [schedule contract](DISTRIBUTED_CAUSAL_SCHEDULE.md), [Phase 4](CROSS_NODE_CAUSALITY_PHASE4.md) | Two physical hosts, useful deterministic input → processing → recorded/observed output, independent reference and resource metrics; separate multiprocess feedback/invalid-cycle regressions | Maintainer/Codex, coordinated with teren_ukr |
 | **G3 / D0 — Common distributed contract and test matrix** | Partial | C++/Python existing control and F64 data streams; shared fixtures; [transport lab](../../s7py/tools/transport_lab/README.md) | Freeze supported topology, security/transport profiles, host and resource envelopes; record expected pass/fail matrix; make cross-language checks required CI | teren_ukr |
@@ -44,8 +45,12 @@ must not be reported as final-candidate tests.
 | **G3 / D2 — Multi-node lifecycle** | Partial | Local mixed-language chain and reconnect checks | Headless forward chain, fan-out, slow consumers, gaps, restart/redeploy/reconnect, controlled recovery and revisions; no obligatory multi-host feedback loop | teren_ukr |
 | **G3 — Failure and authorization boundary** | Partial | Existing [wire/stream contract](../../doc/S7_Network_Wire_Protocol_v1.md), control authorization and [schedule limits](DISTRIBUTED_CAUSAL_SCHEDULE.md) | Assert unauthorized, wrong-pin, profile mismatch, missing values, non-atomic network sends and explicit faults; document limits and operator recovery | Maintainer/Codex + teren_ukr |
 | **G4 — Studio and packaged candidate** | Tooling present; final gate open | [Studio testing](STUDIO_GUI_TESTING.md), [Linux packages](NATIVE_LINUX_PACKAGES.md), [Windows checks](WINDOWS_BUILD.md) | Complete configured Linux/Studio/Wine regressions; candidate artifact rebuilding, relocation, notices, hashes and accurate native-vs-Wine qualification | Maintainer/Codex |
+| **G4/W — Waterfall observer** | **New mandatory scope; implementation/qualification open** | [Array/zero-copy architecture](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), existing Studio spectral analysis | Whole 1D FFT/PSD array values from deterministic IQ reference -> independent read-only time-frequency waterfall, axes/window/normalization, bounded history, discontinuity, saved diagram, visual regression and package check; no required live radio | Maintainer/Codex |
+| **G4/V — Basic Video Player observer** | **New mandatory scope; implementation/qualification open** | [Array/zero-copy architecture](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), video experiment notes | Generated/recorded U8 grayscale/RGB whole frames via actual local S7 array ports -> play/pause presentation, fit, frame/format status, bounded presentation skipping, image/pixel oracle, diagram reopen and package verification; no camera/codec provider required | Maintainer/Codex |
 | **G4/P — Studio diagram/viewer printing** | **New mandatory gate; qualification open** | [Printing contract](STUDIO_PRINTING_0.2.0.md), existing Studio viewer architecture | Diagram and supported viewer output PDF/printer paths; correct page scale, labels, snapshot, error/cancel, package and supported-platform evidence | Maintainer/Codex |
 | **G4 — Reproducible engineering demonstration** | Open | [Distributed schedule smoke cases](DISTRIBUTED_CAUSAL_SCHEDULE.md) and research lab reports | Public practical diagram, independent reference, headless setup, observation/recording workflow, resource metrics and failure/recovery results | Maintainer/Codex + teren_ukr |
+
+**The three new 0.2.0 items above are explicit maintainer-approved scope amendments.** They do not require the complete array-processing roadmap, live camera, video codecs or new remote tensor-wire protocols; follow [the bounded slice](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#5-mandatory-020-minimal-vertical-slice-new-scope).
 
 **Not on the 0.2.0 critical path:** D3 runtime administration and restart
 protocol, D4 full credential tooling and remote provisioning UX,
@@ -79,6 +84,20 @@ the transport and control boundary. Studio is a client of headless services,
 not a second simulation/control implementation.
 
 ## Remaining work, in dependency order
+
+### New array-valued signals and viewers — mandatory narrow slice (G1/V, G4/W, G4/V)
+
+Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), not an unrelated frame/media runtime.
+
+1. Implement local array-valued port descriptors, fixed shapes and CPU lease-backed zero-copy connections while preserving scalar native storage, existing numeric SignalType IDs, causal direct-feedthrough and causal-memory commit/rollback; reject unsupported implicit/coupled numerical array trials.
+2. Provide deterministic array source/pass-through and a frame-valued FFT/PSD path with independent complex-IQ numerical oracle. Verify bounded buffers, fan-out identity, lifetime, shape/type mismatch, forced faults, scalar regression and exact saved-diagram headless execution. Do not rely solely on the existing scalar peak-only FFT plugin.
+3. Implement the read-only Waterfall viewer with spectrum-row ordering, frequency/time axes, selectable range and bounded history; independently compare bins and selected display pixels, including gaps and lifecycle changes.
+4. Implement the basic Video Player viewer for generated/recorded grayscale and RGB U8 whole frames delivered through S7 array ports. Include presentation-only pause/resume, fit, frame metadata, dropped presentation counters, save/reopen and explicit unsupported-format paths. Camera, decoding, FFmpeg and GStreamer are not 0.2.0 prerequisites.
+5. Verify both viewers under G4/P print/PDF and packaging, with coherent snapshots and independent image checks. Record actual source SHA, platform, results and exclusions; a nonblank image is not sufficient acceptance.
+
+**Exit:** G1/V, G4/W and G4/V have tested concrete diagrams, independent references and complete Studio/print/package acceptance, all on the same final candidate as G1–G4. This is new work, not currently implemented.
+
+
 
 ### Education phase — prepare and qualify the curriculum
 
@@ -248,6 +267,7 @@ Before tagging 0.2.0, gather:
 | Failure/recovery report | Scenario, injected fault, active revision, expected/actual stream status, output prefix, gap/recovery behavior and limits |
 | Interoperability matrix | Supported C++/Python combinations, control/data profiles, fixtures and negative security cases; Java boundary explicit |
 | Performance record | Rate, traffic, packet/batch settings, latency/lag, CPU, RSS, queue/log occupancy and reproducible host identifiers |
+| Array/viewer qualification | Vector shape/type and causal fault tests, no-payload-copy local fan-out measurements, deterministic FFT/PSD and frame pixel oracles, Waterfall/Video Player saved-diagram and GUI evidence, lifecycle/resource bounds and candidate SHA |
 | Printing qualification matrix | Supported diagram/viewer inventory, PDF and printer results, checked page geometry/symbols/legends/axes, snapshot consistency, failure/cancel cases, candidate SHA and platform |
 
 | Release/package manifest | Version/SHA, artifact checksums, packaging and relocation checks, notices, CI/local results and platform exclusions |
@@ -285,9 +305,10 @@ documents. This condensed work plan intentionally keeps **only** active
 
 ## Stop rule and release decision
 
-Stop accepting unrelated new capabilities into 0.2.0. Fix regressions or
-inconsistencies revealed by G1–G4; do not require new video, PKI, remote
-administration, signal-generator or general parallel/multi-rate
-features to close a gate. **G4/P printing explicitly remains required.** Multi-host feedback stress tests are optional
+Stop accepting unrelated new capabilities into 0.2.0 **except the explicit 2026-11-23 G1/V, G4/W and G4/V amendment**. Fix regressions or
+inconsistencies revealed by G1–G4; do not require production camera/video I/O,
+FFmpeg/GStreamer integration, PKI, remote administration, signal-generator,
+full tensor/video/spatial processing or general parallel/multi-rate features
+to close a gate. **G4/P printing explicitly remains required for both new viewers.** Multi-host feedback stress tests are optional
 additional evidence, not the pre-MVP showcase. Any substantive gate change needs an explicit
 maintainer decision, an updated contract and a visible release-note exclusion.
