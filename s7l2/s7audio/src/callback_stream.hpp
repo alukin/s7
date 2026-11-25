@@ -5,7 +5,13 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <stop_token>
 #include <thread>
+#if defined(__linux__)
+// sem_post-backed: release() never blocks, so callbacks may signal it.
+#include <semaphore>
+#define S7_AUDIO_WAKE_SEMAPHORE 1
+#endif
 
 namespace s7::audio::detail {
 using namespace hardware;
@@ -69,17 +75,21 @@ public:
         std::uint64_t expected=0;
         const auto event=(static_cast<std::uint64_t>(static_cast<std::uint32_t>(native_error))<<32)|static_cast<std::uint32_t>(s);
         fault_.compare_exchange_strong(expected,event,std::memory_order_release);
+        wake();
     }
+    void cancel() noexcept override { Stream::cancel(); wake(); }
     Status callback_status() const noexcept { return static_cast<Status>(fault_.load(std::memory_order_acquire)&0xffffffffu); }
     int callback_error() const noexcept { return static_cast<std::int32_t>(fault_.load(std::memory_order_acquire)>>32); }
     void capture(const void* p,std::size_t n) noexcept {
         if (callback_status()!=Status::Ok || cancelled()) return;
         if (!p) { fault(Status::ContinuityLost); return; }
         if (ring_.push(static_cast<const std::byte*>(p),n)!=n) fault(Status::Overflow);
+        wake();
     }
     void capture_silence(std::size_t n) noexcept {
         if (callback_status()!=Status::Ok || cancelled()) return;
         if (ring_.push(nullptr,n)!=n) fault(Status::Overflow);
+        wake();
     }
     void playback_underflow() noexcept {
         // A native underflow can describe a previous device period. With
@@ -96,6 +106,7 @@ public:
             if (refilling_ && ring_.readable()>=std::min(request.queue_frames,std::max(refill_frames_,n)))
                 refilling_=false;
             if (!refilling_) count=ring_.pop(static_cast<std::byte*>(p),n);
+            if (count) wake(); // space for a waiting writer
         }
         if (count<n) {
             std::memset(static_cast<std::byte*>(p)+count*stride,0,(n-count)*stride);
@@ -115,6 +126,7 @@ protected:
     }
 private:
     Transfer transfer(std::byte* dst,const std::byte* src,std::size_t n,Deadline d,std::stop_token st) {
+        std::stop_callback on_stop(st,[this]() noexcept { wake(); });
         std::size_t done=0;
         const auto stride=descriptor().actual.frame_bytes();
         while (done<n) {
@@ -134,15 +146,43 @@ private:
                 if (dst && done==n) return {done,Status::Ok,0,{}};
                 return {done,status,0,{},callback_error()};
             }
-            if (std::chrono::steady_clock::now()>=d) return {done,Status::Timeout,0,{}};
-            std::this_thread::sleep_for(std::chrono::microseconds(200));
+            const auto now=std::chrono::steady_clock::now();
+            if (now>=d) return {done,Status::Timeout,0,{}};
+            wait_for_progress(now,d);
         }
         // A capture terminal is returned on the next read after queued prefix;
         // never hide queued frames just because the producer failed later.
         return {done,src?callback_status():Status::Ok,0,{},src?callback_error():0};
     }
+    // Wakes a transfer waiting for data, space, a fault or cancellation.
+    // Callback-safe: one atomic exchange, and at most one non-blocking
+    // sem_post while no earlier wake is pending (so the count stays <= 1).
+    void wake() noexcept {
+#if defined(S7_AUDIO_WAKE_SEMAPHORE)
+        if (!wake_pending_.exchange(true,std::memory_order_acq_rel)) wake_.release();
+#endif
+    }
+    void wait_for_progress(std::chrono::steady_clock::time_point now,Deadline d) {
+#if defined(S7_AUDIO_WAKE_SEMAPHORE)
+        // Bounded even if a wake were missed: deadlines and cancellation are
+        // also rechecked at least every 50 ms.
+        // Re-arm only after consuming the release: clearing the flag on a
+        // timeout could let a second release exceed the semaphore's maximum.
+        // The exchange also acquires every ring update made before a wake
+        // that found the flag already set.
+        if (wake_.try_acquire_until(std::min<Deadline>(d,now+std::chrono::milliseconds(50))))
+            wake_pending_.exchange(false,std::memory_order_acq_rel);
+#else
+        static_cast<void>(now); static_cast<void>(d);
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+#endif
+    }
     const std::size_t refill_frames_;
     Ring ring_;
+#if defined(S7_AUDIO_WAKE_SEMAPHORE)
+    std::binary_semaphore wake_{0};
+    std::atomic<bool> wake_pending_{false};
+#endif
     bool refilling_{}; // Only the playback callback changes this state.
     std::atomic<std::uint64_t> fault_{}; // Status and native code published together.
     std::atomic<std::uint64_t> emergency_{};
