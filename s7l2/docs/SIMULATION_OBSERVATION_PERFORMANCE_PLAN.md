@@ -112,6 +112,25 @@ later claim is measured.
   in `RUNTIME_PERFORMANCE_ARCHITECTURE.md`.
 - **Acceptance:** reproducible baseline numbers for O1–O5 and P1, committed with
   the exact commands used.
+- **Implemented (2026-11-25):**
+  - `s7studio_observation_load_benchmark` drives the real `LocalSchemaRunner`
+    with a gain chain or a Euler oscillator plus gain chain, 0–8 probes,
+    recording and/or live acquisition, and the viewer emulation. It reports
+    steps/s and per-call viewer latencies.
+  - `tools/run_observation_benchmark.py` runs the matrix in fresh processes.
+    It waits for a quiet machine (load average) and supports a `slow` profile
+    (two CPUs, 60% CPU quota, transient systemd user scope).
+  - `tools/ai/benchmark.py` records agent task outcomes, not code
+    performance, so it was not extended. Runtime step costs keep using
+    `s7core_indexed_benchmark`.
+  - Invocation:
+
+    ```sh
+    cmake --build build --target s7studio_observation_load_benchmark s7core_indexed_benchmark
+    tools/run_observation_benchmark.py \
+      --binary build/s7studio/s7studio_observation_load_benchmark \
+      --output /tmp/observation-baseline.json   # --quick for a smoke check
+    ```
 
 ### WP1 — Cheaper runtime bookkeeping copies (P1)
 

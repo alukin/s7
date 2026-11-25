@@ -778,6 +778,12 @@ add_executable(s7studio_live_trigger_benchmark EXCLUDE_FROM_ALL tests/live_trigg
 target_link_libraries(s7studio_live_trigger_benchmark PRIVATE s7studio_observation Threads::Threads)
 s7_enable_project_warnings(s7studio_live_trigger_benchmark)
 
+# Opt-in probe/viewer load on local runs (performance plan WP0);
+# tools/run_observation_benchmark.py drives the measurement matrix.
+add_executable(s7studio_observation_load_benchmark EXCLUDE_FROM_ALL tests/observation_load_benchmark.cpp)
+target_link_libraries(s7studio_observation_load_benchmark PRIVATE s7studio_local_runner Threads::Threads)
+s7_enable_project_warnings(s7studio_observation_load_benchmark)
+
 # Under Wine (the Windows cross build), Qt Quick, Qt Graphs and Qt Quick 3D
 # render through Direct3D 11 in wined3d whatever QT_QUICK_BACKEND says: on a
 # desktop that opens real windows that can hang the test, and under Xvfb it
