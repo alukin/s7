@@ -8,6 +8,7 @@
 #include "scope_sample_mailbox.hpp"
 #include "observation/observation_source.hpp"
 #include "observation/live_acquisition.hpp"
+#include "observation/probe_block_ring.hpp"
 
 #include <QObject>
 #include <QString>
@@ -25,6 +26,10 @@
 
 #include <s7/transport.hpp>
 #include <s7/hardware_live_run.hpp>
+#include <s7/observe.hpp>
+
+#include <chrono>
+#include <optional>
 
 namespace s7studio {
 
@@ -42,6 +47,7 @@ public:
     void stop() override;
     void reset() override;
     void setHardwareFactory(s7::hardware::CreateLiveRun factory) { hardwareFactory_ = factory; }
+    void setRecordingOverflow(RecordingOverflow overflow) override { recordingOverflow_ = overflow; }
 
     // Commands and snapshot access belong to the QObject owner thread.
     [[nodiscard]] RunState state() const override { return state_.load(); }
@@ -67,7 +73,17 @@ signals:
     void scopeSamplesAvailable();
 
 private:
-    void emitScopeSamples(const s7::NodeRuntime&);
+    // Observation (plan WP3): the stepping thread copies probe values into
+    // blocks; one distributor thread delivers them to the recording, live
+    // views and the Scope mailbox.
+    void captureFrame();
+    // allowDrop: drop mode may discard a block when the ring is full; pause
+    // and completion always deliver (nothing there is time-critical).
+    void publishBlock(bool allowDrop = true);
+    void startObservation(std::uint64_t id);
+    [[nodiscard]] std::string finishObservation();
+    void distributeBlocks(std::uint64_t id);
+    void distribute(const observation::ProbeBlock& block, std::uint64_t id);
     void requestStop();
     void prepareRuntime(const RunConfiguration& configuration);
     void executeRunLoop(std::shared_ptr<const RunConfiguration> configuration);
@@ -108,8 +124,20 @@ private:
         std::vector<double> values;
     };
     std::vector<LiveRoute> liveRoutes_;
-    std::vector<std::size_t> readIndices_; // Deduplicate reads of identical output ports.
-    std::vector<double> probeValues_;
+    std::vector<std::size_t> readIndices_; // probe -> index of its distinct output in compiledProbes_
+    std::optional<s7::CompiledProbes> compiledProbes_;
+    std::vector<double> distinctValues_;
+    std::vector<std::size_t> recordedProbes_;
+    RecordingOverflow recordingOverflow_ = RecordingOverflow::Lossless; // next run
+    RecordingOverflow activeOverflow_ = RecordingOverflow::Lossless;     // this run, after hardware/live rules
+    std::unique_ptr<observation::ProbeBlockRing> ring_;
+    std::thread distributor_;
+    std::chrono::steady_clock::time_point blockStart_{};
+    std::chrono::nanoseconds throttled_{};
+    std::uint64_t droppedFrames_ = 0;
+    // Distributor scratch, reused for every block.
+    std::vector<observation::Sample> recordBatch_;
+    std::vector<ScopeSample> scopeBatch_;
 };
 
 } // namespace s7studio

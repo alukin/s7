@@ -2083,6 +2083,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     clearSamplesCheck->setChecked(!document_.clearScopesBeforeRun());
     clearSamplesCheck->setToolTip(QStringLiteral("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
+    auto* recordingMayDropCheck = new QCheckBox(QStringLiteral("Never slow the run for recording (may drop samples)"), &dialog);
+    recordingMayDropCheck->setObjectName(QStringLiteral("run.recordingMayDrop"));
+    recordingMayDropCheck->setChecked(document_.recordingMayDrop());
+    recordingMayDropCheck->setToolTip(QStringLiteral("By default the run waits when the full-run recording cannot keep up, and the log reports how long. "
+        "With this option the run never waits; samples it cannot record are dropped and the recording is marked incomplete. "
+        "Live views never slow a run."));
+
     form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
     form->addRow(QStringLiteral("Model step rate"), frequencySpin);
     form->addRow(QStringLiteral("Model step dt"), dtLabel);
@@ -2092,6 +2099,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     frequencySpin->setToolTip(QStringLiteral("Sets the local simulation rate and effective dt of rate-dependent elements. This is not a real-time pacing limit."));
     layout->addLayout(form);
     layout->addWidget(clearSamplesCheck);
+    layout->addWidget(recordingMayDropCheck);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     auto* durationNotice = new QLabel(&dialog);
@@ -2129,6 +2137,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     if (runtimeSecondsSpin->value() != initialDisplayedDuration)
         document_.setRuntimeSeconds(runtimeSecondsSpin->value());
     document_.setClearScopesBeforeRun(!clearSamplesCheck->isChecked());
+    document_.setRecordingMayDrop(recordingMayDropCheck->isChecked());
     if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == document_.clearScopesBeforeRun()) {
         const QSignalBlocker blocker(overlayScopeTracesAction_);
         overlayScopeTracesAction_->setChecked(!document_.clearScopesBeforeRun());
@@ -2196,6 +2205,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
     toolWindows_->show(observersDock_);
     if (previousFocus) previousFocus->setFocus(Qt::OtherFocusReason);
     observersPanel_->setRunState(RunState::Preparing, 0, dtSeconds);
+    runner_->setRecordingOverflow(document_.recordingMayDrop() ? RecordingOverflow::Drop : RecordingOverflow::Lossless);
     controller_->run(document_.schema(), dtSeconds, ui::RunExecutionConfig{document_.runtimeSeconds()}, probes);
     viewers_->presentLive(runner_->liveSources());
     refreshActions();

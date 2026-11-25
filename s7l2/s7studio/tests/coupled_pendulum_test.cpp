@@ -64,13 +64,33 @@ int main(int argc, char** argv) try
                     [&](bool ok, const QString& message) { completed = true; success = ok; error = message; });
                 std::size_t received = 0, checkpoint = 0;
                 double max_difference = 0;
-                const auto consume = [&] {
-                    const auto batch = runner.takeScopeSamples();
-                    if (batch.dropped != 0) throw std::runtime_error("Bundled runtime lost samples during numerical test");
-                    for (const auto& sample : batch.samples) {
+                // The Scope mailbox is a bounded preview that may skip updates
+                // when its reader falls behind (the authoritative recording is
+                // unaffected); drain it as Studio's UI does.
+                const auto drain = [&] { static_cast<void>(runner.takeScopeSamples()); };
+                const long ticks = static_cast<long>(duration * frequency);
+                runner.run(root.at("schema"), dt, ticks, probes);
+                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
+                while (!completed && std::chrono::steady_clock::now() < deadline) {
+                    app.processEvents();
+                    drain();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+                drain();
+                // Compare the full-run recording, sample by sample, with the
+                // headless reference.
+                const auto recording = runner.recordedSource();
+                runner.reset(); // joins worker, including on failed completion
+                if (!completed || !success) throw std::runtime_error("Bundled run failed: " + error.toStdString());
+                if (!recording || recording->status().incomplete())
+                    throw std::runtime_error("Bundled runtime lost samples during numerical test");
+                for (std::uint64_t cursor = 0; cursor < recording->status().samples;) {
+                    const auto page = recording->read(cursor);
+                    if (!page.error.isEmpty()) throw std::runtime_error("Bundled recording read failed: " + page.error.toStdString());
+                    for (const auto& sample : page.samples) {
                         const long step = static_cast<long>(received / 4 + 1);
                         const auto channel = received % 4;
-                        if (!std::isfinite(sample.value) || sample.step != step || sample.probeName != probes[channel].name ||
+                        if (!std::isfinite(sample.value) || sample.step != step || sample.channel != channel ||
                             std::abs(sample.timeSeconds - step * dt) > 1e-10) {
                             throw std::runtime_error("Bundled runtime sample order/time/channel mismatch");
                         }
@@ -81,18 +101,8 @@ int main(int argc, char** argv) try
                         }
                         ++received;
                     }
-                };
-                const long ticks = static_cast<long>(duration * frequency);
-                runner.run(root.at("schema"), dt, ticks, probes);
-                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
-                while (!completed && std::chrono::steady_clock::now() < deadline) {
-                    app.processEvents();
-                    consume();
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    cursor = page.next;
                 }
-                consume();
-                runner.reset(); // joins worker, including on failed completion
-                if (!completed || !success) throw std::runtime_error("Bundled run failed: " + error.toStdString());
                 if (received != static_cast<std::size_t>(ticks) * 4 || checkpoint != expected.checkpoints.size()
                     || max_difference > 1e-12) {
                     throw std::runtime_error(name(method, mode) + ": bundled/headless traces disagree");

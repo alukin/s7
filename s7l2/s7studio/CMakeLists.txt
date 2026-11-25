@@ -98,7 +98,8 @@ target_link_libraries(s7studio_run_provenance PUBLIC s7studio_observation s7core
 s7_enable_project_warnings(s7studio_run_provenance)
 target_link_libraries(s7studio_diagram PUBLIC s7studio_run_provenance)
 
-add_library(s7studio_local_runner STATIC src/local_schema_runner.cpp src/local_schema_runner.hpp)
+add_library(s7studio_local_runner STATIC src/local_schema_runner.cpp src/local_schema_runner.hpp
+    src/observation/probe_block_ring.hpp)
 target_include_directories(s7studio_local_runner PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/s7hardware/include ${PROJECT_SOURCE_DIR}/s7transport/include)
 target_link_libraries(s7studio_local_runner PUBLIC s7studio_run_provenance s7observe Threads::Threads)

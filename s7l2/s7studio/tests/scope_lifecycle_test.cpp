@@ -240,7 +240,11 @@ int main(int argc, char** argv) try {
     require(runner.recordedSource()->status().finished && !runner.recordedSource()->status().incomplete(), "Stopped recording incomplete");
     require(success && received > pausedCount && received % 2 == 0, "Stop while paused lost final channel or failed");
     while (portrait->refreshSource()) {} // bounded pages; drain presentation backlog explicitly
-    require(portrait->points() == expectedPairs, "Phase Portrait lost, duplicated or misaligned pairs across pause/resume/stop");
+    // The portrait keeps the newest kMaxPoints pairs ("trajectory trimmed");
+    // a fast continuous run can exceed that between the test's polls.
+    const auto kept = std::min<qsizetype>(expectedPairs.size(), s7studio::ui::PhasePortraitViewWindow::kMaxPoints);
+    require(portrait->points() == expectedPairs.mid(expectedPairs.size() - kept),
+            "Phase Portrait lost, duplicated or misaligned pairs across pause/resume/stop");
     require(manager.viewers().size() == 1, "Manager created viewers for unresolved probes");
     runner.reset();
     manager.beginRun(QStringLiteral("previous"), false);

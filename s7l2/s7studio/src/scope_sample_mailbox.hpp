@@ -52,16 +52,43 @@ public:
         return !notifyPending_.exchange(true);
     }
 
+    // Worker thread: a whole block under one lock, oldest-first. Keeps at
+    // most `capacity` samples, dropping (and counting) the oldest.
+    bool push(std::vector<ScopeSample>& batch)
+    {
+        if (batch.empty()) return false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (batch.front().runId != runId_) return false;
+            auto first = batch.begin();
+            if (batch.size() > capacity_) { // only the newest fit
+                dropped_ += samples_.size() + (batch.size() - capacity_);
+                samples_.clear();
+                first += static_cast<std::ptrdiff_t>(batch.size() - capacity_);
+            } else if (samples_.size() + batch.size() > capacity_) {
+                const auto excess = samples_.size() + batch.size() - capacity_;
+                samples_.erase(samples_.begin(), samples_.begin() + static_cast<std::ptrdiff_t>(excess));
+                dropped_ += excess;
+            }
+            samples_.insert(samples_.end(), std::make_move_iterator(first), std::make_move_iterator(batch.end()));
+        }
+        return !notifyPending_.exchange(true);
+    }
+
     // UI thread. Takes everything queued so far and re-arms notification.
     auto take() -> ScopeSampleBatch
     {
         notifyPending_.store(false);
         ScopeSampleBatch batch;
-        std::lock_guard<std::mutex> lock(mutex_);
-        batch.samples.assign(std::make_move_iterator(samples_.begin()), std::make_move_iterator(samples_.end()));
-        samples_.clear();
-        batch.dropped = std::exchange(dropped_, 0);
-        batch.runId = runId_;
+        std::deque<ScopeSample> taken;
+        {
+            // O(1) under the lock, so the producer never waits for the copy.
+            std::lock_guard<std::mutex> lock(mutex_);
+            taken.swap(samples_);
+            batch.dropped = std::exchange(dropped_, 0);
+            batch.runId = runId_;
+        }
+        batch.samples.assign(std::make_move_iterator(taken.begin()), std::make_move_iterator(taken.end()));
         return batch;
     }
 

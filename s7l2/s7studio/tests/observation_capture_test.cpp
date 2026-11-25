@@ -7,7 +7,10 @@
 #include <QDataStream>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <chrono>
 #include <cmath>
+#include <cstring>
+#include <thread>
 
 using namespace s7studio;
 namespace {
@@ -21,6 +24,50 @@ protected:
         return QBuffer::writeData(data, std::min(length, limit_ - pos()));
     }
 };
+// Storage whose every write is slow, so the recording cannot keep up.
+class SlowBuffer : public QBuffer {
+public:
+    SlowBuffer() { open(QIODevice::ReadWrite); }
+protected:
+    qint64 writeData(const char* data, qint64 length) override {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return QBuffer::writeData(data, length);
+    }
+};
+observation::StorageOptions slowStorage() {
+    observation::StorageOptions storage;
+    storage.memoryLimit = 2;
+    storage.createStorage = [] { return std::make_unique<SlowBuffer>(); };
+    return storage;
+}
+bool logged(const QSignalSpy& log, const QString& text) {
+    for (const auto& entry : log)
+        if (entry[0].toString().contains(text)) return true;
+    return false;
+}
+// A real-valued oscillator (forward Euler) for comparing recorded values.
+boost::json::value oscillator() {
+    auto element = [](const char* id, const char* type, boost::json::object params) {
+        return boost::json::object{{"id", id}, {"type", type}, {"params", std::move(params)}};
+    };
+    auto wire = [](const char* from, const char* to) {
+        return boost::json::object{{"from_element", from}, {"from_port", 0}, {"to_element", to}, {"to_port", 0}};
+    };
+    return boost::json::object{{"name", "oscillator"},
+        {"elements", boost::json::array{element("velocity", "EulerIntegrator", {{"initial_value", 1.0}, {"substeps", 1}}),
+                                        element("position", "EulerIntegrator", {{"initial_value", 0.0}, {"substeps", 1}}),
+                                        element("spring", "Gain", {{"factor", -1.0}})}},
+        {"connections", boost::json::array{wire("velocity", "position"), wire("position", "spring"), wire("spring", "velocity")}}};
+}
+std::vector<double> recordedValues(const observation::ObservationSource& source, observation::ChannelId channel) {
+    std::vector<double> values;
+    for (std::uint64_t cursor = 0; cursor < source.status().samples;) {
+        const auto page = source.read(cursor);
+        for (const auto& sample : page.samples) if (sample.channel == channel) values.push_back(sample.value);
+        cursor = page.next;
+    }
+    return values;
+}
 std::atomic<int> complexSteps{0};
 class ComplexElement : public s7::Element {
     s7::ComplexValue value_{1,2};
@@ -116,6 +163,72 @@ private slots:
         QCOMPARE(runner.recordedSource()->status().samples, std::uint64_t(3));
         QVERIFY(!runner.recordedSource()->status().incomplete());
         QVERIFY(failed->status().incomplete());
+    }
+    // D1: a recording that cannot keep up makes a lossless run wait (and the
+    // log says how long), but loses nothing.
+    void slowRecordingThrottlesLosslessRun() {
+        LocalSchemaRunner runner(nullptr, slowStorage());
+        QSignalSpy complete(&runner, &LocalSchemaRunner::runCompleted);
+        QSignalSpy log(&runner, &LocalSchemaRunner::logMessage);
+        runner.run(schema(3), .001, 150000, {{"scope/a", "source", 0}});
+        QTRY_COMPARE_WITH_TIMEOUT(complete.count(), 1, 30000);
+        QCOMPARE(runner.state(), RunState::Completed);
+        const auto source = runner.recordedSource();
+        QCOMPARE(source->status().samples, std::uint64_t(150000));
+        QVERIFY(!source->status().incomplete());
+        QTRY_VERIFY(logged(log, "run throttled by recording"));
+        QCOMPARE(source->provenance().value("recording_overflow").toString(), QString("lossless"));
+    }
+    // D1 opt-in: the run never waits; lost samples are counted and mark the
+    // recording incomplete, but the run itself completes.
+    void dropModeNeverWaitsAndMarksLoss() {
+        LocalSchemaRunner runner(nullptr, slowStorage());
+        runner.setRecordingOverflow(RecordingOverflow::Drop);
+        QSignalSpy complete(&runner, &LocalSchemaRunner::runCompleted);
+        QSignalSpy log(&runner, &LocalSchemaRunner::logMessage);
+        runner.run(schema(3), .001, 150000, {{"scope/a", "source", 0}});
+        QTRY_COMPARE_WITH_TIMEOUT(complete.count(), 1, 30000);
+        QCOMPARE(runner.state(), RunState::Completed);
+        const auto status = runner.recordedSource()->status();
+        QVERIFY(status.captureDropped > 0);
+        QVERIFY(status.incomplete());
+        QCOMPARE(status.samples + status.captureDropped, std::uint64_t(150000));
+        QTRY_VERIFY(logged(log, "the recording is incomplete"));
+        QVERIFY(!logged(log, "run throttled by recording"));
+        QCOMPARE(runner.recordedSource()->provenance().value("recording_overflow").toString(), QString("drop"));
+    }
+    // Pausing hands over the partial block, so viewers show the latest step.
+    void pausePublishesLatestSamples() {
+        gate_ = currentGate = std::make_shared<Gate>(); // closed: steps need permits
+        LocalSchemaRunner runner;
+        runner.run(schema(4), .001, 1000, {{"scope/a", "source", 0}});
+        gate_->allow(10);
+        QTRY_COMPARE(gate_->entered.load(), 11); // blocked inside step 11
+        runner.pause();
+        gate_->allow(1);
+        QTRY_COMPARE(runner.state(), RunState::Paused);
+        QTRY_COMPARE(runner.recordedSource()->status().samples, std::uint64_t(11));
+        gate_->releaseAll();
+        runner.resume();
+        QTRY_COMPARE(runner.state(), RunState::Completed);
+        QCOMPARE(runner.recordedSource()->status().samples, std::uint64_t(1000));
+    }
+    // Observation is not computation: more probes record the same values.
+    void probeCountDoesNotChangeResults() {
+        std::vector<std::vector<double>> runs;
+        for (const auto& probes : std::vector<std::vector<RunProbe>>{
+                 {{"position", "position", 0}},
+                 {{"position", "position", 0}, {"velocity", "velocity", 0}, {"spring", "spring", 0},
+                  {"live/position", "position", 0, "", false, "live"}, {"live/velocity", "velocity", 0, "", false, "live"}}}) {
+            LocalSchemaRunner runner;
+            QSignalSpy complete(&runner, &LocalSchemaRunner::runCompleted);
+            runner.run(oscillator(), .001, 5000, probes);
+            QTRY_COMPARE(complete.count(), 1);
+            QCOMPARE(runner.state(), RunState::Completed);
+            runs.push_back(recordedValues(*runner.recordedSource(), 0));
+        }
+        QCOMPARE(runs[0].size(), std::size_t(5000));
+        QVERIFY(std::memcmp(runs[0].data(), runs[1].data(), runs[0].size() * sizeof(double)) == 0);
     }
     void invalidOrComplexProbesFailBeforeStepping() {
         LocalSchemaRunner runner;

@@ -73,22 +73,55 @@ bool ObservationSource::spill()
 }
 bool ObservationSource::append(const Sample& sample)
 {
+    return append(std::span<const Sample>(&sample, 1));
+}
+bool ObservationSource::append(const std::span<const Sample> samples)
+{
+    // One lock per batch: the producer delivers whole blocks of frames.
     std::lock_guard lock(mutex_);
     if (status_.finished || !status_.storageError.isEmpty()) return false;
-    if (sample.channel >= static_cast<ChannelId>(channels_.size())) {
-        status_.storageError = QStringLiteral("Unknown observation channel."); return false;
-    }
-    if (!file_ && memory_.size() >= memoryLimit_ && !spill()) return false;
-    if (file_) {
-        const auto offset = static_cast<qint64>(status_.samples) * static_cast<qint64>(sizeof(Sample));
-        if ((file_->pos() != offset && !file_->seek(offset)) || file_->write(reinterpret_cast<const char*>(&sample), sizeof(Sample)) != sizeof(Sample)) {
-            status_.storageError = QStringLiteral("Observation history write failed: ") + file_->errorString(); return false;
+    for (const auto& sample : samples) {
+        if (sample.channel >= static_cast<ChannelId>(channels_.size())) {
+            status_.storageError = QStringLiteral("Unknown observation channel."); return false;
         }
-    } else memory_.push_back(sample);
-    auto& tail = tails_[sample.channel];
-    if (tail.size() == static_cast<std::size_t>(tailPositions)) tail.pop_front();
-    tail.emplace_back(status_.samples, sample);
-    ++status_.samples; return true;
+    }
+    auto pending = samples;
+    while (!pending.empty()) {
+        if (!file_ && memory_.size() >= memoryLimit_ && !spill()) return false;
+        std::span<const Sample> chunk;
+        if (file_) {
+            // Every remaining sample goes to the file in one write.
+            chunk = pending;
+            const auto offset = static_cast<qint64>(status_.samples) * static_cast<qint64>(sizeof(Sample));
+            const auto bytes = static_cast<qint64>(chunk.size_bytes());
+            if (file_->pos() != offset && !file_->seek(offset)) {
+                status_.storageError = QStringLiteral("Observation history write failed: ") + file_->errorString(); return false;
+            }
+            if (const auto written = file_->write(reinterpret_cast<const char*>(chunk.data()), bytes); written != bytes) {
+                // Keep the complete samples that did reach storage, as a
+                // per-sample writer would have: the recording is a prefix.
+                const auto kept = written > 0 ? static_cast<std::size_t>(written) / sizeof(Sample) : 0;
+                for (const auto& sample : chunk.first(kept)) {
+                    auto& tail = tails_[sample.channel];
+                    if (tail.size() == static_cast<std::size_t>(tailPositions)) tail.pop_front();
+                    tail.emplace_back(status_.samples, sample);
+                    ++status_.samples;
+                }
+                status_.storageError = QStringLiteral("Observation history write failed: ") + file_->errorString(); return false;
+            }
+        } else {
+            chunk = pending.first(std::min<std::size_t>(pending.size(), static_cast<std::size_t>(memoryLimit_ - memory_.size())));
+            memory_.append(QList<Sample>(chunk.begin(), chunk.end()));
+        }
+        for (const auto& sample : chunk) {
+            auto& tail = tails_[sample.channel];
+            if (tail.size() == static_cast<std::size_t>(tailPositions)) tail.pop_front();
+            tail.emplace_back(status_.samples, sample);
+            ++status_.samples;
+        }
+        pending = pending.subspan(chunk.size());
+    }
+    return true;
 }
 bool ObservationSource::finish(bool stopped, const QString& runError)
 {

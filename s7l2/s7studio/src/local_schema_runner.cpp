@@ -66,6 +66,7 @@ void LocalSchemaRunner::publishState(RunState expected, std::uint64_t id)
 
 void LocalSchemaRunner::releaseRuntime()
 {
+    compiledProbes_.reset(); // addresses storage owned by the runtime
     hardwareRun_.reset();
     hardwarePaced_ = false;
     runtime_.reset();
@@ -89,14 +90,16 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     if (storage.temporaryDirectory.isEmpty()) storage.temporaryDirectory = qEnvironmentVariable("S7STUDIO_RECORDING_TEMP_DIR");
     const bool liveOnly = !probes.empty() && std::ranges::none_of(probes, [](const auto& p) { return p.record; });
     recording_ = liveOnly ? nullptr : std::make_shared<observation::ObservationSource>(id, std::move(storage));
-    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); probeValues_.clear();
-    probeChannels_.clear();
+    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); distinctValues_.clear();
+    probeChannels_.clear(); recordedProbes_.clear(); compiledProbes_.reset(); ring_.reset();
+    throttled_ = {}; droppedFrames_ = 0;
     completedTicks_.store(0);
     pauseRequested_.store(false);
     stopRequested_.store(false);
     hardwareStop_ = std::stop_source{};
     state_.store(RunState::Preparing);
-    configuration_ = std::make_shared<const RunConfiguration>(RunConfiguration{id, schemaJson, dt, ticks, std::move(probes)});
+    configuration_ = std::make_shared<const RunConfiguration>(
+        RunConfiguration{id, schemaJson, dt, ticks, std::move(probes), recordingOverflow_});
     totalTicks_ = ticks;
     probes_ = configuration_->probes;
     publishState(RunState::Preparing, id);
@@ -160,26 +163,37 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
         runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
         runtime_->set_model_time_rate(rate);
     }
+    // Hardware runs never wait for observation; nor do runs without a
+    // recording, since live views always keep only the newest data (D1).
+    activeOverflow_ = hardwarePaced_ || !recording_ ? RecordingOverflow::Drop : configuration.recordingOverflow;
+    prepared.provenance.insert(QStringLiteral("recording_overflow"), QString::fromLatin1(recordingOverflowName(activeOverflow_)));
     if (recording_) recording_->setProvenance(prepared.provenance);
     std::map<std::string, std::size_t> groups;
     std::vector<QVector<observation::LiveChannel>> liveChannels;
-    std::map<std::pair<std::string, int>, std::size_t> uniqueReads;
+    std::map<std::pair<std::string, int>, std::size_t> distinctReads;
+    std::vector<s7::ProbePoint> distinct;
     std::size_t liveCount = 0;
-    s7::ObservationService observation(hardwarePaced_ ? hardwareRun_->runtime() : *runtime_);
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {
         if (probe.name.empty() || !names.insert(probe.name).second || probe.port < 0)
             throw std::invalid_argument("Probe names must be nonempty and unique, and output ports nonnegative.");
-        const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
-        if (sample.is_complex())
-            throw std::invalid_argument("Probe '" + probe.name + "' has unsupported complex type " +
-                std::string(s7::signal_type_name(sample.type)) + "; scalar viewers require a real-valued output.");
-        const auto type = QString::fromStdString(std::string(s7::signal_type_name(sample.type)));
-        probeChannels_.push_back(probe.record ? recording_->channel(QString::fromStdString(probe.name), type) : 0);
-        const auto index = readIndices_.size();
-        auto read = uniqueReads.emplace(std::pair{probe.element, probe.port}, index).first;
-        readIndices_.push_back(read->second);
         if (!probe.record && probe.liveGroup.empty()) throw std::invalid_argument("Probe has no capture subscription.");
+        const auto [read, added] = distinctReads.emplace(std::pair{probe.element, probe.port}, distinct.size());
+        if (added) distinct.push_back({probe.element, static_cast<std::size_t>(probe.port)});
+        readIndices_.push_back(read->second);
+    }
+    // Resolved once: per-step reads copy from output storage directly.
+    compiledProbes_.emplace(s7::ObservationService(hardwarePaced_ ? hardwareRun_->runtime() : *runtime_).compile(distinct));
+    distinctValues_.resize(distinct.size());
+    for (std::size_t index = 0; index < configuration.probes.size(); ++index) {
+        const auto& probe = configuration.probes[index];
+        const auto signal = compiledProbes_->point(readIndices_[index]).type;
+        if (s7::is_complex_signal_type(signal))
+            throw std::invalid_argument("Probe '" + probe.name + "' has unsupported complex type " +
+                std::string(s7::signal_type_name(signal)) + "; scalar viewers require a real-valued output.");
+        const auto type = QString::fromStdString(std::string(s7::signal_type_name(signal)));
+        probeChannels_.push_back(probe.record ? recording_->channel(QString::fromStdString(probe.name), type) : 0);
+        if (probe.record) recordedProbes_.push_back(index);
         if (!probe.liveGroup.empty()) {
             if (++liveCount > observation::LiveAcquisition::maxChannels)
                 throw std::invalid_argument("Prototype supports at most 8 live channels across all workspaces.");
@@ -188,13 +202,12 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
             liveChannels[group->second].push_back({QString::fromStdString(probe.name), QString::fromStdString(probe.unit), type});
             liveRoutes_[group->second].probes.push_back(index);
         }
-        if (sample.type != s7::SignalType::F64) {
+        if (signal != s7::SignalType::F64) {
             const auto message = QStringLiteral("[runtime] probe %1: %2 is explicitly converted to stored binary64; wider scalar values may round.")
-                .arg(QString::fromStdString(probe.name)).arg(QString::fromStdString(std::string(s7::signal_type_name(sample.type))));
+                .arg(QString::fromStdString(probe.name)).arg(QString::fromStdString(std::string(s7::signal_type_name(signal))));
             postRunEvent(configuration.id, [this, message] { emit logMessage(message); });
         }
     }
-    probeValues_.resize(configuration.probes.size());
     for (const auto& [name, index] : groups) {
         auto source = std::make_shared<observation::LiveAcquisition>(configuration.id, configuration.dt,
             std::move(liveChannels[index]), prepared.provenance,
@@ -211,44 +224,69 @@ void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> c
     bool success = true;
     std::string error;
     const auto id = configuration->id;
+    const auto started = std::chrono::steady_clock::now();
     try {
+        startObservation(id);
         if (hardwarePaced_) {
             executeHardwareRun(*configuration);
-            finalizeRun(id, true, {});
-            return;
-        }
-        constexpr auto progressInterval = std::chrono::milliseconds(50);
-        auto nextProgress = std::chrono::steady_clock::now();
-        for (long step = 0; configuration->ticks < 0 || step < configuration->ticks; ++step) {
-            if (pauseRequested_.load()) {
-                std::unique_lock lock(controlMutex_);
-                if (pauseRequested_.load() && !stopRequested_.load()) {
-                    state_.store(RunState::Paused);
-                    lock.unlock();
-                    publishState(RunState::Paused, id);
-                    lock.lock();
-                    controlChanged_.wait(lock, [this] { return !pauseRequested_.load() || stopRequested_.load(); });
+        } else {
+            constexpr auto progressInterval = std::chrono::milliseconds(50);
+            auto nextProgress = std::chrono::steady_clock::now();
+            for (long step = 0; configuration->ticks < 0 || step < configuration->ticks; ++step) {
+                if (pauseRequested_.load() && ring_) {
+                    // A paused run shows its latest samples as soon as it
+                    // reports Paused: deliver them before pausing.
+                    publishBlock(false);
+                    ring_->waitDrained();
+                }
+                if (pauseRequested_.load()) {
+                    std::unique_lock lock(controlMutex_);
+                    if (pauseRequested_.load() && !stopRequested_.load()) {
+                        state_.store(RunState::Paused);
+                        lock.unlock();
+                        publishState(RunState::Paused, id);
+                        lock.lock();
+                        controlChanged_.wait(lock, [this] { return !pauseRequested_.load() || stopRequested_.load(); });
+                    }
+                }
+                if (stopRequested_.load()) break;
+                runtime_->step();
+                completedTicks_.store(step + 1);
+                captureFrame();
+                if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
+                    const long completed = step + 1;
+                    postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
+                    nextProgress = now + progressInterval;
                 }
             }
-            if (stopRequested_.load()) break;
-            runtime_->step();
-            completedTicks_.store(step + 1);
-            emitScopeSamples(*runtime_);
-            if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
-                const long completed = step + 1;
-                postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
-                nextProgress = now + progressInterval;
-            }
+            const long completed = completedTicks_.load();
+            postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
+            if (!stopRequested_.load()) emitFinalSamples();
         }
-        const long completed = completedTicks_.load();
-        postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
-        if (!stopRequested_.load()) emitFinalSamples();
     } catch (const std::exception& ex) {
         success = false;
         error = ex.what();
     } catch (...) {
         success = false;
         error = "Unknown exception while executing the local graph.";
+    }
+    // Every captured frame reaches its destinations before the recording is
+    // finished; a capture failure fails the run as before.
+    if (auto observation = finishObservation(); !observation.empty() && success) {
+        success = false;
+        error = std::move(observation);
+    }
+    const auto wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    if (throttled_.count() > 0 && wall > 0) {
+        const auto message = QStringLiteral("[runtime] run throttled by recording: %1% of wall time (%2 s)")
+            .arg(100.0 * std::chrono::duration<double>(throttled_).count() / wall, 0, 'f', 1)
+            .arg(std::chrono::duration<double>(throttled_).count(), 0, 'f', 3);
+        postRunEvent(id, [this, message] { emit logMessage(message); });
+    }
+    if (droppedFrames_ > 0) {
+        const auto message = QStringLiteral("[runtime] observation kept up by dropping %1 frames; the recording is incomplete")
+            .arg(droppedFrames_);
+        postRunEvent(id, [this, message] { emit logMessage(message); });
     }
     finalizeRun(id, success, error);
 }
@@ -274,7 +312,7 @@ void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration
                                                : static_cast<std::uint64_t>(configuration.ticks);
     try {
         run->execute(frames, stop, [&](std::uint64_t completed) {
-            if (!probes_.empty()) emitScopeSamples(runtime);
+            captureFrame();
             if (completed != 1 && completed % 1024 != 0) return;
             trackTicks(completed);
             const auto now = std::chrono::steady_clock::now();
@@ -292,32 +330,120 @@ void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration
     postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
 }
 
-void LocalSchemaRunner::emitScopeSamples(const s7::NodeRuntime& runtime)
+void LocalSchemaRunner::captureFrame()
+{
+    if (!ring_) return;
+    compiledProbes_->read_display(distinctValues_);
+    auto& block = ring_->current();
+    const auto frame = block.frames;
+    if (frame == 0) blockStart_ = std::chrono::steady_clock::now();
+    block.steps[frame] = static_cast<std::int64_t>(compiledProbes_->step());
+    block.times[frame] = compiledProbes_->model_time_seconds().value();
+    const auto width = probes_.size();
+    auto* values = block.values.data() + frame * width;
+    for (std::size_t probe = 0; probe < width; ++probe) values[probe] = distinctValues_[readIndices_[probe]];
+    block.frames = frame + 1;
+    // D3: hand over at 1,024 frames or after 20 ms, checking the clock every
+    // 64 frames rather than on every step.
+    constexpr auto flushInterval = std::chrono::milliseconds(20);
+    if (block.frames == ring_->capacity() ||
+        ((block.frames & 63) == 0 && std::chrono::steady_clock::now() - blockStart_ >= flushInterval))
+        publishBlock();
+}
+
+void LocalSchemaRunner::publishBlock(const bool allowDrop)
+{
+    if (!ring_ || ring_->current().frames == 0) return;
+    if (ring_->failed()) throw std::runtime_error("Observation capture failed: " + ring_->error());
+    if (ring_->tryPublish()) return;
+    if (allowDrop && activeOverflow_ == RecordingOverflow::Drop) {
+        // Never wait: count the loss; live views see the step gap.
+        auto& block = ring_->current();
+        droppedFrames_ += block.frames;
+        if (recording_ && !recordedProbes_.empty()) recording_->addCaptureLoss(block.frames * recordedProbes_.size());
+        block.frames = 0;
+        return;
+    }
+    bool published = false;
+    throttled_ += ring_->publishWaiting(published);
+    if (!published) throw std::runtime_error("Observation capture failed: " + ring_->error());
+}
+
+void LocalSchemaRunner::startObservation(const std::uint64_t id)
 {
     if (probes_.empty()) return;
-    s7::ObservationService observation(runtime);
-    bool notify = false;
-    const auto id = configuration_->id;
-    std::int64_t step = 0;
-    double timeSeconds = 0;
-    for (std::size_t i = 0; i < probes_.size(); ++i) {
-        if (readIndices_[i] == i) {
-            const auto sample = observation.sample_output(probes_[i].element, static_cast<std::size_t>(probes_[i].port));
-            step = static_cast<std::int64_t>(sample.step);
-            timeSeconds = sample.model_time_seconds.value();
-            probeValues_[i] = sample.to_display_double();
-        } else probeValues_[i] = probeValues_[readIndices_[i]];
-        if (probes_[i].record) {
-            if (!recording_->append({probeChannels_[i], step, timeSeconds, probeValues_[i]}))
-                throw std::runtime_error("Observation capture failed: " + recording_->status().storageError.toStdString());
-            notify |= scopeMailbox_.push(ScopeSample{probes_[i].name, static_cast<long>(step), timeSeconds, probeValues_[i], id});
+    // D3: 1,024-frame blocks; up to 64 of them, fewer when many probes would
+    // make the ring larger than about 16 MiB.
+    constexpr std::size_t frames = 1024, maxSlots = 64, budget = std::size_t(16) << 20;
+    const auto blockBytes = frames * (sizeof(std::int64_t) + sizeof(double) * (1 + probes_.size()));
+    const auto slotCount = std::clamp<std::size_t>(budget / blockBytes, 4, maxSlots);
+    ring_ = std::make_unique<observation::ProbeBlockRing>(slotCount, frames, probes_.size());
+    recordBatch_.reserve(frames * recordedProbes_.size());
+    scopeBatch_.reserve(frames * recordedProbes_.size());
+    for (auto& route : liveRoutes_) route.values.reserve(frames * route.probes.size());
+    distributor_ = std::thread([this, id] { distributeBlocks(id); });
+}
+
+std::string LocalSchemaRunner::finishObservation()
+{
+    if (!ring_) return {};
+    std::string error;
+    try {
+        publishBlock(false);
+    } catch (const std::exception& ex) {
+        error = ex.what();
+    }
+    ring_->close();
+    if (distributor_.joinable()) distributor_.join();
+    if (error.empty() && ring_->failed()) error = "Observation capture failed: " + ring_->error();
+    return error;
+}
+
+void LocalSchemaRunner::distributeBlocks(const std::uint64_t id)
+{
+    while (const auto* block = ring_->waitReadable()) {
+        if (!ring_->failed()) {
+            try {
+                distribute(*block, id);
+            } catch (const std::exception& ex) {
+                ring_->fail(ex.what());
+            } catch (...) {
+                ring_->fail("unknown observation delivery error");
+            }
         }
+        ring_->release();
+    }
+}
+
+void LocalSchemaRunner::distribute(const observation::ProbeBlock& block, const std::uint64_t id)
+{
+    const auto width = ring_->width();
+    const auto frames = block.frames;
+    if (recording_ && !recordedProbes_.empty()) {
+        recordBatch_.clear();
+        scopeBatch_.clear();
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            const auto step = block.steps[frame];
+            const auto time = block.times[frame];
+            const auto* values = block.values.data() + frame * width;
+            for (const auto probe : recordedProbes_) {
+                recordBatch_.push_back({probeChannels_[probe], step, time, values[probe]});
+                scopeBatch_.push_back(ScopeSample{probes_[probe].name, static_cast<long>(step), time, values[probe], id});
+            }
+        }
+        if (!recording_->append(std::span<const observation::Sample>(recordBatch_)))
+            throw std::runtime_error(recording_->status().storageError.toStdString());
+        if (scopeMailbox_.push(scopeBatch_)) postRunEvent(id, [this] { emit scopeSamplesAvailable(); });
     }
     for (auto& route : liveRoutes_) {
-        for (std::size_t i = 0; i < route.probes.size(); ++i) route.values[i] = probeValues_[route.probes[i]];
-        route.source->append(step, timeSeconds, route.values);
+        const auto routeWidth = route.probes.size();
+        route.values.resize(frames * routeWidth);
+        for (std::size_t frame = 0; frame < frames; ++frame)
+            for (std::size_t i = 0; i < routeWidth; ++i)
+                route.values[frame * routeWidth + i] = block.values[frame * width + route.probes[i]];
+        route.source->append(std::span<const std::int64_t>(block.steps.data(), frames),
+                             std::span<const double>(block.times.data(), frames), route.values);
     }
-    if (notify) postRunEvent(id, [this] { emit scopeSamplesAvailable(); });
 }
 
 auto LocalSchemaRunner::takeScopeSamples() -> ScopeSampleBatch { return scopeMailbox_.take(); }
@@ -327,9 +453,15 @@ void LocalSchemaRunner::finalizeRun(std::uint64_t id, bool success, const std::s
     QString detail = QString::fromStdString(error);
     const bool stopped = stopRequested_.load(); // latch outcome before final storage flush
     if (recording_ && !recording_->finish(stopped, detail)) {
-        success = false;
         const auto status = recording_->status();
-        if (detail.isEmpty()) detail = status.storageError.isEmpty() ? status.runError : status.storageError;
+        // In drop mode (D1) lost samples are expected: the recording is marked
+        // incomplete and the log says so, but the run itself succeeded.
+        const bool onlyDropped = activeOverflow_ == RecordingOverflow::Drop &&
+            status.storageError.isEmpty() && status.runError.isEmpty();
+        if (!onlyDropped) {
+            success = false;
+            if (detail.isEmpty()) detail = status.storageError.isEmpty() ? status.runError : status.storageError;
+        }
     }
     for (auto& route : liveRoutes_) if (route.source) route.source->finish(detail);
     RunState terminal;
@@ -397,8 +529,8 @@ void LocalSchemaRunner::reset()
     configuration_.reset();
     recording_.reset();
     for (auto& route : liveRoutes_) if (route.source) route.source->finish();
-    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); probeValues_.clear();
-    probeChannels_.clear();
+    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); distinctValues_.clear();
+    probeChannels_.clear(); recordedProbes_.clear(); compiledProbes_.reset(); ring_.reset();
     probes_.clear();
     scopeMailbox_.clear();
     completedTicks_.store(0);

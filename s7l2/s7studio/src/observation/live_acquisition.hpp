@@ -82,6 +82,9 @@ public:
     LiveAcquisition(std::uint64_t runId, double dt, QVector<LiveChannel> channels,
                     QJsonObject provenance = {}, std::uint64_t rateNumerator = 0, std::uint64_t rateDenominator = 1);
     void append(std::int64_t step, double time, std::span<const double> values);
+    // A block of complete frames under one lock: steps/times per frame,
+    // values[frame * channels + channel].
+    void append(std::span<const std::int64_t> steps, std::span<const double> times, std::span<const double> values);
     bool setCapacity(std::size_t capacity);
     bool setDuration(const QString& seconds, QString* error = nullptr);
     [[nodiscard]] std::size_t capacity() const;
@@ -150,6 +153,7 @@ private:
     std::vector<TimeBucket> timeBuckets_;
     std::uint64_t timeStride_ = 1, timeReceived_ = 0, timeGeneration_ = 1;
     double timeSpan_ = 20;
+    void appendLocked(std::int64_t step, double time, std::span<const double> values);
     void appendTimeLocked(std::int64_t step, double time, std::span<const double> values, bool gap);
     void storeTimeSampleLocked(const TimeSample& sample, bool gap, const std::array<bool, maxChannels>& invalid);
     void resetTriggerLocked(bool discardCompleted);

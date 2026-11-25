@@ -44,6 +44,9 @@ public:
     void setFrequencyHz(double value) { frequencyHz_ = value; }
     [[nodiscard]] auto clearScopesBeforeRun() const -> bool { return clearScopesBeforeRun_; }
     void setClearScopesBeforeRun(bool value) { clearScopesBeforeRun_ = value; }
+    // Opt-in recording mode that never slows the run (performance plan D1).
+    [[nodiscard]] auto recordingMayDrop() const -> bool { return recordingMayDrop_; }
+    void setRecordingMayDrop(bool value) { recordingMayDrop_ = value; }
 
 private:
     boost::json::value schema_;
@@ -57,6 +60,7 @@ private:
     double frequencyHz_ = 1000.0;
     double runtimeSeconds_ = 60.0;
     bool clearScopesBeforeRun_ = true;
+    bool recordingMayDrop_ = false;
 };
 
 } // namespace s7studio
