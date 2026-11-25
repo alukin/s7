@@ -10,6 +10,8 @@
 #include <charconv>
 #include <cmath>
 #include <cstring>
+#include <format>
+#include <optional>
 
 namespace s7::sdr {
 using namespace hardware;
@@ -25,6 +27,12 @@ Status status(int code) {
     }
 }
 void check(int code) { if (code<0) throw std::runtime_error(std::string("SoapySDR: ")+SoapySDR_errToStr(code)); }
+// Exact decimal text without exponents: whole numbers (Hz, S/s) in fixed
+// notation, other values in the shortest round-trip form.
+std::string decimal(double value) {
+    if (std::trunc(value)==value && std::abs(value)<1e17) return std::format("{:.0f}",value);
+    return std::format("{}",value);
+}
 double number(const std::string& text) {
     double value=0; const auto p=std::from_chars(text.data(),text.data()+text.size(),value);
     if (p.ec!=std::errc{} || p.ptr!=text.data()+text.size() || !std::isfinite(value)) throw std::invalid_argument("invalid SDR numeric option");
@@ -156,11 +164,14 @@ public:
         r.validate();
         if (r.backend!=id() || r.device=="default" || r.device.empty()) throw std::invalid_argument("SoapySDR requires an explicit device selector (driver=...,serial=...)");
         if (r.type!=SignalType::C32 && r.type!=SignalType::CI12 && r.type!=SignalType::CI16) throw std::invalid_argument("SoapySDR supports C32, qualified native CI12/CI16");
-        double rate_tolerance_ppm=0;
+        // Continuous settings are realized at the closest value the device can
+        // produce: S7 accepts and reports it (requested and actual, ADR-028).
+        // An explicit rate_tolerance_ppm is an opt-in strict rate check.
+        std::optional<double> rate_tolerance_ppm;
         for (const auto& [key,value]:r.options) {
             if (key=="rate_tolerance_ppm") {
                 rate_tolerance_ppm=number(value);
-                if (r.direction!=Direction::Capture || rate_tolerance_ppm<0)
+                if (r.direction!=Direction::Capture || *rate_tolerance_ppm<0)
                     throw std::invalid_argument("SoapySDR rate_tolerance_ppm must be nonnegative and is RX-only");
                 continue;
             }
@@ -196,13 +207,21 @@ public:
                 d.backend_details["channel."+text+".native_format"]=native+" fullscale="+std::to_string(fullscale);
                 const auto formats=device->getStreamFormats(direction,channel);
                 if (std::find(formats.begin(),formats.end(),format)==formats.end()) throw std::invalid_argument("SoapySDR application format unsupported");
+                const auto prefix="channel."+text+".";
                 device->setSampleRate(direction,channel,r.rate.to_hz());
                 const auto actual_rate=device->getSampleRate(direction,channel);
-                if (!std::isfinite(actual_rate) || actual_rate<=0 ||
-                    std::abs(actual_rate-r.rate.to_hz())/r.rate.to_hz()*1e6>rate_tolerance_ppm)
+                if (!std::isfinite(actual_rate) || actual_rate<=0)
+                    throw std::invalid_argument("SoapySDR channel "+text+" reported an invalid sample rate");
+                const auto deviation_ppm=(actual_rate-r.rate.to_hz())/r.rate.to_hz()*1e6;
+                if (rate_tolerance_ppm && std::abs(deviation_ppm)>*rate_tolerance_ppm)
                     throw std::invalid_argument("SoapySDR channel "+text+
-                    " nominal rate differs from graph: requested "+r.rate.to_string()+", got "+std::to_string(actual_rate)+" Hz");
-                d.backend_details["channel."+text+".sample_rate_hz"]=std::to_string(actual_rate);
+                    " nominal rate differs from graph beyond rate_tolerance_ppm: requested "+r.rate.to_string()+
+                    ", got "+decimal(actual_rate)+" Hz");
+                // The graph keeps the nominal rate as model time; the device's
+                // realized rate is reported, not substituted.
+                d.backend_details[prefix+"requested_sample_rate_hz"]=decimal(r.rate.to_hz());
+                d.backend_details[prefix+"sample_rate_hz"]=decimal(actual_rate);
+                d.backend_details[prefix+"sample_rate_deviation_ppm"]=decimal(deviation_ppm);
                 // Tune before setting gain, since tuning may change the device's gain range.
                 for (const auto* key:{"antenna","frequency_hz","bandwidth_hz","gain_mode","gain_db"}) {
                     const auto option=r.options.find(key);
@@ -216,6 +235,7 @@ public:
                         if (device->getGainMode(direction,channel)!=automatic) throw std::invalid_argument("SoapySDR gain mode readback mismatch");
                     }
                     else {
+                        // Continuous: the device realizes the closest value it can.
                         const auto v=number(value); double actual=0;
                         if (name=="frequency_hz") { device->setFrequency(direction,channel,v); actual=device->getFrequency(direction,channel); }
                         if (name=="bandwidth_hz") { device->setBandwidth(direction,channel,v); actual=device->getBandwidth(direction,channel); }
@@ -223,11 +243,13 @@ public:
                             if (device->hasGainMode(direction,channel)) device->setGainMode(direction,channel,false);
                             device->setGain(direction,channel,v); actual=device->getGain(direction,channel);
                         }
-                        if (actual!=v) throw std::invalid_argument("SoapySDR channel "+text+" "+name+
-                            " readback mismatch: requested "+value+", got "+std::to_string(actual));
+                        if (!std::isfinite(actual)) throw std::invalid_argument("SoapySDR channel "+text+" reported an invalid "+name);
+                        d.backend_details[prefix+"requested_"+name]=value;
+                        d.backend_details[prefix+name]=decimal(actual);
                     }
                 }
-                d.backend_details["channel."+text+".frequency_hz"]=std::to_string(device->getFrequency(direction,channel));
+                if (!d.backend_details.contains(prefix+"frequency_hz"))
+                    d.backend_details[prefix+"frequency_hz"]=decimal(device->getFrequency(direction,channel));
             }
             stream=device->setupStream(direction,format,channels);
             if (!stream) throw std::runtime_error("SoapySDR setupStream returned null");

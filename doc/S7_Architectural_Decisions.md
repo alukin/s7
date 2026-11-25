@@ -1298,6 +1298,46 @@ remain separate work. See the
 
 ------------------------------------------------------------------------
 
+# ADR-028
+
+## Hardware realizes continuous device settings; S7 accepts and reports them
+
+**Status:** Accepted, 2026-11-25 by the maintainer (decision D4 of the
+[simulation and observation performance plan](../s7l2/docs/SIMULATION_OBSERVATION_PERFORMANCE_PLAN.md)).
+
+## Context
+
+The SoapySDR provider refused a stream unless the device read back exactly the
+requested sample rate, frequency, bandwidth and gain. Devices realize the
+closest value their synthesizers and gain stages allow. On an AD9361,
+100.1 MHz reads back as 100,099,998 Hz and 2.4 MS/s as 2,399,998 S/s, so
+ordinary requests and the bundled receive example failed. The rejected
+difference is about a thousand times smaller than the ±25 ppm crystal
+uncertainty of such devices.
+
+## Decision
+
+1. Continuous settings (sample rate, frequency, bandwidth, gain) are accepted
+   at the value the device realizes. The provider reports both requested and
+   realized values in the stream descriptor (`requested_<setting>` and
+   `<setting>` per channel, plus the sample-rate deviation in ppm). Runners
+   show them, so nothing changes silently.
+2. Model time keeps the nominal (requested) rate. The realized rate is
+   reported, not substituted. Using the realized rate as model time would be a
+   separate semantic decision.
+3. Discrete settings (antenna, gain mode) are not rounding. A readback mismatch
+   means the device refused the choice, and preparation fails.
+4. An explicit `rate_tolerance_ppm` remains an opt-in strict check of the
+   sample rate. No other tolerance options are added.
+
+## Consequences
+
+Out-of-range requests clamped by a driver are accepted and visible in the
+report, not refused. Users and tools that need a stricter rate guarantee state
+it with `rate_tolerance_ppm`.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

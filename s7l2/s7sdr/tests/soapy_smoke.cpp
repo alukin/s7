@@ -9,6 +9,7 @@
 #include <chrono>
 #include <fstream>
 #include <numbers>
+#include <cmath>
 #include <SoapySDR/Device.hpp>
 #include <SoapySDR/Registry.hpp>
 #include <SoapySDR/Formats.hpp>
@@ -20,7 +21,7 @@
 using namespace s7;
 using namespace s7::hardware;
 namespace {
-struct Trace { int alive{},starts{},closes{},rx_error{},tx_error{}; double fullscale=2048; bool wrong_rate{}, fm{}, automatic{}; std::vector<std::int16_t> tx; } trace;
+struct Trace { int alive{},starts{},closes{},rx_error{},tx_error{}; double fullscale=2048; bool wrong_rate{}, fm{}, automatic{}, quantize{}, refuse_antenna{}; std::vector<std::int16_t> tx; } trace;
 class Fake final : public SoapySDR::Device {
 public:
     Fake(){++trace.alive;} ~Fake() override{--trace.alive;}
@@ -30,11 +31,14 @@ public:
     std::string getNativeStreamFormat(int,std::size_t,double& scale) const override {scale=trace.fullscale;return SOAPY_SDR_CS16;}
     void setSampleRate(int,std::size_t,double value) override {rate=value;}
     double getSampleRate(int,std::size_t) const override {return rate+(trace.wrong_rate?1:0);}
-    void setFrequency(int, std::size_t, double value, const SoapySDR::Kwargs&) override { frequency = value; }
+    // quantize: realize the closest value a synthesizer/gain stage could (3 Hz, 1 kHz and 1 dB steps).
+    void setFrequency(int, std::size_t, double value, const SoapySDR::Kwargs&) override { frequency = trace.quantize ? std::floor(value / 3) * 3 : value; }
     double getFrequency(int, std::size_t) const override { return frequency; }
-    void setBandwidth(int, std::size_t, double value) override { bandwidth = value; }
+    void setBandwidth(int, std::size_t, double value) override { bandwidth = trace.quantize ? std::round(value / 1000) * 1000 : value; }
+    void setGain(int, std::size_t, double value) override { gain = trace.quantize ? std::round(value) : value; }
+    double getGain(int, std::size_t) const override { return gain; }
     double getBandwidth(int, std::size_t) const override { return bandwidth; }
-    void setAntenna(int, std::size_t, const std::string& value) override { antenna = value; }
+    void setAntenna(int, std::size_t, const std::string& value) override { if (!trace.refuse_antenna) antenna = value; }
     std::string getAntenna(int, std::size_t) const override { return antenna; }
     bool hasGainMode(int direction, std::size_t) const override { return direction == SOAPY_SDR_RX; }
     void setGainMode(int, std::size_t, bool automatic) override { trace.automatic = automatic; }
@@ -84,7 +88,7 @@ public:
     }
     int readStreamStatus(SoapySDR::Stream*,std::size_t&,int&,long long&,long) override {return trace.tx_error?trace.tx_error:SOAPY_SDR_NOT_SUPPORTED;}
 private:
-    double rate{}, bandwidth{}, frequency{1000000000}, phase{};
+    double rate{}, bandwidth{}, frequency{1000000000}, gain{}, phase{};
     std::size_t channels{}, position{};
     std::string antenna;
 };
@@ -221,7 +225,20 @@ int main(){
     assert(trace.alive==0);
     trace.fullscale=32768;rejects([&]{provider->prepare(request(Direction::Capture));});assert(trace.alive==0);trace.fullscale=2048;
     trace.wrong_rate=true;
-    rejects([&]{provider->prepare(request(Direction::Capture));});
+    {
+        // ADR-028: the device's realized rate is accepted and reported; the
+        // descriptor keeps the nominal rate as model time.
+        auto r=request(Direction::Capture);
+        auto stream=provider->prepare(r);
+        const auto& details=stream->descriptor().backend_details;
+        assert(stream->descriptor().actual.rate==r.rate);
+        assert(details.at("channel.0.requested_sample_rate_hz")=="48000");
+        assert(details.at("channel.0.sample_rate_hz")=="48001");
+        assert(std::abs(std::stod(details.at("channel.0.sample_rate_deviation_ppm"))-1e6/48000)<1e-9);
+        // An explicit tolerance remains an opt-in strict check.
+        r.options["rate_tolerance_ppm"]="0";
+        rejects([&]{provider->prepare(r);});
+    }
     assert(trace.alive==0);
     {
         auto r=request(Direction::Capture);
@@ -234,6 +251,31 @@ int main(){
         rejects([&]{provider->prepare(r);});
     }
     trace.wrong_rate=false;
+    {
+        // ADR-028: continuous settings are realized at the closest value and reported.
+        trace.quantize=true;
+        auto r=request(Direction::Capture);
+        r.options["frequency_hz"]="100100000";
+        r.options["bandwidth_hz"]="2000400";
+        r.options["gain_db"]="15.4";
+        auto stream=provider->prepare(r);
+        const auto& details=stream->descriptor().backend_details;
+        for (const char* channel : {"channel.0.", "channel.1."}) {
+            const std::string c=channel;
+            assert(details.at(c+"requested_frequency_hz")=="100100000" && details.at(c+"frequency_hz")=="100099998");
+            assert(details.at(c+"requested_bandwidth_hz")=="2000400" && details.at(c+"bandwidth_hz")=="2000000");
+            assert(details.at(c+"requested_gain_db")=="15.4" && details.at(c+"gain_db")=="15");
+        }
+        trace.quantize=false;
+    }
+    {
+        // Discrete settings are not rounding: a refused antenna still fails.
+        trace.refuse_antenna=true;
+        auto r=request(Direction::Capture);
+        r.options["antenna"]="RX2";
+        rejects([&]{provider->prepare(r);});
+        trace.refuse_antenna=false;
+    }
     {
         auto r=request(Direction::Capture);auto stream=provider->prepare(r);stream->start();stream->cancel();Buffer b(7*r.frame_bytes());
         assert(stream->read(b.bytes(),7,Deadline::max()).status==Status::Cancelled);

@@ -31,7 +31,7 @@
           ],
           "block_frames": 8192,
           "queue_frames": 32768,
-          "options": "{\"frequency_hz\":\"88700000\",\"bandwidth_hz\":\"500000\",\"antenna\":\"A_BALANCED\",\"gain_mode\":\"auto\",\"rate_tolerance_ppm\":\"2\"}"
+          "options": "{\"frequency_hz\":\"88700000\",\"bandwidth_hz\":\"500000\",\"antenna\":\"A_BALANCED\",\"gain_mode\":\"auto\"}"
         }
       },
       {

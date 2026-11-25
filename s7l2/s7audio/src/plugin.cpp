@@ -30,7 +30,9 @@ public:
         const auto& d = run_.descriptor();
         auto description = d.actual.backend + " " + d.actual.device + " at " + d.actual.rate.to_string();
         for (const auto& [key, value] : d.backend_details) {
-            if (key.ends_with(".frequency_hz") || key.ends_with(".sample_rate_hz"))
+            // Requested and realized values (ADR-028).
+            if (key.ends_with("frequency_hz") || key.ends_with("sample_rate_hz") ||
+                key.ends_with("sample_rate_deviation_ppm"))
                 description += ", " + key + "=" + value;
         }
         return description;
