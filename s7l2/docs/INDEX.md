@@ -126,7 +126,7 @@ The [version roadmap](RELEASE_ROADMAP.md) assigns
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
-3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
+3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions. Deferred security findings are tracked in [SECURITY_TODO.md](SECURITY_TODO.md); the [simulation and observation performance plan](SIMULATION_OBSERVATION_PERFORMANCE_PLAN.md) covers probe/viewer overhead, runtime copy costs and hardware-boundary fixes.
 4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research record](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned) links the original assignment and delivered reports.
 
 Local simulation quality was the 0.1.x target. The 0.2.0 goals and work plan now
