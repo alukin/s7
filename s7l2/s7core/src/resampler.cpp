@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <numbers>
 
 namespace s7::resampling {
@@ -91,6 +92,30 @@ std::uint64_t samples_through(const std::uint64_t step, const Rate& rate, const 
     const uint256_t count = uint256_t(step) * rate.numerator * model.denominator / (uint256_t(rate.denominator) * model.numerator);
     if (count >= std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error("Rate domain sample count overflow.");
     return count.convert_to<std::uint64_t>() + 1;
+}
+
+SampleCounter::SampleCounter(const Rate& rate, const Rate& model) : rate_(rate), model_(model)
+{
+    // samples = floor(step * a / b) + 1 with a = rate.num * model.den and
+    // b = rate.den * model.num, each a product of two 64-bit values.
+    auto a = uint128_t(rate.numerator) * model.denominator;
+    auto b = uint128_t(rate.denominator) * model.numerator;
+    if (a == 0 || b == 0) return;
+    const auto divisor = std::gcd(a, b);
+    a /= divisor;
+    b /= divisor;
+    if (a > std::numeric_limits<std::uint64_t>::max() || b > std::numeric_limits<std::uint64_t>::max()) return;
+    numerator_ = static_cast<std::uint64_t>(a);
+    denominator_ = static_cast<std::uint64_t>(b);
+    fast_ = true;
+}
+
+std::uint64_t SampleCounter::samples_through(const std::uint64_t step) const
+{
+    if (!fast_) return resampling::samples_through(step, rate_, model_);
+    const auto count = uint128_t(step) * numerator_ / denominator_;
+    if (count >= std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error("Rate domain sample count overflow.");
+    return static_cast<std::uint64_t>(count) + 1;
 }
 
 } // namespace s7::resampling

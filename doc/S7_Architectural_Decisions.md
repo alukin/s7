@@ -1035,7 +1035,7 @@ A different rate requires an explicit `Resampler`, which S7 never inserts. It pa
 
 ## Consequences
 
-A run either has one consistent model time or does not start. Changing `dt` in the run dialog never edits the design. A file, stream or device at another rate needs a visible resampling step, with a documented latency. Existing documents keep loading: stored sample counts are converted using the rate they were written at, and stored `dt`/`sample_rate_hz` values of rate-following elements become legacy fields. Rate-following elements built in C++ with an explicit rate remain pins for now; the 0.2.0 work plan includes reviewing such tests. Hardware clock domains, drift and networked audio are 0.3.0 research. In a graph with several rate domains, ADR-021's all-or-nothing rule holds per domain step: a fault partway through a run step leaves domains that already completed that step advanced, although a retry continues exactly.
+A run either has one consistent model time or does not start. Changing `dt` in the run dialog never edits the design. A file, stream or device at another rate needs a visible resampling step, with a documented latency. Existing documents keep loading: stored sample counts are converted using the rate they were written at, and stored `dt`/`sample_rate_hz` values of rate-following elements become legacy fields. Rate-following elements built in C++ with an explicit rate remain pins for now; the 0.2.0 work plan includes reviewing such tests. Hardware clock domains, drift and networked audio are 0.3.0 research. In a graph with several rate domains, ADR-021's all-or-nothing rule holds per domain step: a fault partway through a run step leaves domains that already completed that step advanced, and retrying does not repeat them. Within the faulting domain, the retry is exact only as far as ADR-021 reaches: a Resampler, like any element with private state, has already advanced when a later element of its domain step fails, so the retry cannot be exact ([ADR-029](#adr-029)).
 
 ------------------------------------------------------------------------
 
@@ -1335,6 +1335,48 @@ uncertainty of such devices.
 Out-of-range requests clamped by a driver are accepted and visible in the
 report, not refused. Users and tools that need a stricter rate guarantee state
 it with `rate_tolerance_ppm`.
+
+------------------------------------------------------------------------
+
+# ADR-029
+
+## A retry after a fault reports when it cannot be exact
+
+**Status:** Accepted, 2026-11-25 by the maintainer (decision D5 of the
+[simulation and observation performance plan](../s7l2/docs/SIMULATION_OBSERVATION_PERFORMANCE_PLAN.md)).
+
+## Context
+
+ADR-021 restores published outputs after a failed step, not private element
+state. Every element with private state that stepped before the failing
+element advances once more when the step is retried. Examples are filters,
+oscillators, PWM, sources and the Resampler. Most of these diverge silently;
+a Resampler throws on the retry. ADR-022 claimed that a multi-rate retry
+continues exactly. The headless runtime retries the same graph after
+`RECOVER_STREAM`.
+
+## Decision
+
+1. ADR-022's claim is corrected. Exact retry is limited to what ADR-021
+   covers.
+2. `NodeRuntime` records each failed step after which a direct-feedthrough
+   element with private state (`has_state`) had already stepped or started.
+   It is conservative: an element whose state is only its published output
+   counts too. Memory elements count as exact, because their state is their
+   published output. `NodeRuntime::retry_exactness()` reports the count and
+   the elements of the latest such fault.
+3. The headless node logs `runtime.execution.retry_inexact elements=...`.
+   It reports the count and elements in the optional
+   `STREAM_STATUS.execution` member (S7_Control_Protocol_MVP.md).
+4. Exact retry for elements with private state is deferred to general state
+   snapshots ("Snapshots/restore" on the roadmap), not to a per-element commit
+   hook in the plugin ABI.
+
+## Consequences
+
+Nothing changes in how steps execute, and no per-step cost is added. Silent
+divergence after recovery becomes visible. Studio local runs and `s7hw`
+still end at the first fault.
 
 ------------------------------------------------------------------------
 

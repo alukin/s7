@@ -57,6 +57,20 @@ struct Position {
 // Samples of `rate` at or before time step / model (the count to have taken
 // by the end of model step `step`): floor(step * rate / model) + 1, exactly.
 [[nodiscard]] std::uint64_t samples_through(std::uint64_t step, const Rate& rate, const Rate& model);
+
+// samples_through for one fixed (rate, model) pair, reduced once to a 64-bit
+// ratio so each step costs one 128-bit multiply and divide. Pairs whose
+// reduced ratio needs more than 64 bits use the exact general function.
+class SampleCounter {
+public:
+    SampleCounter(const Rate& rate, const Rate& model);
+    [[nodiscard]] std::uint64_t samples_through(std::uint64_t step) const;
+
+private:
+    Rate rate_, model_;
+    std::uint64_t numerator_{}, denominator_{};
+    bool fast_{};
+};
 } // namespace resampling
 
 /// Resampler: converts a signal from its input domain's rate to its output

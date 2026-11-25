@@ -11,6 +11,24 @@
 #include <unordered_map>
 
 namespace s7 {
+namespace {
+// Signal storage is 1, 2, 4, 8, 16 or 32 bytes. Fixed-size copies inline to a
+// few moves instead of a libc call per output per step.
+inline void copy_value(void* destination, const void* source, const std::size_t bytes) noexcept
+{
+    switch (bytes) {
+    case 8: std::memcpy(destination, source, 8); return;
+    case 16: std::memcpy(destination, source, 16); return;
+    case 4: std::memcpy(destination, source, 4); return;
+    case 32: std::memcpy(destination, source, 32); return;
+    case 2: std::memcpy(destination, source, 2); return;
+    case 1: std::memcpy(destination, source, 1); return;
+    default: std::memcpy(destination, source, bytes);
+    }
+}
+constexpr std::size_t next_slot(const std::size_t slot) { return slot == 2 ? 0 : slot + 1; }
+constexpr std::size_t previous_slot(const std::size_t slot) { return slot == 0 ? 2 : slot - 1; }
+} // namespace
 
 void NodeRuntime::TrialRegion::add_output(void* value_ptr, std::size_t bytes) {
     if (bytes > 32) throw std::invalid_argument("Numerical trial output exceeds snapshot storage.");
@@ -18,11 +36,11 @@ void NodeRuntime::TrialRegion::add_output(void* value_ptr, std::size_t bytes) {
 }
 
 void NodeRuntime::TrialRegion::capture() {
-    for (auto& output : outputs) std::memcpy(output.base.data(), output.value_ptr, output.bytes);
+    for (auto& output : outputs) copy_value(output.base.data(), output.value_ptr, output.bytes);
 }
 
 void NodeRuntime::TrialRegion::restore() noexcept {
-    for (auto& output : outputs) std::memcpy(output.value_ptr, output.base.data(), output.bytes);
+    for (auto& output : outputs) copy_value(output.value_ptr, output.base.data(), output.bytes);
 }
 
 void NodeRuntime::TrialRegion::replay(std::size_t* evaluated) {
@@ -102,12 +120,15 @@ void NodeRuntime::build_domain(DomainState& domain)
 
     for (auto* element : domain.causal) {
         for (const auto& port : element->output_ports()) {
-            domain.causal_outputs.push_back(CausalOutput{
-                .value_ptr = port.value_ptr,
-                .bytes = signal_type_info(port.type).storage_bytes,
-            });
+            const auto bytes = signal_type_info(port.type).storage_bytes;
+            if (bytes == 8) {
+                domain.causal_outputs8.push_back(port.value_ptr);
+                continue;
+            }
+            domain.causal_outputs.push_back(CausalOutput{.value_ptr = port.value_ptr, .bytes = bytes});
         }
     }
+    domain.causal_snapshot8.resize(domain.causal_outputs8.size());
     for (auto* element : domain.trapezoid_rhs) {
         for (const auto& port : element->output_ports()) {
             domain.trapezoid_trial.add_output(port.value_ptr, signal_type_info(port.type).storage_bytes);
@@ -168,7 +189,7 @@ void NodeRuntime::stage_trapezoids(DomainState& domain) {
                 for (const auto& stage : domain.trapezoids) {
                     for (auto i = stage.outputs.begin; i < stage.outputs.end; ++i) {
                         auto& output = domain.memory_outputs[i];
-                        std::memcpy(output.staged[domain.staged_index ^ 1].data(), output.value_ptr, output.bytes);
+                        copy_value(output.staged[next_slot(domain.staged_index)].data(), output.value_ptr, output.bytes);
                     }
                 }
                 domain.trapezoid_trial.restore();
@@ -327,7 +348,7 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
 }
 
 void NodeRuntime::stage_coupled(DomainState& domain) {
-    const auto next = domain.staged_index ^ 1;
+    const auto next = next_slot(domain.staged_index);
     for (auto& stage : domain.coupled_stages) {
         for (auto& input : stage.stage_inputs) {
             const auto& source = domain.coupled_stages[input.source_stage];
@@ -370,25 +391,31 @@ void NodeRuntime::stage_coupled(DomainState& domain) {
     }
 }
 
-void NodeRuntime::roll_back_step(DomainState& domain, const bool published_memory) {
+void NodeRuntime::roll_back_step(DomainState& domain) {
     for (auto* element : domain.causal) element->on_step_failure();
     for (auto* element : domain.memory) element->on_step_failure();
     // A direct evaluation, numerical trial or causal-memory step faulted:
     // restore every causal output, and the memory outputs published at the
     // start of this step, so the step is all-or-nothing instead of a mix of
-    // this step's and the previous step's outputs. Memory elements stage into
-    // the unused buffer, so the values staged by the previous step survive
-    // and a later successful step() republishes them. This covers only
-    // published outputs, not private element state (e.g. a filter's internal
-    // delay line) already advanced before the fault.
-    for (auto& output : domain.causal_outputs) {
-        std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
+    // this step's and the previous step's outputs (ADR-021). Before this
+    // step's publication each memory output held the previous step's
+    // published value, still intact in the previous slot. The step staged
+    // only into the next slot, so the values to publish survive in the
+    // current slot and a later successful step() republishes them. This
+    // covers only published outputs, not private element state (e.g. a
+    // filter's internal delay line) already advanced before the fault.
+    {
+        void* const* const outputs = domain.causal_outputs8.data();
+        const std::uint64_t* const saved = domain.causal_snapshot8.data();
+        const auto count = domain.causal_outputs8.size();
+        for (std::size_t index = 0; index < count; ++index) std::memcpy(outputs[index], &saved[index], 8);
     }
-    if (published_memory) {
-        for (auto& output : domain.memory_outputs) {
-            std::memcpy(output.value_ptr, output.before_publish.data(), output.bytes);
-        }
-        domain.memory_outputs_staged = true;
+    for (auto& output : domain.causal_outputs) {
+        copy_value(output.value_ptr, output.snapshot.data(), output.bytes);
+    }
+    const auto previous = previous_slot(domain.staged_index);
+    for (auto& output : domain.memory_outputs) {
+        copy_value(output.value_ptr, output.staged[previous].data(), output.bytes);
     }
 }
 
@@ -431,6 +458,10 @@ void NodeRuntime::set_model_time_rate(std::optional<Rate> rate) {
         }
     }
     model_time_rate_ = rate;
+    for (auto& domain : domains_) {
+        if (rate) domain.sample_counter.emplace(domain.rate, *rate);
+        else domain.sample_counter.reset();
+    }
 }
 
 std::optional<Rate> NodeRuntime::graph_rate() const {
@@ -478,7 +509,7 @@ void NodeRuntime::step() {
         // input domains first. A fault leaves domains already stepped here
         // advanced; retrying continues exactly, since each counts its own samples.
         for (auto& domain : domains_) {
-            const auto target = resampling::samples_through(step_count_, domain.rate, *model_time_rate_);
+            const auto target = domain.sample_counter->samples_through(step_count_);
             while (domain.steps < target) {
                 step_domain(domain);
                 for (auto* resampler : domain.captures) resampler->capture_input();
@@ -489,62 +520,83 @@ void NodeRuntime::step() {
 }
 
 void NodeRuntime::step_domain(DomainState& domain) {
-    const bool publishing = domain.memory_outputs_staged;
-    if (publishing) {
+    if (!domain.staging_initialized) {
+        // The first step publishes each output's initial value: every slot
+        // starts with it, so publication and rollback change nothing.
         for (auto& output : domain.memory_outputs) {
-            std::memcpy(output.before_publish.data(), output.value_ptr, output.bytes);
-            std::memcpy(output.value_ptr, output.staged[domain.staged_index].data(), output.bytes);
+            for (auto& slot : output.staged) copy_value(slot.data(), output.value_ptr, output.bytes);
         }
-        domain.memory_outputs_staged = false;
+        domain.staged_index = 0;
+        domain.staging_initialized = true;
+    }
+    const auto current = domain.staged_index;
+    for (auto& output : domain.memory_outputs) {
+        copy_value(output.value_ptr, output.staged[current].data(), output.bytes);
     }
 
-    for (auto& output : domain.causal_outputs) {
-        std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
+    // 8-byte outputs: one unaligned-safe 8-byte load and store each. Locals,
+    // so stores through output pointers do not force reloading the vectors.
+    {
+        void* const* const outputs = domain.causal_outputs8.data();
+        std::uint64_t* const saved = domain.causal_snapshot8.data();
+        const auto count = domain.causal_outputs8.size();
+        for (std::size_t index = 0; index < count; ++index) std::memcpy(&saved[index], outputs[index], 8);
     }
+    for (auto& output : domain.causal_outputs) {
+        copy_value(output.snapshot.data(), output.value_ptr, output.bytes);
+    }
+    std::size_t stepped = 0; // direct elements that ran or started this step
     try {
-        for (auto* element : domain.causal) element->step();
+        for (auto* element : domain.causal) {
+            ++stepped;
+            element->step();
+        }
         stage_coupled(domain);
         stage_trapezoids(domain);
     } catch (...) {
-        roll_back_step(domain, publishing);
+        record_fault(domain, stepped);
+        roll_back_step(domain);
         throw;
     }
 
     // Each causal-memory element computes its next output from this step's
-    // inputs into the unused staging buffer; its published output is restored
-    // right away so that other causal-memory elements still read this step's
-    // values.
-    const auto next = domain.staged_index ^ 1;
+    // inputs into its storage; that value is staged into the next slot and
+    // the published value restored from the current slot right away, so that
+    // other causal-memory elements still read this step's values.
+    const auto next = next_slot(current);
     for (std::size_t element_index = 0; element_index < domain.memory.size(); ++element_index) {
         if (domain.implicit_memory[element_index]) continue;
-        const auto range = domain.memory_output_ranges[element_index];
-        for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
-            auto& output = domain.memory_outputs[output_index];
-            std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
-        }
-
         try {
             domain.memory[element_index]->step();
         } catch (...) {
-            for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
-                auto& output = domain.memory_outputs[output_index];
-                std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
-            }
-            roll_back_step(domain, publishing);
+            record_fault(domain, domain.causal.size());
+            roll_back_step(domain);
             throw;
         }
-
+        const auto range = domain.memory_output_ranges[element_index];
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
             auto& output = domain.memory_outputs[output_index];
-            std::memcpy(output.staged[next].data(), output.value_ptr, output.bytes);
-            std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
+            copy_value(output.staged[next].data(), output.value_ptr, output.bytes);
+            copy_value(output.value_ptr, output.staged[current].data(), output.bytes);
         }
     }
-    if (!domain.memory_outputs.empty()) {
-        domain.staged_index = next;
-        domain.memory_outputs_staged = true;
-    }
+    domain.staged_index = next;
     ++domain.steps;
+}
+
+void NodeRuntime::record_fault(const DomainState& domain, const std::size_t stepped) {
+    std::vector<std::string> advanced;
+    for (std::size_t index = 0; index < stepped && index < domain.causal.size(); ++index) {
+        const auto* element = domain.causal[index];
+        if (!element->has_state()) continue;
+        // Faults are rare: resolve the id by searching the graph's elements.
+        for (const auto& [id, owned] : graph_.elements) {
+            if (owned.get() == element) { advanced.push_back(id); break; }
+        }
+    }
+    if (advanced.empty()) return;
+    ++retry_exactness_.inexact_faults;
+    retry_exactness_.last_elements = std::move(advanced);
 }
 
 const std::string& NodeRuntime::runtime_instance_uuid() const {
@@ -589,12 +641,14 @@ OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std:
         return output_binding_of(source, source_port);
     }
 
-    const auto outputs = element_it->second->outputs();
-    if (port >= outputs.size()) {
+    // The port's storage address directly: Element::outputs() would build a
+    // vector on every observation read.
+    const auto ports = element_it->second->output_ports();
+    if (port >= ports.size()) {
         throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
     }
 
-    return outputs[port];
+    return ports[port].value_ptr;
 }
 
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {

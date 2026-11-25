@@ -83,6 +83,17 @@ public:
     // and ordinary elements are deliberately not assigned fabricated counts.
     [[nodiscard]] NumericalDiagnostics numerical_diagnostics() const;
 
+    // ADR-021 restores published outputs after a failed step, not private
+    // element state. A failed step after which an element with private state
+    // (direct feedthrough, has_state) had already stepped cannot be retried
+    // exactly: retrying advances that state again (ADR-029). Conservative: an
+    // element whose state is only its output is counted too.
+    struct RetryExactness {
+        std::uint64_t inexact_faults{};          // failed steps with advanced private state
+        std::vector<std::string> last_elements;  // those elements, for the latest such fault
+    };
+    [[nodiscard]] const RetryExactness& retry_exactness() const { return retry_exactness_; }
+
 private:
     // The element output behind an output of a flattened nested schema.
     [[nodiscard]] std::pair<std::string, std::size_t> aliased_output(const std::string& element_id, std::size_t port) const;
@@ -90,16 +101,19 @@ private:
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next
     // step, so all outputs read after step() belong to the same step.
-    // Raw copies of the output's storage (at most 32 bytes: CI128/C128).
-    // staged[staged_index_] holds the values to publish next; a step stages
-    // into the other buffer and switches only after every memory element and
-    // coupled trial succeeded, so a failed step keeps the earlier values.
+    // Raw copies of the output's storage (at most 32 bytes: CI128/C128) in
+    // three rotating buffers. staged[staged_index] holds the values published
+    // at the start of a step; the step stages its results into the next
+    // buffer and switches only after every memory element and coupled trial
+    // succeeded. The third buffer still holds the values published by the
+    // previous step, which is what the output held before this step's
+    // publication: a failed step restores it, and the memory phase restores
+    // each element's published value from staged[staged_index], without
+    // separate snapshot copies (ADR-021).
     struct MemoryOutput {
         void* value_ptr{};
         std::size_t bytes{};
-        std::array<std::byte, 32> snapshot{};
-        std::array<std::byte, 32> before_publish{};
-        std::array<std::array<std::byte, 32>, 2> staged{};
+        std::array<std::array<std::byte, 32>, 3> staged{};
     };
 
     struct MemoryOutputRange {
@@ -163,14 +177,24 @@ private:
         std::vector<RateChangingElement*> captures;
         std::vector<MemoryOutput> memory_outputs;
         std::vector<MemoryOutputRange> memory_output_ranges;
+        // Rollback snapshots of direct outputs: 8-byte values (most signal
+        // types) in a tight array without per-output size dispatch; other
+        // sizes as records.
+        std::vector<void*> causal_outputs8;
+        std::vector<std::uint64_t> causal_snapshot8;
         std::vector<CausalOutput> causal_outputs;
         std::vector<TrapezoidStage> trapezoids;
         TrialRegion trapezoid_trial;
         std::vector<CoupledStage> coupled_stages;
         std::vector<bool> implicit_memory;
-        bool memory_outputs_staged{};
-        std::size_t staged_index{};
+        // Set at the start of the first step, when all three buffers of every
+        // memory output are filled with its initial value.
+        bool staging_initialized{};
+        std::size_t staged_index{}; // 0..2, see MemoryOutput
         std::uint64_t steps{}; // samples this domain has completed
+        // Samples due by each model step, precomputed when the model-time
+        // rate is set (multi-rate stepping).
+        std::optional<resampling::SampleCounter> sample_counter;
     };
     void build_domain(DomainState& domain);
     void step_domain(DomainState& domain);
@@ -180,7 +204,7 @@ private:
     void stage_residual(CoupledStage& stage, const std::vector<double>& k, std::vector<double>& result);
     void solve_gauss_legendre(CoupledStage& stage);
     // Restores every published output of the domain to its pre-step value.
-    static void roll_back_step(DomainState& domain, bool published_memory);
+    static void roll_back_step(DomainState& domain);
 
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
@@ -189,6 +213,10 @@ private:
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};
+    RetryExactness retry_exactness_;
+    // Records whether direct elements with private state stepped before a
+    // fault: the first `stepped` entries of domain.causal ran (or started).
+    void record_fault(const DomainState& domain, std::size_t stepped);
 };
 
 } // namespace s7
