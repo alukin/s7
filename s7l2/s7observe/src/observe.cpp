@@ -49,6 +49,57 @@ ObservationSample ObservationService::sample_output(const std::string& element_i
     return read(element_id, port);
 }
 
+CompiledProbes ObservationService::compile(const std::vector<ProbePoint>& probes) const {
+    require_stepping_thread();
+    std::vector<CompiledProbes::Point> points;
+    points.reserve(probes.size());
+    for (const auto& probe : probes) {
+        CompiledProbes::Point point;
+        point.type = runtime_->output_type_of(probe.element_id, probe.port);
+        point.value = runtime_->output_binding_of(probe.element_id, probe.port);
+        // The same explicit conversion as ObservationSample::to_display_double,
+        // chosen once per probe instead of dispatched on every read.
+        point.display = visit_signal_type(point.type, []<SignalType T>() -> double (*)(const void*) {
+            if constexpr (signal_type_info(T).is_complex()) {
+                return nullptr;
+            } else {
+                return +[](const void* storage) -> double {
+                    signal_storage_t<T> value{};
+                    std::memcpy(&value, storage, sizeof(value));
+                    return static_cast<double>(value);
+                };
+            }
+        });
+        points.push_back(point);
+    }
+    return CompiledProbes(*runtime_, std::move(points));
+}
+
+CompiledProbes::CompiledProbes(const NodeRuntime& runtime, std::vector<Point> points)
+    : runtime_(&runtime), points_(std::move(points)) {
+    for (const auto& point : points_) displayable_ = displayable_ && point.display != nullptr;
+}
+
+void CompiledProbes::require_stepping_thread() const {
+    const auto stepping = runtime_->stepping_thread();
+    if (stepping != std::thread::id{} && stepping != std::this_thread::get_id()) {
+        throw std::logic_error("CompiledProbes must be read on the thread that steps the runtime.");
+    }
+}
+
+void CompiledProbes::read_display(const std::span<double> out) const {
+    if (!displayable_) throw std::invalid_argument("A complex probe has no single display value.");
+    if (out.size() != points_.size()) throw std::invalid_argument("Display buffer size differs from the probe count.");
+    require_stepping_thread();
+    for (std::size_t index = 0; index < points_.size(); ++index) out[index] = points_[index].display(points_[index].value);
+}
+
+void CompiledProbes::read(const std::size_t index, void* destination) const {
+    require_stepping_thread();
+    const auto& point = points_.at(index);
+    std::memcpy(destination, point.value, signal_type_info(point.type).storage_bytes);
+}
+
 ObservationSnapshot ObservationService::snapshot(const std::vector<ProbePoint>& probes) const {
     require_stepping_thread();
     ObservationSnapshot snapshot;
