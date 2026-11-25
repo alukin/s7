@@ -1,6 +1,6 @@
 # Simulation and observation performance plan
 
-Status: decisions D1–D4 taken 2026-11-25; implementation not started. It follows the 2026-11-25 review of
+Status: decisions D1–D5 taken 2026-11-25; implemented on branch `perf/observation-runtime-hardware` (see Results). It follows the 2026-11-25 review of
 simulation correctness/performance and hardware-bound elements. Security
 findings from the same review are tracked separately in
 [SECURITY_TODO.md](SECURITY_TODO.md). Line numbers refer to commit `dfbecd9`.
@@ -14,6 +14,71 @@ are open. This is the existing contract in
 observation "must not significantly degrade execution performance" and should
 use buffering, decimation and rate limiting. The current Studio implementation
 does not meet it.
+
+## Results (2026-11-25)
+
+Measured on the 7940HS development host, Release build. Baseline is commit
+`05f61fc` (before WP1–WP6); "branch" is the implementation. User machines are
+slower, so the slow profile matters more than the fast one.
+
+**Implemented:**
+- **WP0:** load benchmark and matrix runner.
+- **WP1:** inlined fixed-size copies, three-slot memory staging (5 → 3 copies
+  per memory output per step), and branch-free snapshots of 8-byte direct
+  outputs.
+- **WP2:** compiled probes.
+- **WP3:** block ring, distributor thread and the D1 policies, with the Run
+  Configuration option.
+- **WP4 (partial):** batched recording and live appends, O(1) Scope mailbox
+  take, and Scope samples pushed per block.
+- **WP5:** H2/H5 (ADR-028) and H4 (Linux semaphore waits).
+- **WP6:** per-domain sample counters.
+- **V1:** extreme-preserving 3D trajectory reduction.
+- **D5:** inexact-retry reporting (ADR-029).
+
+**Runtime step cost** (`s7core_indexed_benchmark`, one pinned core, median of
+5 interleaved runs, identical checksums):
+
+| case | baseline ns/step | branch ns/step | change |
+|---|---|---|---|
+| gain64 | 358 | 181 | −49% |
+| gain512 | 2,790 | 1,619 | −42% |
+| wide512 | 2,656 | 1,293 | −51% |
+| feedback | 40.0 | 21.1 | −47% |
+| trapezoid | 164 | 138 | −16% |
+| pendulum | 299 | 135 | −55% |
+| nested | 97.8 | 48.2 | −51% |
+
+**Probe and viewer load** (`tools/run_observation_benchmark.py`, 1M ticks,
+64-gain chain or Euler oscillator, median of 3). Runs with probes were 5.7–8.3×
+faster on both profiles, and every recording was complete (lossless).
+Observation share of run time, baseline → branch:
+
+| profile | 4 probes | 8 probes |
+|---|---|---|
+| fast | 76–80% → 8–18% | 87–88% → 28–38% |
+| slow (0.6 CPU) | 90–91% → 58–68% | 94% → 73–79% |
+
+**Not met:** WP3's acceptance gate of ≤ 5% observation share.
+- **What remains is recording work itself:** copying 4–8 values per step into
+  the journal, the live buffers and the Scope preview.
+- **Why the slow profile is worst:** it gives the stepping and distributor
+  threads 0.6 of one CPU in total, so in lossless mode every sample's delivery
+  cost subtracts from stepping.
+- **The largest avoidable part** is the per-sample `ScopeSample` built for a
+  preview the Studio UI does not read. It only uses the drop count, and draws
+  from the recording. Making the mailbox notification-only would change a
+  Studio API that tests use; this needs a decision.
+- **Viewer call times:** the 60–90 ms maxima on the slow profile come from
+  cgroup quota throttling (present in the baseline too), not lock contention.
+
+**D2 fallback trigger:** the direct-output rollback snapshot is now roughly
+10–18% of step time in the gain chain (the cheapest possible elements) and
+less in real models. That is at the 10% trigger; the decision is open again.
+
+**Deferred WP4 items:** separate reader file handle; envelope sort outside
+the live lock. The stepping thread no longer takes these locks, so they now
+delay only the distributor.
 
 ## Findings this plan addresses
 
@@ -32,6 +97,7 @@ Findings marked *traced* come from reading the code, without a measurement yet.
 | P1 | Copying outputs for publish/stage/rollback costs more than the elements' own arithmetic: ~36% of `gain512` and ~40% of `pendulum` step time is `memmove`/`memcpy@plt`, against ~23% and ~15% for the model's own arithmetic. | measured with `perf`; `s7core/src/runtime.cpp:491–546` |
 | P2 | In multi-rate graphs whose rates are not whole numbers of Hz, `samples_through` runs a 256-bit division for each domain on every step. | traced; `s7core/src/resampler.cpp:91` |
 | V1 | The 3D trajectory viewer reduces points by plain stride subsampling (every Nth point), so a short excursion between kept points disappears from the display. The Scope (per-pixel-column min/max with gaps) and the Phase Portrait (per-bucket x/y extrema with gaps) preserve extremes. | traced; `s7studio/src/viewers/trajectory_geometry.cpp:90–97`; compare `scope_view_window.cpp:60–97`, `phase_portrait_view_window.cpp:44–73` |
+| R1 | A fault inside a Resampler's output rate domain cannot be retried exactly. The Resampler steps first in that domain, advancing its private input position (`step_++`) and discarding consumed samples. When a later element of the same domain step faults, rollback restores only published outputs (ADR-021), so the retry asks for the next input position and throws "Resampler read an input sample it has not received". This contradicts ADR-022's "a retry continues exactly". Faults in the Resampler's input domain retry exactly. | **confirmed** with a fault-injection test on the pre-change runtime (found while writing WP1 tests); `s7core/include/s7/resampler.hpp:115–135`, `doc/S7_Architectural_Decisions.md` ADR-022 |
 | H1 | Device-paced runs call the O1/O2 path once per sample (672 kS/s for the FM receiver), on the thread that must keep up with the device. Observation load can therefore cause a capture overflow and end the run. | traced from O1/O2; `local_schema_runner.cpp:276–285` |
 | H2 | SoapySDR requires exact readback of frequency, bandwidth and gain (`actual!=v`). Tuners quantize these values, so ordinary requests are refused. | **confirmed on hardware** (AD9361 at `ip:analog1.local`, set and read back with `iio_attr`): RX LO 100,100,000 → 100,099,998; 98,765,432 → 98,765,430; 101,123,457 → 101,123,454. The example stations 88.7 and 100.6 MHz happen to read back exactly, which is why `fm_receiver.s7diagram` works. Sample rate already needed `rate_tolerance_ppm` (672,000 → 671,999). End-to-end through `s7hw --run` with SoapyPlutoSDR, receive only, 48,000 frames: 100.6 MHz `status=ok`; 100.1 MHz refused with "frequency_hz readback mismatch: requested 100100000, got 100099998" (exit 1). `s7sdr/src/soapy.cpp` |
 | H5 | The bundled `examples/sdr/sdr_receive.json` fails on the AD9361 before tuning: 2.4 MS/s reads back as 2,399,998, and `rate_tolerance_ppm` defaults to 0. A failed `prepare` also leaves the radio at the rejected setting. | **confirmed on hardware**: "nominal rate differs from graph: requested 2400000 Hz, got 2399998 Hz" |
@@ -314,6 +380,19 @@ staging keep their exact behavior (decision D2).
     strict check. No new tolerance options are added.
   - Out-of-range requests are reported as clamped by the device, but not
     refused.
+
+- **D5 — Exact retry for elements with private state (R1). DECIDED
+  2026-11-25: report now, snapshots later
+  ([ADR-029](../../doc/S7_Architectural_Decisions.md#adr-029)).**
+  - R1 is one instance of a general limit: ADR-021 never restored private
+    state, so every stateful element that stepped before a fault (filters,
+    oscillators, sources, the Resampler) advances again on retry.
+  - Now: ADR-022's claim is corrected. `NodeRuntime::retry_exactness()`
+    records failed steps after which stateful direct elements had advanced.
+    The headless node logs `runtime.execution.retry_inexact` and reports it
+    in `STREAM_STATUS.execution`. No per-step cost, no API break for plugins.
+  - Later: exact retry through general state snapshots (roadmap
+    "Snapshots/restore"), not a per-element `on_step_commit()` plugin hook.
 
 ## Verification rules
 
