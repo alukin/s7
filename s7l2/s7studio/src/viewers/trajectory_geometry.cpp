@@ -87,15 +87,52 @@ TrajectoryData prepareTrajectory(const QList<TrajectoryPoint> &points, const Tra
     TrajectoryData data;
     data.colorByX = colorByX;
     const auto count = points.size();
-    const auto stride = maxVertices > 0 && count > maxVertices ? (count + maxVertices - 1) / maxVertices : 1;
-    data.vertices.reserve(count / stride + 2);
-    for (qsizetype i = 0; i < count; i += stride) {
-        if (canceled && canceled())
-            return {};
-        data.vertices.push_back(toScene(points[i], bounds));
-    }
-    if (count > 0 && (count - 1) % stride != 0)
+    if (maxVertices <= 0 || count <= maxVertices) {
+        data.vertices.reserve(count);
+        for (const auto &point : points) {
+            if (canceled && canceled())
+                return {};
+            data.vertices.push_back(toScene(point, bounds));
+        }
+    } else {
+        // Reduce like the 2D Phase Portrait: per bucket, keep its first and
+        // last point, each axis's extremes and its first non-finite point,
+        // in their original order. A short excursion stays visible however
+        // long the trajectory, unlike every-Nth-point subsampling.
+        constexpr qsizetype kept = 9;
+        const auto buckets = std::max(qsizetype(1), (maxVertices - 2) / kept);
+        const auto stride = (count - 2 + buckets - 1) / buckets;
+        data.vertices.reserve(maxVertices);
+        data.vertices.push_back(toScene(points.front(), bounds));
+        for (qsizetype begin = 1; begin < count - 1; begin += stride) {
+            if (canceled && canceled())
+                return {};
+            const auto end = std::min(begin + stride, count - 1);
+            std::array<qsizetype, kept> indices;
+            indices.fill(-1);
+            indices[0] = begin;
+            indices[1] = end - 1;
+            for (qsizetype i = begin; i < end; ++i) {
+                const auto &point = points[i];
+                if (!std::isfinite(point[0]) || !std::isfinite(point[1]) || !std::isfinite(point[2])) {
+                    if (indices[8] < 0) indices[8] = i;
+                    continue;
+                }
+                for (std::size_t axis = 0; axis < 3; ++axis) {
+                    auto &low = indices[2 + 2 * axis], &high = indices[3 + 2 * axis];
+                    if (low < 0 || point[axis] < points[low][axis]) low = i;
+                    if (high < 0 || point[axis] > points[high][axis]) high = i;
+                }
+            }
+            std::ranges::sort(indices);
+            qsizetype previous = -1;
+            for (const auto index : indices) {
+                if (index >= 0 && index != previous) data.vertices.push_back(toScene(points[index], bounds));
+                if (index >= 0) previous = index;
+            }
+        }
         data.vertices.push_back(toScene(points.back(), bounds));
+    }
     const int components = colorByX ? 7 : 3;
     data.buffer = QByteArray(data.vertices.size() * components * qsizetype(sizeof(float)), Qt::Uninitialized);
     auto *out = reinterpret_cast<float *>(data.buffer.data());

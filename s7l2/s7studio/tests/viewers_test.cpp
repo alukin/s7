@@ -32,7 +32,9 @@
 #include <QQuickWidget>
 #include <QtGraphs/QLineSeries>
 
+#include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 #include <iostream>
 #include <stdexcept>
@@ -471,6 +473,18 @@ void testTrajectory()
     geometry.setTrajectory(points, bounds, 100);
     require(geometry.vertexCount() <= 102 && geometry.vertexAt(geometry.vertexCount() - 1) == viewers::toScene(points.back(), bounds)
         && geometry.vertexAt(0) == viewers::toScene(points.front(), bounds), "Thinning lost the trajectory ends");
+    // Thinning keeps extremes (plan V1): a one-sample spike on any axis
+    // survives a 100x reduction, as in the 2D Phase Portrait.
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        QList<TrajectoryPoint> spiky;
+        for (int i = 0; i < 100001; ++i) spiky.push_back({std::cos(i * 1e-4), std::sin(i * 1e-4), i * 1e-5});
+        spiky[54321][axis] += 10.0;
+        const auto spikeBounds = viewers::TrajectoryBounds::of(spiky);
+        const auto reduced = viewers::prepareTrajectory(spiky, spikeBounds, 1000, false, {});
+        require(reduced.vertices.size() <= 1000, "Thinned trajectory exceeds its vertex budget");
+        require(std::ranges::find(reduced.vertices, viewers::toScene(spiky[54321], spikeBounds)) != reduced.vertices.end(),
+            ("Thinning dropped a one-sample excursion on axis " + std::to_string(axis)).c_str());
+    }
 
     // The 3D scene loads; the window draws in its own instance.
     ui::PhaseTrajectory3DViewWindow first("a/x", "a/y", "a/z");
