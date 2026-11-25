@@ -132,6 +132,9 @@ struct ControlPlaneOptions {
     std::function<boost::json::object()> network_info;
     std::size_t max_peers{256}; // configured seeds plus unverified discovery hints (at most 1024)
     std::chrono::seconds peer_hint_ttl{std::chrono::hours(24)};
+    // Execution state of the active graph, reported as STREAM_STATUS.execution
+    // when set (e.g. whether a retried step may be inexact, ADR-029).
+    std::function<boost::json::object()> execution_status;
 };
 
 class ControlPlane {
