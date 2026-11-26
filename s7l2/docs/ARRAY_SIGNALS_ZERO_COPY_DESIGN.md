@@ -177,6 +177,14 @@ Require **exact numeric type, concrete positive rank/extents and required domain
 
 One C32[N] value is **one causal `step()`**, not N graph steps. Distinguish graph **rational model-time rate-domain cadence** (ADR-022), physical sample rate, valid sample count and block duration, first physical sample index, block/frame/row sequence, optional source clock/timestamp and video PTS. Define optional provenance fields, absence, forwarding, reset, discontinuity and delay behavior **per producer/transform** before AV11/AV12 (D6). Never derive physical samples/PTS from graph `step_count()` or use scalar `Resampler` as a hidden in-block resampler. Missing source sample rate means unknown physical frequency axis; Waterfall gaps and Video Player skipped-frame IDs must be visible.
 
+### D6 proposal — Array provenance and whole-array delay
+
+**Open.** Store source provenance alongside the array value. It travels with the buffer lease through graph slots, staging and observation. Keep the array descriptor limited to numeric shape and layout. Report the receiving graph's rate and committed domain position separately. Numerical arrays and spatial fields may leave provenance absent.
+
+- **Sample blocks.** A producer can report its physical sample rate and the source interval identified by first sample index and valid sample count. The count describes the source interval. A derived output such as an FFT may have a different array extent and describes its frequency axis separately.
+- **Frames and continuity.** Frame sequence belongs to a source and continuity epoch. A producer starts a new epoch after a restart or seek that resets its indexing. A source-reported gap is distinct from frames skipped by a viewer. Optional presentation timestamps use the source's declared clock and time base. Unknown fields stay absent.
+- **Forwarding.** Fan-out, pass-through and a whole-array `VectorDelay` preserve the lease and provenance. The domain position advances when the delayed value is published. The initializer has no source provenance. An element that changes the sample interval, clock or continuity must define the resulting provenance. A transform can preserve fields it can substantiate and leave any others absent.
+
 Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
 
 ### Plugin and format compatibility policy (D1)
@@ -192,7 +200,7 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D3 | **Accepted.** [Pool admission and optional retention](#d3--pool-admission-and-optional-retention). | AV04/AV13 |
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
-| D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. Resolve the whole-array Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
+| D6 | **Open.** [Array provenance and whole-array delay proposal](#d6-proposal--array-provenance-and-whole-array-delay). Resolve the Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
 
 **D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
