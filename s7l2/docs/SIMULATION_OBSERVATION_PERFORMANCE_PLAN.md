@@ -99,9 +99,11 @@ The snapshot costs about 0.55 ns per 8-byte direct output per step. It is a
 large share only when elements do almost nothing (gain chains). The slow
 profile caps CPU time but does not slow the CPU, so it gives the same shares.
 
-**Deferred WP4 items:** separate reader file handle; envelope sort outside
-the live lock. The stepping thread no longer takes these locks, so they now
-delay only the distributor.
+**Remaining WP4 items closed (D7, 2026-11-26):** the separate reader file
+handle and the envelope sort outside the live lock are not implemented. The
+stepping thread no longer takes these locks, so they can delay only the
+distributor, and measured viewer calls stay far below the ring's buffering
+time.
 
 ## Findings this plan addresses
 
@@ -290,13 +292,12 @@ staging keep their exact behavior (decision D2).
 
 ### WP4 — Viewer reads without the writer's lock (O3, O4, O5)
 
-- `ObservationSource`: batched file writes, an atomic committed count, a
-  separate reader handle and no seeks on the writer handle.
-- `LiveAcquisition`: block append; take snapshots under a short lock and do the
-  envelope build and sort outside it. Move `setTimeSpan` re-bucketing off the
-  lock path, or onto the distributor.
-- `ScopeSampleMailbox`: carry blocks with channel ids instead of per-sample
-  strings; `take` swaps its container.
+- `ObservationSource`: batched file writes (done). An atomic committed count,
+  a separate reader handle and no seeks on the writer handle: closed by D7.
+- `LiveAcquisition`: block append (done). Snapshots under a short lock with the
+  envelope build and sort outside it, and `setTimeSpan` re-bucketing off the
+  lock path: closed by D7.
+- `ScopeSampleMailbox`: removed by D6; the UI reads the recording.
 - **V1:** replace stride subsampling in the 3D trajectory with
   extreme-preserving reduction. Per bucket, keep the first and last point, each
   axis's minimum and maximum, and non-finite gaps, as the Phase Portrait does in
@@ -435,6 +436,22 @@ staging keep their exact behavior (decision D2).
   - Also fixed: a drop-mode run no longer reports "run throttled by recording"
     for the lossless hand-over of its last partial block, which waits only
     after stepping has finished.
+
+- **D7 — Remaining WP4 items. DECIDED 2026-11-26: close them, with a
+  trigger to reopen.**
+  - The separate reader file handle and the envelope build/sort outside the
+    live lock fixed viewers blocking the stepping thread. Since WP3 only the
+    distributor takes these locks.
+  - A distributor stall slows a lossless run only if it outlasts the ring:
+    64 blocks, about 94 ms of frames at 700k steps/s and more at slower rates.
+    Measured viewer calls were 0.1–2.6 ms on the fast profile; the 60–90 ms
+    slow-profile maxima are cgroup throttling, present with no viewers too.
+    Per block, appends are one `write()`, so a viewer's seek costs one extra
+    seek, not unbuffered writes.
+  - **Reopen** when the WP0 benchmark shows a viewer call or a distributor
+    wait on these mutexes longer than about a quarter of the ring's buffering
+    time, or when the throttled share rises with viewers added to a run with
+    the same probes.
 
 ## Verification rules
 
