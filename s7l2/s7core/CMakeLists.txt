@@ -148,6 +148,10 @@ s7_add_test_executable(s7core_array_port_smoke tests/array_port_smoke.cpp)
 target_link_libraries(s7core_array_port_smoke PRIVATE s7core)
 add_test(NAME s7core_array_port_smoke COMMAND s7core_array_port_smoke)
 
+s7_add_test_executable(s7core_array_rollback_smoke tests/array_rollback_smoke.cpp)
+target_link_libraries(s7core_array_rollback_smoke PRIVATE s7core)
+add_test(NAME s7core_array_rollback_smoke COMMAND s7core_array_rollback_smoke)
+
 s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smoke.cpp)
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)
 add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smoke)

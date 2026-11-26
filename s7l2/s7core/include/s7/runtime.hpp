@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <expected>
 #include <optional>
 #include <string>
@@ -229,6 +230,9 @@ private:
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};
+    // A receiver can change private state before throwing during capture.
+    // Earlier captures and the upstream evaluation may already be committed.
+    std::exception_ptr delivery_fault_;
     RetryExactness retry_exactness_;
     // Records whether direct elements with private state stepped before a
     // fault: the first `stepped` entries of domain.causal ran (or started).

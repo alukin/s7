@@ -511,22 +511,36 @@ void NodeRuntime::step() {
         throw std::overflow_error("Runtime step count exhausted.");
     if (model_time_rate_) static_cast<void>(timestamp_ns(step_count_ + 1, *model_time_rate_));
     stepping_thread_.store(std::this_thread::get_id());
-    if (domains_.size() == 1 || (!model_time_rate_ && graph_.domain_links.empty())) {
-        // One rate, or unrelated parts with no time base: one step each.
-        for (auto& domain : domains_) step_domain(domain);
+    if (domains_.size() == 1) {
+        step_domain(domains_.front());
+    } else if (!model_time_rate_ && graph_.domain_links.empty()) {
+        // Independent domains take one sample per outer step. A retry
+        // skips the domains that already committed that sample.
+        for (auto& domain : domains_) {
+            if (domain.steps <= step_count_) step_domain(domain);
+        }
     } else {
+        if (delivery_fault_) std::rethrow_exception(delivery_fault_);
         if (!model_time_rate_) {
             throw std::logic_error("This graph has several rate domains joined by Resamplers; set the model-time "
                                    "rate (the run's dt) to schedule them.");
         }
         // Each domain takes every sample at or before this step's model time,
-        // input domains first. A fault leaves domains already stepped here
-        // advanced; retrying continues exactly, since each counts its own samples.
+        // input domains first. On a retry, each domain resumes from its
+        // own committed sample count.
         for (auto& domain : domains_) {
             const auto target = domain.sample_counter->samples_through(step_count_);
             while (domain.steps < target) {
                 step_domain(domain);
-                for (auto* resampler : domain.captures) resampler->capture_input();
+                try {
+                    for (auto* resampler : domain.captures) resampler->capture_input();
+                } catch (...) {
+                    // The sample is already committed and capture may have
+                    // partially delivered it. Replaying or skipping it
+                    // cannot guarantee a consistent receiver state.
+                    delivery_fault_ = std::current_exception();
+                    throw;
+                }
             }
         }
     }

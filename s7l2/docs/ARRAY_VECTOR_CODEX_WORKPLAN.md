@@ -224,6 +224,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **AV06a evidence:** The observation smoke test steps a mixed scalar/array source into a downstream reader. During evaluation, the downstream reader sees the current scalar and array values. Array observation sees the previous domain position and payload, or no payload before the first commit. After each step it retains the exact buffer used by the graph at the new domain position. The test also checks that another thread cannot acquire samples directly from the runtime. All 16 selected headless Release tests passed, including the four array smoke tests, observation and scalar rollback. AV06b covers the fault, repeated-retry and exhaustion matrix.
 
+**AV06b evidence:** `s7core_array_rollback_smoke` checks first-step failure, a failure between two output writes, a late failure after forwarding, and execution-pool exhaustion after publishing one candidate. Each rollback preserves the published buffer addresses and array values. A retained view survives repeated faults while optional admission saturates. Clocked and unclocked retries match an unfaulted run and preserve the committed prefix across three consecutive faults. An injected failure in scalar rate-boundary delivery preserves the source commit and latches the fault. All 18 selected headless Release tests passed. Internal direct-array fixtures can use the experimental compiler entry point.
+
 ### AV07 — Causal memory, VectorDelay and feedback
 
 **Depends:** AV06.
