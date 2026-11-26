@@ -72,9 +72,22 @@ Observation share of run time, baseline → branch:
 - **Viewer call times:** the 60–90 ms maxima on the slow profile come from
   cgroup quota throttling (present in the baseline too), not lock contention.
 
-**D2 fallback trigger:** the direct-output rollback snapshot is now roughly
-10–18% of step time in the gain chain (the cheapest possible elements) and
-less in real models. That is at the 10% trigger; the decision is open again.
+**D2 re-measured (2026-11-26): ADR-021 stays.** The same commit was built
+with and without the direct-output snapshot loop and the builds were run
+alternately (`s7core/benchmarks/compare_indexed.py`, 2,000,000 steps, median of
+11, identical checksums). Snapshot share of step time, fast / slow profile:
+
+| Graph | Per step, with → without (fast) | Fast | Slow |
+|---|---|---|---|
+| `gain512` | 1,619 → 1,334 ns | 17.6% | 17.5% |
+| `gain64` | 184 → 158 ns | 14.3% | 14.9% |
+| `pendulum` | 134 → 123 ns | 8.6% | 6.7% |
+| `nested` | 49 → 45 ns | 8.0% | (throttling noise) |
+| `trapezoid` | 139 → 137 ns | 1.5% | 1.2% |
+
+The snapshot costs about 0.55 ns per 8-byte direct output per step. It is a
+large share only when elements do almost nothing (gain chains). The slow
+profile caps CPU time but does not slow the CPU, so it gives the same shares.
 
 **Deferred WP4 items:** separate reader file handle; envelope sort outside
 the live lock. The stepping thread no longer takes these locks, so they now
@@ -332,14 +345,17 @@ staging keep their exact behavior (decision D2).
     provenance.
   - **Device-paced (hardware) runs:** always use `drop` for every destination.
 - **D2 — Per-step rollback snapshot (ADR-021). DECIDED 2026-11-25: keep
-  ADR-021 unchanged; reduce copying in WP1 first.**
+  ADR-021 unchanged; reduce copying in WP1 first. Re-decided 2026-11-26 after
+  measurement (see Results): keep A; B stays rejected while the trigger below
+  is not met.**
   - Rollback is required: the headless runtime resumes the same graph after
     `RECOVER_STREAM` (`s7runtime/src/runtime_service.cpp:1191–1206`), so
     removing the snapshot (option C) is rejected.
   - Fallback (option B, not adopted): if WP1 measurements still show the
     snapshot as a large share of step time, take it as a new decision.
-    Proposed trigger: more than 10% of step time in `gain512` or `pendulum` on
-    either host profile. B would let runs that never retry after a fault
+    Trigger (restated 2026-11-26): more than 10% of step time in a realistic
+    graph, `pendulum` or heavier. Gain chains are a stress test only; they
+    measured 15–18%, `pendulum` 7–9%. B would let runs that never retry after a fault
     (Studio local runs, `s7hw`) skip it, while the headless runtime keeps
     ADR-021. B requires an ADR-021 amendment and a guarantee that nothing reads
     outputs after a fault in such a run.
