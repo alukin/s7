@@ -52,7 +52,9 @@ Do not bundle these scans.
 ### Sanjoy Mahajan and Dennis Freeman — *Discrete-Time Signals and Systems:
 An Operator Approach*
 
-MIT 6.003 Fall 2011 [OCW readings](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/pages/readings/).
+MIT OpenCourseWare hosts the original PDF for MIT 6.003, Fall 2011.
+[Complete course notes](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_notes/).
+
 The [existing S7 source review](../docs/INTEGRATOR_REFERENCES.md)
 identifies difference equations (Chapter 1), delay/gain/adder blocks
 (Chapter 3), forward/backward Euler and mixed integrators (Chapter 6).
