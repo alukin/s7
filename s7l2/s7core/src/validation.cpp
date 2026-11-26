@@ -439,6 +439,9 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
             if (!element) {
                 throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
             }
+            if (element->has_array_ports()) {
+                throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
+            }
             instances.emplace(spec.id, element.get());
             checked.elements[index] = std::move(element);
         } catch (const std::exception& ex) {

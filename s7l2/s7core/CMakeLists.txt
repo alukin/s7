@@ -12,6 +12,7 @@ configure_file(resources/schema_elements.hpp.in generated/s7_schema_elements.hpp
 add_library(s7core SHARED
     src/array_descriptor.cpp
     src/array_pool.cpp
+    src/array_port.cpp
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
@@ -142,6 +143,10 @@ add_test(NAME s7core_array_descriptor_smoke COMMAND s7core_array_descriptor_smok
 s7_add_test_executable(s7core_array_pool_smoke tests/array_pool_smoke.cpp)
 target_link_libraries(s7core_array_pool_smoke PRIVATE s7core Threads::Threads)
 add_test(NAME s7core_array_pool_smoke COMMAND s7core_array_pool_smoke)
+
+s7_add_test_executable(s7core_array_port_smoke tests/array_port_smoke.cpp)
+target_link_libraries(s7core_array_port_smoke PRIVATE s7core)
+add_test(NAME s7core_array_port_smoke COMMAND s7core_array_port_smoke)
 
 s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smoke.cpp)
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)

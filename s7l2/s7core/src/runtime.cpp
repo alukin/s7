@@ -63,6 +63,11 @@ void NodeRuntime::CoupledStage::prepare_storage() {
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
+    for (const auto& [id, element] : graph_.elements) {
+        if (element->has_array_ports()) {
+            throw std::invalid_argument("Element '" + id + "' registers array ports. Array execution is not available.");
+        }
+    }
     if (graph_.domains.empty()) {
         // A graph built without rate domains (not by Compiler) is one domain.
         DomainState state;
