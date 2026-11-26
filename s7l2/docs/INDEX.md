@@ -99,7 +99,7 @@ AV00–AV18, dependency order, tests and handoffs for sessions capped at five
 hours. The [AV00 evidence](ARRAY_VECTOR_AV00_BASELINE.md) records the scalar
 baseline and the initial D4 proposal. The [accepted D4 design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics)
 covers compact CPU views and rank-generic array descriptors for DSP, video and fields.
-Existing scalar execution remains a regression target. D2, D3 and D5–D7 require approval.
+Existing scalar execution remains a regression target. D2 and D5–D7 require approval.
 These features and their G1/V, G4/W, G4/V checks are planned, not
 implemented/qualified; production camera, codecs, GStreamer/FFmpeg, full
 tensor/spatial processing and remote arrays remain later work.

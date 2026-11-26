@@ -11,6 +11,7 @@ configure_file(resources/schema_elements.hpp.in generated/s7_schema_elements.hpp
 # element code.
 add_library(s7core SHARED
     src/array_descriptor.cpp
+    src/array_pool.cpp
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
@@ -70,6 +71,7 @@ target_link_libraries(s7core PUBLIC
     ZLIB::ZLIB
     ${CMAKE_DL_LIBS}
 )
+target_link_libraries(s7core PRIVATE Threads::Threads)
 if (WIN32)
     # F128 on MinGW (s7/float_types.hpp), used by inline functions too: math
     # from libquadmath, and soft-float routines with Clang's return convention
@@ -136,6 +138,10 @@ add_test(NAME s7core_smoke COMMAND s7core_smoke)
 s7_add_test_executable(s7core_array_descriptor_smoke tests/array_descriptor_smoke.cpp)
 target_link_libraries(s7core_array_descriptor_smoke PRIVATE s7core)
 add_test(NAME s7core_array_descriptor_smoke COMMAND s7core_array_descriptor_smoke)
+
+s7_add_test_executable(s7core_array_pool_smoke tests/array_pool_smoke.cpp)
+target_link_libraries(s7core_array_pool_smoke PRIVATE s7core Threads::Threads)
+add_test(NAME s7core_array_pool_smoke COMMAND s7core_array_pool_smoke)
 
 s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smoke.cpp)
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)

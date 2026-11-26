@@ -1,6 +1,6 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy and D4 descriptor foundation accepted. D2, D3 and D5–D7 remain open.**
+**Design notes — maintainer-approved scope. D1 compatibility policy, D3 buffer ownership and D4 descriptor foundation accepted. D2 and D5–D7 remain open.**
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
@@ -135,6 +135,20 @@ Before evaluation, retain the previous external snapshot and valid memory stagin
 
 A bounded producer pool needs an **execution-critical reserve independent of optional viewers**. A slow/paused Waterfall or Video Player cannot hold the last available producer candidate. Define maximum retained bytes/frames, eviction/drop and discontinuity counters, admission, cancellation and recovery **before AV04** (D3). Optional observation is newest/bounded presentation with skips, never graph backpressure; authoritative/lossless recording is a separately admitted backpressure/failure profile. Synchronous borrowed views are compile-lifetime bounded; asynchronous clients and printing retain explicit charged immutable leases. Existing `s7transport` lease accounting can inform implementation, but `FrameTransport` copies incoming bytes and is not a writable-array producer API. Add a distinct committed-array Observation source/mailbox: do not feed arrays through scalar `ObservationSample::storage[32]`, scalar `ObservationSource::Sample::double`, Scope or journal.
 
+### D3 — Pool admission and optional retention
+
+**Accepted.** A producer pool preallocates aligned, fixed-capacity CPU slots. Each pool declares an execution reserve and optional retention headroom. The configured slot count must cover both, and allocation charges the full slot capacity to the run's memory budget. The execution reserve covers every slot the graph may hold simultaneously, including writable candidates, published and staged values, rollback handles and downstream aliases. AV04 accepts the declared bound. The compiler derives or verifies bounds when it introduces graph bindings and publication.
+
+A producer acquires exclusive writable storage without waiting for a slot. Sealing consumes that writable lease and returns an immutable read lease for the same bytes. Abandoning a candidate releases it. Synchronous graph readers borrow views from live graph leases. Optional asynchronous readers retain a buffer only after admission against explicit slot and byte caps. Charge the whole backing slot, including for a subview. Copies of a retained handle share its admission until the last copy releases it. The aggregate optional cap for each pool fits within its headroom. Failure to acquire execution storage is a resource fault. Failure to admit optional retention is a presentation outcome.
+
+Live presentation keeps one pending frame per subscription and replaces it when newer data is admitted. Count admission failures and replaced frames separately from source discontinuities. A frame already handed to a reader stays valid until released. Printing uses a separate bounded admission and reports when it cannot retain the requested snapshot. Cancel or close stops new work and releases handles still owned by the queue or job. Outstanding reader handles remain readable; storage is recycled only after its final lease ends. An expired token cannot resolve to a newer occupant of the same slot.
+
+Lossless array recording is a separately admitted opt-in policy. It uses bounded capacity and applies backpressure only at a safe runtime boundary. Exhaustion that cannot be resolved within the recording policy faults the recording or run explicitly. AV04 covers the core pool, leases and admission; integration with recording and runtime publication follows their own contracts.
+
+The AV04 regression uses a tiny pool, deliberately holds an optional read lease, and repeatedly acquires and seals producer candidates. It checks bounded optional skips, immutable retained bytes, lease release and close behavior, explicit execution exhaustion, and zero payload copies between the writable candidate and retained readers.
+
+[The AV04 CPU pool](../s7core/include/s7/array_pool.hpp) admits a shared payload budget plus separate execution and optional slot counts. The producer supplies every payload value before sealing. Execution exhaustion can signal an underestimated graph reserve even while optional capacity remains free. Optional admissions reserve their configured headroom until the admission and all its retained handles are released. Observer and printing integration hands out admitted handles. Graph leases stay inside execution so a presentation reader cannot retain a slot outside its budget.
+
 ### Shapes, nested schemas, Studio and provenance (F5–F10)
 
 Require **exact numeric type, concrete positive rank/extents and required domain semantics** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. Initial release elements use F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format on the generic D4 foundation. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
@@ -155,13 +169,13 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | --- | --- | --- |
 | D1 | **Accepted.** Earlier versions and third-party plugins carry no compatibility obligations. Qualify repository-owned consumers of the current interfaces and formats. | AV02, AV05, release SDK |
 | D2 | Approve candidate/staging/committed transition table and fallible resource reservation before nonthrowing **per-domain** commit. | AV05b/AV06/AV07 |
-| D3 | Approve producer reserve, optional viewer retention limits, drops/counters, cancellation and separate lossless recording profile. | AV04/AV13 |
+| D3 | **Accepted.** [Pool admission and optional retention](#d3--pool-admission-and-optional-retention). | AV04/AV13 |
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
 | D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. Resolve the whole-array Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
 
-**D2, D3 and D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D2 and D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 

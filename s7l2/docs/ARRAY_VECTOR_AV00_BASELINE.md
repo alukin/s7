@@ -103,7 +103,7 @@ AV01 should cover valid scalar, F32, C32, grayscale and RGB profiles, and reject
 | --- | --- |
 | D1 · Compatibility | **Accepted.** Design the current interfaces and formats freely. Verify repository-owned plugins and diagrams against the chosen interfaces. |
 | D2 · Publication | Open. Define a nonthrowing per-domain commit, the retained prior state on a failure, and the independent-domain retry case above. Preserve ADR-029's distinction between output rollback and private or external effects. |
-| D3 · Ownership | Open. Size the execution reserve for all live graph handles, including delayed or forwarded payloads. Cap optional observer and print retention separately and test producer progress under exhaustion. |
+| D3 · Ownership | Subsequently accepted in the [design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d3--pool-admission-and-optional-retention). |
 | D4 · Descriptors | Proposed in AV00 and later accepted in [revised form](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics). |
 | D5 · FFT and PSD | Open. Audit the existing backends in AV10a, then decide the backend, bin convention, windowing and normalization before the corresponding implementation. |
 | D6 · Provenance | Open. Define source identity forwarding before whole-array Delay. Define physical rate, sample/frame indices, optional timestamps, and source gaps separately from graph cadence and viewer skips. |
