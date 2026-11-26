@@ -1,6 +1,6 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation approved. D5–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation and D6 provenance semantics approved. D5 and D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
 
 Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
@@ -124,7 +124,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV06a** | AV05b + **D2** | Per-domain direct candidate vs externally committed snapshot machinery, fallible admission before nonthrowing commit; smoke mixed scalar+array outputs and observer invisibility until commit. |
 | **AV06b** | AV06a | Late direct and multi-output exceptions, repeated retries, retained observers, exhausted pool, later-domain fault/committed-prefix checks vs unfaulted oracle; no payload copy on handle rollback. **Unlocks internal array fixtures.** |
 | **AV07a** | AV06b | Causal-memory previous valid and next staged handle phases; first/last memory-fault retries preserve previous staging and scalar semantics. |
-| **AV07b** | AV07a + **D6 forwarding rule** | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, original sample provenance retained, no implicit sample-level delay. |
+| **AV07b** | AV07a + **D6 forwarding rule** | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, source occurrence retained through delay and retry, pool-scoped retention across the initializer-to-upstream switch, one whole value delayed per domain evaluation. |
 | **AV08a** | AV07b + **D7** | Flattened nested exposed-port slot aliases, direct/Delay inline-vs-nested oracle, mismatch and placeholder-byte negative cases. Standalone array Schema unsupported unless D7 adds separately scoped work. |
 | **AV08b** | AV08a | Schema+Studio save/open/save in the current format. Cover shape/format/layout capability, exposed aliases, invalid ranks and current scalar diagrams. No remote profile work. |
 | **AV09a** | AV06b | Minimal **internal-only** deterministic array source/forwarding headless fixture; repeated steps, copy/alloc ledger and fault injection, not public library. May precede AV07/AV08. |
@@ -149,7 +149,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
 | **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1–D4 are accepted. D5–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1–D4 and D6 are accepted. D5 and D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
