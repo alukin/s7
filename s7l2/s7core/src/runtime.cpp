@@ -101,12 +101,28 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
 
 void NodeRuntime::build_domain(DomainState& domain)
 {
+    const auto add_array_output = [&domain](Element& element, const Port& port, bool memory) {
+        auto* slot = dynamic_cast<ArrayElement&>(element).array_outputs_.at(port.index).get();
+        if (!slot) throw std::logic_error("Compiled array output has no slot.");
+        if (memory) {
+            if (!slot->published_) throw std::invalid_argument("Causal array memory output requires an initial value.");
+            slot->mode_ = ArrayOutputSlot::Mode::MemoryIdle;
+            domain.array_memory_outputs.push_back(slot);
+        } else {
+            slot->mode_ = ArrayOutputSlot::Mode::Direct;
+        }
+        domain.array_outputs.push_back(slot);
+    };
     domain.memory_output_ranges.reserve(domain.memory.size());
     for (auto* element : domain.memory) {
         const auto ports = element->output_ports();
         const auto begin = domain.memory_outputs.size();
         domain.memory_outputs.reserve(begin + ports.size());
         for (const auto& port : ports) {
+            if (port.array_descriptor) {
+                add_array_output(*element, port, true);
+                continue;
+            }
             domain.memory_outputs.push_back(MemoryOutput{
                 .value_ptr = port.value_ptr,
                 .bytes = signal_type_info(port.type).storage_bytes,
@@ -127,10 +143,7 @@ void NodeRuntime::build_domain(DomainState& domain)
     for (auto* element : domain.causal) {
         for (const auto& port : element->output_ports()) {
             if (port.array_descriptor) {
-                auto* slot = dynamic_cast<ArrayElement&>(*element).array_outputs_.at(port.index).get();
-                if (!slot) throw std::logic_error("Compiled array output has no slot.");
-                slot->runtime_managed_ = true;
-                domain.array_outputs.push_back(slot);
+                add_array_output(*element, port, false);
                 continue;
             }
             const auto bytes = signal_type_info(port.type).storage_bytes;
@@ -430,7 +443,7 @@ void NodeRuntime::roll_back_step(DomainState& domain) noexcept {
     for (auto& output : domain.memory_outputs) {
         copy_value(output.value_ptr, output.staged[previous].data(), output.bytes);
     }
-    for (auto* slot : domain.array_outputs) slot->candidate_.reset();
+    for (auto* slot : domain.array_outputs) slot->abort_evaluation();
 }
 
 void NodeRuntime::set_model_time_step_ns(const std::optional<std::int64_t> step_ns) {
@@ -561,6 +574,7 @@ void NodeRuntime::step_domain(DomainState& domain) {
     for (auto& output : domain.memory_outputs) {
         copy_value(output.value_ptr, output.staged[current].data(), output.bytes);
     }
+    for (auto* slot : domain.array_memory_outputs) slot->mode_ = ArrayOutputSlot::Mode::MemoryEvaluating;
 
     // 8-byte outputs: one unaligned-safe 8-byte load and store each. Locals,
     // so stores through output pointers do not force reloading the vectors.

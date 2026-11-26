@@ -234,6 +234,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **Accept:** deterministic vector recurrences, initialized memory, invalid direct-only cycles, memory-phase throw/rollback/retry, no unintended payload copy, no one-sample vs block ambiguity. Include a checked saved diagram if metadata/wiring are ready.
 
+**AV07a evidence:** `s7core_array_memory_smoke` exercises two mixed scalar/array memory elements in a feedback loop. Both elements and a direct probe read the same current values throughout evaluation. The test injects faults in the first and last memory elements, including consecutive faults, and checks the published addresses, retained values and subsequent recurrence. Runtime construction rejects an array memory output with no initializer. All 19 selected headless Release tests passed. The fixture uses the experimental compiler entry point.
+
 ### AV08 — Nested schema and persistence round-trip
 
 **Depends:** AV07.

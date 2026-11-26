@@ -447,11 +447,11 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                     throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
                 }
                 if (!spec.factory || !dynamic_cast<const ArrayElement*>(element.get()) ||
-                    element->has_causal_memory() || dynamic_cast<const RateChangingElement*>(element.get()) ||
+                    dynamic_cast<const RateChangingElement*>(element.get()) ||
                     dynamic_cast<const TrapezoidIntegration*>(element.get()) ||
                     dynamic_cast<const CoupledIntegration*>(element.get())) {
                     throw std::invalid_argument("Element '" + spec.id +
-                                                "' requires a concrete, direct array element at one rate.");
+                                                "' requires a concrete array element outside numerical trials and rate conversion.");
                 }
                 array_elements.insert(spec.id);
             }

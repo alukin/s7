@@ -18,7 +18,7 @@ public:
                                    std::string runtime_instance_uuid,
                                    std::string schema_instance_uuid);
 
-    // Internal C++ fixtures for direct array wiring. Schema loading and
+    // Internal C++ fixtures for array wiring. Schema loading and
     // deployment use compile() and cannot opt in.
     static ExecutableGraph compile_experimental_arrays(const Schema& schema);
 

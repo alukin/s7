@@ -25,7 +25,8 @@ public:
     [[nodiscard]] DenseCpuArrayView view() const &;
     DenseCpuArrayView view() const && = delete;
 
-    /// An empty lease clears the slot. On shape mismatch both leases are unchanged.
+    /// An empty lease clears a direct or standalone slot. Causal memory
+    /// stages an initialized value. A rejected exchange preserves both leases.
     [[nodiscard]] ArrayPool::ReadLease exchange(ArrayPool::ReadLease&& next);
     /// Retain the last committed value in a runtime-managed slot.
     /// Standalone slots expose the value most recently exchanged.
@@ -35,16 +36,20 @@ public:
 private:
     friend class ArrayInputBinding;
     friend class NodeRuntime;
+    enum class Mode { Standalone, Direct, MemoryIdle, MemoryEvaluating };
     [[nodiscard]] const ArrayPool::ReadLease& graph_value() const noexcept;
     void commit(std::uint64_t domain_step) noexcept;
+    void abort_evaluation() noexcept;
 
     const ArrayDescriptor descriptor_;
     ArrayPool::ReadLease published_;
     // A disengaged candidate holds the published value. An engaged empty
     // lease explicitly clears it at the next commit.
     std::optional<ArrayPool::ReadLease> candidate_;
+    // For causal memory, staging from the preceding successful evaluation.
+    std::optional<ArrayPool::ReadLease> staged_;
     std::uint64_t committed_step_{};
-    bool runtime_managed_{};
+    Mode mode_{Mode::Standalone};
 };
 
 /// A synchronous input bound to a stable producer slot. The producer must

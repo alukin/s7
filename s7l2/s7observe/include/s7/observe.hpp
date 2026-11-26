@@ -87,7 +87,7 @@ public:
     explicit ObservationService(const NodeRuntime& runtime);
 
     [[nodiscard]] ObservationSample sample_output(const std::string& element_id, std::size_t port = 0) const;
-    // Experimental direct arrays. Samples carry the position of their rate
+    // Experimental arrays. Samples carry the position of their rate
     // domain. The admission bounds how many leases a reader may keep.
     [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
         const ProbePoint& probe, const ArrayPool::Retention& retention) const;

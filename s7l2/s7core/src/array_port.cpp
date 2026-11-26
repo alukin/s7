@@ -14,7 +14,9 @@ ArrayOutputSlot::ArrayOutputSlot(ArrayDescriptor descriptor) : descriptor_(std::
 
 const ArrayPool::ReadLease& ArrayOutputSlot::graph_value() const noexcept
 {
-    return candidate_ ? *candidate_ : published_;
+    if (mode_ == Mode::MemoryEvaluating && staged_) return *staged_;
+    if (mode_ == Mode::Direct && candidate_) return *candidate_;
+    return published_;
 }
 
 DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().view(); }
@@ -27,27 +29,40 @@ ArrayPool::ReadLease ArrayOutputSlot::exchange(ArrayPool::ReadLease&& next)
     if (next && next.view().descriptor() != descriptor_) {
         throw std::invalid_argument("Array lease does not match the output descriptor.");
     }
-    if (!runtime_managed_) return std::exchange(published_, std::move(next));
+    if (mode_ == Mode::Standalone) return std::exchange(published_, std::move(next));
+    if (mode_ == Mode::MemoryIdle || (mode_ == Mode::MemoryEvaluating && !next)) {
+        throw std::invalid_argument("Causal array memory requires a value written during evaluation.");
+    }
 
     // Preserve the committed lease for both observation and rollback.
-    auto previous = candidate_ ? std::move(*candidate_) : published_;
+    auto previous = candidate_ ? std::move(*candidate_) : graph_value();
     candidate_.emplace(std::move(next));
     return previous;
 }
 
 void ArrayOutputSlot::commit(const std::uint64_t domain_step) noexcept
 {
-    if (candidate_) {
+    if (mode_ == Mode::MemoryEvaluating) {
+        if (staged_) published_ = std::move(*staged_);
+        staged_ = std::move(candidate_);
+        mode_ = Mode::MemoryIdle;
+    } else if (candidate_) {
         published_ = std::move(*candidate_);
-        candidate_.reset();
     }
+    candidate_.reset();
     committed_step_ = domain_step;
+}
+
+void ArrayOutputSlot::abort_evaluation() noexcept
+{
+    candidate_.reset();
+    if (mode_ == Mode::MemoryEvaluating) mode_ = Mode::MemoryIdle;
 }
 
 std::expected<ArrayPool::ReadLease, ArrayPoolError> ArrayOutputSlot::try_retain(
     const ArrayPool::Retention& retention) const
 {
-    if (runtime_managed_ && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
+    if (mode_ != Mode::Standalone && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
     return retention.try_retain(published_);
 }
 

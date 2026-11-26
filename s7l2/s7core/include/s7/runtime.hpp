@@ -84,7 +84,7 @@ public:
     }
     // Address of an output's storage, valid between steps on the stepping thread.
     [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
-    // Experimental direct arrays. Acquire on the stepping thread and hand
+    // Experimental arrays. Acquire on the stepping thread and hand
     // off the retained lease if needed. InvalidLease includes an empty or
     // uncommitted output. Admission applies after the domain publishes.
     [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
@@ -200,6 +200,7 @@ private:
         std::vector<std::uint64_t> causal_snapshot8;
         std::vector<CausalOutput> causal_outputs;
         std::vector<ArrayOutputSlot*> array_outputs;
+        std::vector<ArrayOutputSlot*> array_memory_outputs;
         std::vector<TrapezoidStage> trapezoids;
         TrialRegion trapezoid_trial;
         std::vector<CoupledStage> coupled_stages;
