@@ -4,6 +4,9 @@
 #ifndef S7CORE_INCLUDE_S7_ARRAY_PORT_HPP
 #define S7CORE_INCLUDE_S7_ARRAY_PORT_HPP
 
+#include <cstdint>
+#include <optional>
+
 #include "s7/array_pool.hpp"
 #include "s7/element.hpp"
 
@@ -24,14 +27,24 @@ public:
 
     /// An empty lease clears the slot. On shape mismatch both leases are unchanged.
     [[nodiscard]] ArrayPool::ReadLease exchange(ArrayPool::ReadLease&& next);
-    /// The caller selects which values are eligible for asynchronous retention.
+    /// Retain the last committed value in a runtime-managed slot.
+    /// Standalone slots expose the value most recently exchanged.
     [[nodiscard]] std::expected<ArrayPool::ReadLease, ArrayPoolError> try_retain(
         const ArrayPool::Retention& retention) const;
 
 private:
     friend class ArrayInputBinding;
+    friend class NodeRuntime;
+    [[nodiscard]] const ArrayPool::ReadLease& graph_value() const noexcept;
+    void commit(std::uint64_t domain_step) noexcept;
+
     const ArrayDescriptor descriptor_;
-    ArrayPool::ReadLease current_;
+    ArrayPool::ReadLease published_;
+    // A disengaged candidate holds the published value. An engaged empty
+    // lease explicitly clears it at the next commit.
+    std::optional<ArrayPool::ReadLease> candidate_;
+    std::uint64_t committed_step_{};
+    bool runtime_managed_{};
 };
 
 /// A synchronous input bound to a stable producer slot. The producer must
@@ -52,7 +65,7 @@ public:
 
     template <SignalType Type>
     [[nodiscard]] std::span<const signal_storage_t<Type>> values() const & {
-        return source().current_.values<Type>();
+        return source().graph_value().values<Type>();
     }
     template <SignalType Type>
     std::span<const signal_storage_t<Type>> values() const && = delete;
@@ -83,6 +96,7 @@ protected:
     const ArrayInputBinding& array_input(std::size_t) const && = delete;
 
 private:
+    friend class NodeRuntime;
     std::vector<std::unique_ptr<ArrayInputBinding>> array_inputs_;
     std::vector<std::unique_ptr<ArrayOutputSlot>> array_outputs_;
 };

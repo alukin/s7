@@ -162,6 +162,11 @@ void check_slot_exchange()
     require(!slot.exchange(std::move(first)) && !first && input.view().bytes().data() == first_address,
             "input borrows the slot's original payload");
     const auto held = slot.try_retain(retention).value();
+    auto optional_lease = held;
+    rejects<std::invalid_argument>([&] { static_cast<void>(slot.exchange(std::move(optional_lease))); },
+                                   "optional retention cannot be published as an execution lease");
+    require(optional_lease && input.view().bytes().data() == first_address,
+            "rejecting an optional lease preserves ownership and output");
     auto next = frame(pool, 2);
     const auto* next_address = next.view().bytes().data();
     auto previous = slot.exchange(std::move(next));

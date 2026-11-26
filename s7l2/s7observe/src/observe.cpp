@@ -49,6 +49,12 @@ ObservationSample ObservationService::sample_output(const std::string& element_i
     return read(element_id, port);
 }
 
+std::expected<CommittedArraySample, ArrayPoolError> ObservationService::try_retain_array_output(
+    const ProbePoint& probe, const ArrayPool::Retention& retention) const
+{
+    return runtime_->try_retain_array_output(probe.element_id, probe.port, retention);
+}
+
 CompiledProbes ObservationService::compile(const std::vector<ProbePoint>& probes) const {
     require_stepping_thread();
     std::vector<CompiledProbes::Point> points;

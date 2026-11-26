@@ -222,6 +222,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **Accept:** late direct-element throw, several outputs, fan-out, observers, retry, memory pool safety, stable prior published payload and no copying of array bytes during rollback; scalar ADR-021 tests remain green.
 
+**AV06a evidence:** The observation smoke test steps a mixed scalar/array source into a downstream reader. During evaluation, the downstream reader sees the current scalar and array values. Array observation sees the previous domain position and payload, or no payload before the first commit. After each step it retains the exact buffer used by the graph at the new domain position. The test also checks that another thread cannot acquire samples directly from the runtime. All 16 selected headless Release tests passed, including the four array smoke tests, observation and scalar rollback. AV06b covers the fault, repeated-retry and exhaustion matrix.
+
 ### AV07 — Causal memory, VectorDelay and feedback
 
 **Depends:** AV06.

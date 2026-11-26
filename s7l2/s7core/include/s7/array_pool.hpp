@@ -65,6 +65,7 @@ public:
         std::span<const signal_storage_t<Type>> values() const && = delete;
 
     private:
+        friend class ArrayOutputSlot;
         friend class WriteLease;
         friend class Retention;
         ReadLease(std::shared_ptr<State> state, std::size_t slot,

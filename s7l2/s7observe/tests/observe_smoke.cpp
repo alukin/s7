@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include <cassert>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -13,6 +15,107 @@
 #include <vector>
 
 #include "s7/observe.hpp"
+#include "s7/array_port.hpp"
+
+namespace {
+constexpr std::array<std::int64_t, 1> extent{2};
+const s7::ArrayDescriptor shape(s7::SignalType::F32, extent);
+
+class MixedSource final : public s7::ArrayElement {
+public:
+    MixedSource()
+        : ArrayElement("mixed_source"),
+          pool_(shape, 2, 1, std::make_shared<s7::ArrayMemoryBudget>(3 * shape.byte_size())),
+          output_(register_array_output("array", shape))
+    {
+        register_output(1, "scalar", s7::SignalType::F64, &value_);
+    }
+
+    s7::ArrayPool::Retention admit_reader() { return pool_.make_retention(1, shape.byte_size()); }
+
+    void step() override
+    {
+        auto write = pool_.try_acquire().value();
+        ++value_;
+        std::ranges::fill(write.values<s7::SignalType::F32>(), static_cast<float>(value_));
+        static_cast<void>(output_.exchange(std::move(write).seal()));
+    }
+
+private:
+    s7::ArrayPool pool_;
+    s7::ArrayOutputSlot& output_;
+    double value_{};
+};
+
+using InspectCandidate = std::function<void(std::span<const float>, double)>;
+
+class CandidateReader final : public s7::ArrayElement {
+public:
+    explicit CandidateReader(const InspectCandidate& inspect) : ArrayElement("candidate_reader"), inspect_(inspect)
+    {
+        register_array_input("array", shape);
+        register_input(1, "scalar", s7::SignalType::F64, nullptr);
+    }
+
+    void step() override { inspect_(array_input(0).values<s7::SignalType::F32>(), read_input<double>(1)); }
+
+private:
+    const InspectCandidate& inspect_;
+};
+
+void check_committed_array_observation()
+{
+    InspectCandidate inspect;
+    s7::Schema schema("array_publication");
+    const auto rate = s7::Rate::from_hz(100);
+    schema.set_rate(rate);
+    schema.add_element("source", [] { return std::make_unique<MixedSource>(); });
+    schema.add_element("reader", [&] { return std::make_unique<CandidateReader>(inspect); });
+    schema.connect("source", 0, "reader", 0);
+    schema.connect("source", 1, "reader", 1);
+    auto graph = s7::Compiler::compile_experimental_arrays(schema);
+    auto retention = static_cast<MixedSource&>(*graph.elements.at("source")).admit_reader();
+    s7::NodeRuntime runtime(std::move(graph));
+    const s7::ObservationService observation(runtime);
+    const s7::ProbePoint probe{"source", 0};
+    const float* candidate_address{};
+    const float* committed_address{};
+    std::uint64_t checked{};
+    inspect = [&](std::span<const float> values, double scalar) {
+        ++checked;
+        assert(scalar == static_cast<double>(checked) && values.front() == scalar);
+        candidate_address = values.data();
+        const auto sample = observation.try_retain_array_output(probe, retention);
+        if (checked == 1) {
+            assert(!sample && sample.error() == s7::ArrayPoolError::InvalidLease);
+        } else {
+            assert(sample && sample->domain_step == checked - 1 && sample->rate == rate);
+            auto previous = sample->lease.values<s7::SignalType::F32>();
+            assert(previous.data() == committed_address && previous.data() != candidate_address);
+            assert(previous.front() == static_cast<float>(checked - 1));
+        }
+    };
+
+    const auto initial = observation.try_retain_array_output(probe, retention);
+    assert(!initial && initial.error() == s7::ArrayPoolError::InvalidLease);
+    for (std::uint64_t step = 1; step <= 3; ++step) {
+        runtime.step();
+        const auto sample = observation.try_retain_array_output(probe, retention).value();
+        const auto values = sample.lease.values<s7::SignalType::F32>();
+        assert(sample.domain_step == step && sample.rate == rate && checked == step);
+        assert(values.data() == candidate_address && values.front() == static_cast<float>(step));
+        assert(observation.sample_output("source", 1).as_real() == static_cast<double>(step));
+        committed_address = values.data();
+    }
+    bool refused = false;
+    std::thread other([&] {
+        try { static_cast<void>(observation.try_retain_array_output(probe, retention)); }
+        catch (const std::logic_error&) { refused = true; }
+    });
+    other.join();
+    assert(refused);
+}
+} // namespace
 
 int main() try
 {
@@ -154,6 +257,7 @@ int main() try
     other.join();
     assert(refused);
 
+    check_committed_array_observation();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7observe smoke: fatal error: " << ex.what() << '\n';

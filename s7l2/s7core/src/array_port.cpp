@@ -12,20 +12,43 @@ ArrayOutputSlot::ArrayOutputSlot(ArrayDescriptor descriptor) : descriptor_(std::
     if (descriptor_.rank() == 0) throw std::invalid_argument("An array output requires a positive rank.");
 }
 
-DenseCpuArrayView ArrayOutputSlot::view() const & { return current_.view(); }
+const ArrayPool::ReadLease& ArrayOutputSlot::graph_value() const noexcept
+{
+    return candidate_ ? *candidate_ : published_;
+}
+
+DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().view(); }
 
 ArrayPool::ReadLease ArrayOutputSlot::exchange(ArrayPool::ReadLease&& next)
 {
+    if (next.retention_) {
+        throw std::invalid_argument("An array output requires an execution lease.");
+    }
     if (next && next.view().descriptor() != descriptor_) {
         throw std::invalid_argument("Array lease does not match the output descriptor.");
     }
-    return std::exchange(current_, std::move(next));
+    if (!runtime_managed_) return std::exchange(published_, std::move(next));
+
+    // Preserve the committed lease for both observation and rollback.
+    auto previous = candidate_ ? std::move(*candidate_) : published_;
+    candidate_.emplace(std::move(next));
+    return previous;
+}
+
+void ArrayOutputSlot::commit(const std::uint64_t domain_step) noexcept
+{
+    if (candidate_) {
+        published_ = std::move(*candidate_);
+        candidate_.reset();
+    }
+    committed_step_ = domain_step;
 }
 
 std::expected<ArrayPool::ReadLease, ArrayPoolError> ArrayOutputSlot::try_retain(
     const ArrayPool::Retention& retention) const
 {
-    return retention.try_retain(current_);
+    if (runtime_managed_ && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
+    return retention.try_retain(published_);
 }
 
 ArrayInputBinding::ArrayInputBinding(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))
@@ -51,7 +74,7 @@ DenseCpuArrayView ArrayInputBinding::view() const & { return source().view(); }
 
 ArrayPool::ReadLease ArrayInputBinding::share() const
 {
-    const auto& current = source().current_;
+    const auto& current = source().graph_value();
     if (!current) throw std::logic_error("Array input has no value.");
     return current;
 }
