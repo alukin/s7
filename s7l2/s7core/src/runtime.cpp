@@ -64,7 +64,7 @@ void NodeRuntime::CoupledStage::prepare_storage() {
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
     for (const auto& [id, element] : graph_.elements) {
-        if (element->has_array_ports()) {
+        if (element->has_array_ports() && !graph_.experimental_arrays_) {
             throw std::invalid_argument("Element '" + id + "' registers array ports. Array execution is not available.");
         }
     }
@@ -125,6 +125,7 @@ void NodeRuntime::build_domain(DomainState& domain)
 
     for (auto* element : domain.causal) {
         for (const auto& port : element->output_ports()) {
+            if (port.array_descriptor) continue;
             const auto bytes = signal_type_info(port.type).storage_bytes;
             if (bytes == 8) {
                 domain.causal_outputs8.push_back(port.value_ptr);
@@ -653,6 +654,7 @@ OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std:
         throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
     }
 
+    if (ports[port].array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
     return ports[port].value_ptr;
 }
 
@@ -668,6 +670,7 @@ SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_
         throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
     }
 
+    if (ports[port].array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
     return ports[port].type;
 }
 

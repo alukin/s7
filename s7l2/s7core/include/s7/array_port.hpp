@@ -46,6 +46,10 @@ public:
     [[nodiscard]] DenseCpuArrayView view() const &;
     DenseCpuArrayView view() const && = delete;
 
+    /// Alias the current input for a graph output. This lease counts toward
+    /// the producer's execution reserve.
+    [[nodiscard]] ArrayPool::ReadLease share() const;
+
     template <SignalType Type>
     [[nodiscard]] std::span<const signal_storage_t<Type>> values() const & {
         return source().current_.values<Type>();

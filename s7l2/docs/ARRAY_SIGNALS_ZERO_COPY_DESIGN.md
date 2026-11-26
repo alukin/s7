@@ -1,6 +1,6 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy, D3 buffer ownership and D4 descriptor foundation accepted. D2 and D5–D7 remain open.**
+**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation accepted. D5–D7 remain open.**
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
@@ -90,7 +90,7 @@ AV02 uses a `shape` array of positive integer extents alongside the fixed numeri
 
 AV03 validates fixed-count element declarations using their port metadata. Array connections require the same numeric type, rank and extents, and scalar pins on mixed elements use ordinary type inference. Declaration-only elements are direct feedthrough, so they cannot close a feedback cycle. A numerical trial cannot replay a declaration with array ports, even when its derivative signal is scalar. The compiler and deployment preflight reject declaration-only arrays before binding. Later cards cover executable array slots, array causal memory, semantic formats and shaped nested boundaries.
 
-AV05a introduces [stable array port slots](../s7core/include/s7/array_port.hpp) for internal elements. Array ports use the same logical input and output positions as scalar ports, with a descriptor and a null scalar pointer. Use `read_input<T>()` only for scalar positions and the typed array binding for array positions. An input binds to its producer's slot after an exact descriptor check. A synchronous view borrows the slot's current lease until replacement. An asynchronous reader can hold an admitted immutable lease across replacement. Slot exchange transfers ownership without copying payload bytes. Compiler and runtime guards keep these ports out of scalar execution until AV05b adds binding. D2 still governs candidate visibility and publication.
+AV05a introduces [stable array port slots](../s7core/include/s7/array_port.hpp) for internal elements. Array ports use the same logical input and output positions as scalar ports, with a descriptor and a null scalar pointer. Use `read_input<T>()` only for scalar positions and the typed array binding for array positions. An input binds to its producer's slot after an exact descriptor check. A synchronous view borrows the slot's current lease until replacement. An asynchronous reader can hold an admitted immutable lease across replacement. Slot exchange transfers ownership without copying payload bytes. AV05b binds direct array ports through the experimental C++ compiler entry point. Normal compilation and scalar observation reject array execution.
 
 - Add optional shape rules alongside existing numeric PortSpec/type inference. A scalar has shape []; a shaped output carries concrete extents in the 0.2.0 slice. Reject overflow, rank/extent mismatch, invalid strides/planes and unsupported element types before running. Do not silently broadcast or flatten.
 - Serialize logical type, rank, extents and required format/capabilities in the canonical schema representation. Keep incidental padding, offsets, pointers and storage identity in runtime views. Update bundled diagrams as the format changes. Local array connections are the 0.2.0 target.
@@ -125,15 +125,33 @@ The initial implementation and qualification is a **mandatory new 0.2.0 scope am
 
 ## 7. Independent-review architectural reconciliation (2026-11-23)
 
-The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section is **planning guidance, not an accepted ADR or implemented API**. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
+The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section records the publication and ownership contracts alongside implementation guidance. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
 
 ### Publication, rollback and ownership (F1–F4, F11–F12)
 
 Array slots must distinguish **previous externally committed handles**, **current direct-feedthrough candidates** visible only to downstream graph evaluation, **previous valid causal-memory staging** eligible for the present evaluation, and **next staged causal-memory candidates** for a later evaluation. Compiled array inputs bind to **stable producer slots**, not movable payload addresses; RAII leases must never be `memcpy`-snapshotted in scalar `MemoryOutput`, `CausalOutput`, `TrialRegion` or observation storage. Acquire writable **unpublished** storage without modifying a shared/published/rollback-protected payload. Handle swaps, fan-out, pass-through, staging and rollback should incur no payload-byte copies; FFT, Gain, UI rasterization, transport or layout materialization can compute/copy into separate storage. Maintain a per-boundary copy/allocation ledger.
 
-Before evaluation, retain the previous external snapshot and valid memory staging. Direct elements can consume their current candidates in causal order; causal-memory elements stage a candidate for the *next* publication boundary. On success publish a coherent set of output handles and advance the domain's committed position/staging; on fault restore the previous externally visible handles and valid staging and do **not** advance that domain's step. Retained observers still see the old immutable bytes. The exact no-throw commit/resource-reservation algorithm requires **D2 approval** and tests for late direct, early/late memory, multiple-output, mixed scalar/array, consecutive retry and retained observer faults.
+Before evaluation, retain the previous external snapshot and valid memory staging. Direct elements can consume their current candidates in causal order; causal-memory elements stage a candidate for the *next* publication boundary. On success publish a coherent set of output handles and advance the domain's committed position/staging; on fault restore the previous externally visible handles and valid staging and do **not** advance that domain's step. Retained observers still see the old immutable bytes. The D2 commit and resource reservation contract requires tests for late direct, early/late memory, multiple-output, mixed scalar/array, consecutive retry and retained observer faults.
 
 **The atomic boundary is one rate-domain evaluation, not an entire multi-rate run.** If another domain already completed its step, it may remain advanced when a later domain fails (ADR-022). Neither private element state nor irrevocable I/O or network output is rolled back by ADR-021. When replay is unsafe, latch/report an explicit fault. Array participation in implicit/coupled numerical trials is rejected **before execution**, pending a separate reviewed trial contract.
+
+### D2 — Per-domain publication and retry
+
+**Accepted.** The unit of publication is one successful evaluation of one rate domain. Compiled inputs bind to stable source slots. Each array output has separate graph-visible and committed state so a graph read and an external observation use the appropriate lease. All graph slots stay on the evaluation thread. Optional asynchronous readers acquire an admitted immutable lease from a committed result under D3.
+
+| Phase | Graph-visible values | Committed state |
+| --- | --- | --- |
+| Begin an attempt | Make the prior valid causal-memory staging available to the graph. On the first attempt, use the element's initialized memory value. | Keep the last successful outputs and position. |
+| Evaluate direct elements | In causal order, downstream elements see sealed candidates from this attempt. A producer can forward an existing immutable lease without copying. An explicit hold uses its preceding value if initialized. | Keep the last successful outputs and position. |
+| Evaluate causal memory | Memory elements read the same current memory values and the direct results. Each writes separate staging for the next evaluation. | Keep the prior valid staging and last successful outputs. |
+| Commit | Promote current direct results and the memory values used in this evaluation. Save successful next staging for the following attempt. | Expose the complete domain result and advance its position once. |
+| Fail before commit | Restore graph slots to their last successful values and discard this attempt's candidates and next staging. | Preserve prior valid staging, committed outputs and position. Retained reads still point to their original bytes. |
+
+Preallocate bookkeeping and admit the execution reserve before running. Acquire required candidate capacity and validate results before the commit point. Commit uses handle transfers and preallocated state, with no fallible allocation, output validation or consumer callback. Observer delivery happens after commit. A rejected optional admission counts as a presentation skip. It cannot undo or delay a domain commit. On failure, restore domain state before reporting the error or collecting diagnostic details so reporting cannot mask incomplete rollback.
+
+A retry of an unfinished outer step resumes from each domain's committed position. In both clocked and independent unclocked graphs, a domain that already met this outer step's target is skipped on retry. The outer step advances after every domain meets its target. A snapshot that combines domains must identify each contributing domain position. Private element state and irreversible I/O retain the ADR-029 retry limits. A failure during delivery after an upstream commit cannot rerun that committed evaluation. Array wires in this slice stay local and within a single rate domain. Rate conversion and cross-domain array links need their own contract.
+
+AV05b exercises an internal direct source, pass-through and two consumers through the compiler and runtime. Check payload identity and zero wire copies, reject mismatched shapes, and run the scalar regressions. Keep external array observation gated until AV06a implements the commit boundary and AV06b verifies direct faults, retained reads, exhausted pools, repeated retries and the independent-domain retry discrepancy from AV00. AV07a/AV07b add and verify array causal-memory staging and delay.
 
 A bounded producer pool needs an **execution-critical reserve independent of optional viewers**. A slow/paused Waterfall or Video Player cannot hold the last available producer candidate. Define maximum retained bytes/frames, eviction/drop and discontinuity counters, admission, cancellation and recovery **before AV04** (D3). Optional observation is newest/bounded presentation with skips, never graph backpressure; authoritative/lossless recording is a separately admitted backpressure/failure profile. Synchronous borrowed views are compile-lifetime bounded; asynchronous clients and printing retain explicit charged immutable leases. Existing `s7transport` lease accounting can inform implementation, but `FrameTransport` copies incoming bytes and is not a writable-array producer API. Add a distinct committed-array Observation source/mailbox: do not feed arrays through scalar `ObservationSample::storage[32]`, scalar `ObservationSource::Sample::double`, Scope or journal.
 
@@ -170,14 +188,14 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | ID | Decision | Gate |
 | --- | --- | --- |
 | D1 | **Accepted.** Earlier versions and third-party plugins carry no compatibility obligations. Qualify repository-owned consumers of the current interfaces and formats. | AV02, AV05, release SDK |
-| D2 | Approve candidate/staging/committed transition table and fallible resource reservation before nonthrowing **per-domain** commit. | AV05b/AV06/AV07 |
+| D2 | **Accepted.** [Per-domain publication and retry](#d2--per-domain-publication-and-retry). | AV05b/AV06/AV07 |
 | D3 | **Accepted.** [Pool admission and optional retention](#d3--pool-admission-and-optional-retention). | AV04/AV13 |
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
 | D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. Resolve the whole-array Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
 
-**D2 and D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 

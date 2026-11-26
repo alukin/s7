@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/core.hpp"
+#include "s7/array_port.hpp"
 #include "s7/type_inference.hpp"
 
 #include <queue>
@@ -122,8 +123,20 @@ ExecutableGraph Compiler::compile(const Schema& schema) {
 ExecutableGraph Compiler::compile(const Schema& nested_schema,
                                   std::string runtime_instance_uuid,
                                   std::string schema_instance_uuid) {
+    return compile_impl(nested_schema, std::move(runtime_instance_uuid), std::move(schema_instance_uuid), false);
+}
+
+ExecutableGraph Compiler::compile_experimental_arrays(const Schema& schema) {
+    return compile_impl(schema, {}, {}, true);
+}
+
+ExecutableGraph Compiler::compile_impl(const Schema& nested_schema,
+                                       std::string runtime_instance_uuid,
+                                       std::string schema_instance_uuid,
+                                       bool experimental_arrays) {
     // Validation creates every element once; the graph is built from them.
-    auto checked = detail::check_schema(nested_schema);
+    auto checked = experimental_arrays ? detail::check_experimental_array_schema(nested_schema)
+                                       : detail::check_schema(nested_schema);
     if (!checked.errors.empty()) {
         throw std::invalid_argument("Schema validation failed:\n" + join_errors(checked.errors));
     }
@@ -131,6 +144,7 @@ ExecutableGraph Compiler::compile(const Schema& nested_schema,
     const Schema& schema = *checked.flat;
 
     ExecutableGraph executable_graph;
+    executable_graph.experimental_arrays_ = experimental_arrays;
     executable_graph.schema_name = schema.name();
     executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
     executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);
@@ -201,27 +215,35 @@ ExecutableGraph Compiler::compile(const Schema& nested_schema,
         if (schema_ports.contains(connection.to_element)) continue;
 
         const auto [from_element, from_port] = source_of({connection.from_element, connection.from_port});
-        const auto source = executable_graph.elements.at(from_element)->outputs();
+        const auto& producer = *executable_graph.elements.at(from_element);
+        const auto source = producer.output_ports();
         if (from_port >= source.size()) {
             throw std::runtime_error("Connection from '" + from_element + "' uses invalid output port " +
                                      std::to_string(from_port) + ".");
         }
 
-        element_inputs[connection.to_element][connection.to_port] = source[from_port];
+        if (source[from_port].array_descriptor) {
+            const auto& slot = dynamic_cast<const ArrayElement&>(producer).array_output(from_port);
+            auto& consumer = dynamic_cast<ArrayElement&>(*executable_graph.elements.at(connection.to_element));
+            consumer.bind_array_input(connection.to_port, slot);
+        } else {
+            element_inputs[connection.to_element][connection.to_port] = source[from_port].value_ptr;
+        }
     }
 
     // Validation gave every element its resolved rate (adopt_rate) before
     // binding: a nested schema compiles on binding and checks against it.
 
     for (auto& [id, bindings] : element_inputs) {
+        auto& element = *executable_graph.elements.at(id);
         for (std::size_t port = 0; port < bindings.size(); ++port) {
-            if (bindings[port] == nullptr) {
+            if (bindings[port] == nullptr && !element.input_ports()[port].array_descriptor) {
                 throw std::runtime_error("Compiler produced an unresolved input binding for element '" + id +
                                          "' at input port " + std::to_string(port) + ".");
             }
         }
 
-        executable_graph.elements.at(id)->bind_inputs(bindings);
+        element.bind_inputs(bindings);
     }
 
     executable_graph.causal_order =

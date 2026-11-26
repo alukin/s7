@@ -49,6 +49,13 @@ const ArrayOutputSlot& ArrayInputBinding::source() const
 
 DenseCpuArrayView ArrayInputBinding::view() const & { return source().view(); }
 
+ArrayPool::ReadLease ArrayInputBinding::share() const
+{
+    const auto& current = source().current_;
+    if (!current) throw std::logic_error("Array input has no value.");
+    return current;
+}
+
 void ArrayElement::register_array_input(const std::string_view name, ArrayDescriptor descriptor)
 {
     const auto index = input_count();

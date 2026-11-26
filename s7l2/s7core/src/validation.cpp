@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/core.hpp"
+#include "s7/array_port.hpp"
 #include "s7/rate_inference.hpp"
 #include "s7/resampler.hpp"
 #include "s7/type_inference.hpp"
@@ -398,7 +399,8 @@ public:
 
 namespace detail {
 
-static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve_timing) {
+static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve_timing,
+                                       bool experimental_arrays = false) {
     CheckedSchema checked;
     // Nested schemas are inlined first (ADR-024): every check below sees the
     // flattened graph, so a nested schema behaves exactly like its contents.
@@ -422,6 +424,7 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
     // Every element is created once: the instance type inference already
     // made (concrete elements), or by its resolved factory.
     InstanceMap instances;
+    std::unordered_set<std::string> array_elements;
     checked.elements.resize(schema.elements().size());
     for (std::size_t index = 0; index < schema.elements().size(); ++index) {
         const auto& spec = schema.elements()[index];
@@ -440,7 +443,17 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                 throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
             }
             if (element->has_array_ports()) {
-                throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
+                if (!experimental_arrays) {
+                    throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
+                }
+                if (!spec.factory || !dynamic_cast<const ArrayElement*>(element.get()) ||
+                    element->has_causal_memory() || dynamic_cast<const RateChangingElement*>(element.get()) ||
+                    dynamic_cast<const TrapezoidIntegration*>(element.get()) ||
+                    dynamic_cast<const CoupledIntegration*>(element.get())) {
+                    throw std::invalid_argument("Element '" + spec.id +
+                                                "' requires a concrete, direct array element at one rate.");
+                }
+                array_elements.insert(spec.id);
             }
             instances.emplace(spec.id, element.get());
             checked.elements[index] = std::move(element);
@@ -492,6 +505,13 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
         for (std::size_t index = 0; index < schema.elements().size(); ++index) index_of.emplace(schema.elements()[index].id, index);
         std::vector<CheckedSchema::DomainLink> links;
         for (const auto& connection : schema.connections()) {
+            if (array_elements.contains(connection.from_element)) {
+                const auto& port = instances.at(connection.from_element)->output_ports()[connection.from_port];
+                if (port.array_descriptor && checked.rates.at(connection.from_element) != checked.rates.at(connection.to_element)) {
+                    checked.errors.push_back("Array wire from '" + connection.from_element +
+                                             "' to '" + connection.to_element + "' crosses rate domains.");
+                }
+            }
             const auto target = index_of.find(connection.to_element);
             if (target == index_of.end() || !checked.elements[target->second]) continue;
             auto* changing = dynamic_cast<RateChangingElement*>(checked.elements[target->second].get());
@@ -584,7 +604,6 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
         }
         if (!implicit.empty() || !checked.coupled_regions.empty()) {
             const auto parents = parents_of(schema);
-            std::unordered_set<std::string> array_elements;
             for (const auto& spec : schema.elements()) if (spec.array_metadata) array_elements.insert(spec.id);
             if (!implicit.empty())
                 checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, implicit, array_elements, false, checked.errors);
@@ -735,9 +754,10 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
     return checked;
 }
 
-static CheckedSchema check_executable_schema(const Schema& schema, const bool resolve_timing)
+static CheckedSchema check_executable_schema(const Schema& schema, const bool resolve_timing,
+                                             const bool experimental_arrays = false)
 {
-    auto checked = check_schema_impl(schema, resolve_timing);
+    auto checked = check_schema_impl(schema, resolve_timing, experimental_arrays);
     if (checked.errors.empty()) {
         const auto& elements = checked.flat->elements();
         const auto array = std::ranges::find_if(elements, [](const ElementSpec& spec) { return spec.array_metadata != nullptr; });
@@ -749,6 +769,7 @@ static CheckedSchema check_executable_schema(const Schema& schema, const bool re
 }
 
 CheckedSchema check_schema(const Schema& schema) { return check_executable_schema(schema, true); }
+CheckedSchema check_experimental_array_schema(const Schema& schema) { return check_executable_schema(schema, true, true); }
 CheckedSchema check_schema_structure(const Schema& schema) { return check_executable_schema(schema, false); }
 
 } // namespace detail

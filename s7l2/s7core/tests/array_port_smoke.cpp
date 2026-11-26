@@ -22,7 +22,8 @@ static_assert(!std::is_copy_constructible_v<ArrayOutputSlot>);
 static_assert(!std::is_move_constructible_v<ArrayOutputSlot>);
 static_assert(!std::is_trivially_copyable_v<ArrayOutputSlot>);
 
-const ArrayDescriptor shape(SignalType::F32, std::array<std::int64_t, 2>{2, 3});
+constexpr std::array<std::int64_t, 2> extents{2, 3};
+const ArrayDescriptor shape(SignalType::F32, extents);
 const ArrayDescriptor wrong_shape(SignalType::F32, std::array<std::int64_t, 2>{3, 2});
 
 void require(const bool condition, const std::string_view reason)
@@ -64,18 +65,82 @@ private:
     ArrayOutputSlot* frame_{};
 };
 
+struct WireTrace {
+    const void* source{};
+    std::size_t reads{};
+    std::size_t materialized_bytes{};
+
+    void read(std::span<const std::byte> bytes)
+    {
+        ++reads;
+        if (bytes.data() != source) materialized_bytes += bytes.size();
+    }
+};
+
 class Consumer final : public ArrayElement {
 public:
-    Consumer() : ArrayElement("internal_array_consumer")
+    explicit Consumer(const ArrayDescriptor& descriptor = shape, WireTrace* trace = nullptr)
+        : ArrayElement("internal_array_consumer"), trace_(trace)
     {
         register_input(0, "scale", SignalType::F64, nullptr);
-        register_array_input("frame", shape);
+        register_array_input("frame", descriptor);
         register_input(2, "offset", SignalType::F64, nullptr);
+        register_output(0, "result", SignalType::F64, &result);
     }
 
     std::span<const float> samples() const { return array_input(1).values<SignalType::F32>(); }
-    void step() override { result = read_input<double>(0) * samples().front() + read_input<double>(2); }
+    void step() override
+    {
+        const auto input = samples();
+        if (trace_) trace_->read(std::as_bytes(input));
+        result = read_input<double>(0) * input.front() + read_input<double>(2);
+    }
     double result{};
+
+private:
+    WireTrace* trace_;
+};
+
+class Source final : public ArrayElement {
+public:
+    explicit Source(WireTrace& trace)
+        : ArrayElement("array_source"), trace_(trace),
+          pool_(shape, 2, 0, std::make_shared<ArrayMemoryBudget>(2 * shape.byte_size())),
+          output_(register_array_output("frame", shape))
+    {}
+
+    void step() override
+    {
+        auto value = frame(pool_, ++sample_);
+        trace_.source = value.view().bytes().data();
+        static_cast<void>(output_.exchange(std::move(value)));
+    }
+
+private:
+    WireTrace& trace_;
+    ArrayPool pool_;
+    ArrayOutputSlot& output_;
+    float sample_{};
+};
+
+class Forward final : public ArrayElement {
+public:
+    explicit Forward(WireTrace& trace)
+        : ArrayElement("array_forward"), trace_(trace), output_(register_array_output("frame", shape))
+    {
+        register_array_input("frame", shape);
+    }
+
+    void step() override
+    {
+        const auto& input = array_input(0);
+        trace_.read(input.view().bytes());
+        static_cast<void>(output_.exchange(input.share()));
+    }
+
+private:
+    WireTrace& trace_;
+    ArrayOutputSlot& output_;
 };
 
 void check_slot_exchange()
@@ -159,12 +224,67 @@ void check_execution_guard()
     rejects<std::invalid_argument>([&] { s7::NodeRuntime runtime(std::move(graph)); },
                                    "manually submitted graph must not snapshot an array port as scalar bytes");
 }
+
+void check_compiled_fanout()
+{
+    WireTrace trace;
+    s7::Schema schema("compiled_fanout");
+    schema.set_rate(s7::Rate::from_hz(100));
+    // Declare the consumers first to make scheduling depend on the wires.
+    schema.add_element("left", [&] { return std::make_unique<Consumer>(shape, &trace); });
+    schema.add_element("right", [&] { return std::make_unique<Consumer>(shape, &trace); });
+    schema.add_element("forward", [&] { return std::make_unique<Forward>(trace); });
+    schema.add_element("source", [&] { return std::make_unique<Source>(trace); });
+    schema.add_element("scale", [] { return std::make_unique<s7::Constant>(2.0); });
+    schema.add_element("offset", [] { return std::make_unique<s7::Constant>(3.0); });
+    schema.connect("source", 0, "forward", 0);
+    for (const auto* reader : {"left", "right"}) {
+        schema.connect("forward", 0, reader, 1);
+        schema.connect("scale", 0, reader, 0);
+        schema.connect("offset", 0, reader, 2);
+    }
+    s7::NodeRuntime runtime(s7::Compiler::compile_experimental_arrays(schema));
+    const void* previous = nullptr;
+    for (int step = 1; step <= 4; ++step) {
+        runtime.step();
+        require(trace.source != previous, "the two consumers follow each freshly sealed payload");
+        require(runtime.real_output_of("left") == 2 * step + 3 &&
+                runtime.real_output_of("right") == 2 * step + 3, "mixed inputs evaluate in causal order");
+        previous = trace.source;
+    }
+    require(trace.reads == 12 && trace.materialized_bytes == 0, "all three wires reuse the source payload");
+    rejects<std::invalid_argument>([&] { static_cast<void>(runtime.output_of<SignalType::F32>("forward")); },
+                                   "scalar observation cannot read a graph array candidate");
+}
+
+void check_compiled_shape_validation()
+{
+    for (const auto& descriptor : {wrong_shape, ArrayDescriptor(SignalType::I32, extents)}) {
+        WireTrace trace;
+        s7::Schema schema("wrong_signature");
+        schema.set_rate(s7::Rate::from_hz(100));
+        schema.add_element("source", [&] { return std::make_unique<Source>(trace); });
+        schema.add_element("consumer", [&] { return std::make_unique<Consumer>(descriptor); });
+        schema.add_element("scalar", [] { return std::make_unique<s7::Constant>(1.0); });
+        schema.connect("source", 0, "consumer", 1);
+        schema.connect("scalar", 0, "consumer", 0);
+        schema.connect("scalar", 0, "consumer", 2);
+        try { static_cast<void>(s7::Compiler::compile_experimental_arrays(schema)); }
+        catch (const std::invalid_argument& error) {
+            if (std::string_view(error.what()).contains("Array port mismatch")) continue;
+            throw;
+        }
+        throw std::runtime_error("compiled wire accepted a mismatched array signature");
+    }
+}
 } // namespace
 
 int main() try {
     check_slot_exchange();
     check_mixed_ports();
     check_execution_guard();
+    check_compiled_fanout();
+    check_compiled_shape_validation();
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

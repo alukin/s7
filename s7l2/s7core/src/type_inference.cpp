@@ -150,7 +150,9 @@ public:
         if (!result_.errors.empty()) {
             return std::move(result_);
         }
-        if (std::ranges::any_of(elements_, [](const ElementTypes& element) { return element.spec->array_metadata != nullptr; })) {
+        if (std::ranges::any_of(elements_, [](const ElementTypes& element) {
+            return element.spec->array_metadata || (element.probe && element.probe->has_array_ports());
+        })) {
             check_array_connections();
         }
         propagate();
@@ -327,6 +329,16 @@ private:
 
     void check_array_connections()
     {
+        const auto descriptor = [](const ElementTypes& element, bool output, std::size_t port) -> const ArrayDescriptor* {
+            if (element.probe) {
+                const auto ports = output ? element.probe->output_ports() : element.probe->input_ports();
+                return ports[port].array_descriptor;
+            }
+            const auto& metadata = element.spec->array_metadata;
+            if (!metadata) return nullptr;
+            const auto& ports = output ? metadata->output_ports : metadata->input_ports;
+            return ports[port].array ? &*ports[port].array : nullptr;
+        };
         const auto describe = [](const ArrayDescriptor* array) {
             if (!array) return std::string("scalar");
             std::string description(signal_type_name(array->type()));
@@ -345,12 +357,8 @@ private:
             const auto& to = elements_[target->second];
             if (edge.from_port >= from.outputs.size() || edge.to_port >= to.inputs.size()) continue;
 
-            const auto& source_metadata = from.spec->array_metadata;
-            const auto& target_metadata = to.spec->array_metadata;
-            const auto* output = source_metadata && source_metadata->output_ports[edge.from_port].array
-                ? &*source_metadata->output_ports[edge.from_port].array : nullptr;
-            const auto* input = target_metadata && target_metadata->input_ports[edge.to_port].array
-                ? &*target_metadata->input_ports[edge.to_port].array : nullptr;
+            const auto* output = descriptor(from, true, edge.from_port);
+            const auto* input = descriptor(to, false, edge.to_port);
             if (output == input || (output && input && *output == *input)) continue;
             result_.errors.push_back("Array port mismatch: " + label(edge.from_element, "output", edge.from_port) +
                                      " (" + describe(output) + ") -> " + label(edge.to_element, "input", edge.to_port) +

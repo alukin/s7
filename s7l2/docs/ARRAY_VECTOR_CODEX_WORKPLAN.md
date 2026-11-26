@@ -1,6 +1,6 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status:** D1 compatibility policy, D3 buffer ownership and D4 descriptor foundation approved. D2 and D5–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation approved. D5–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
 
 Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
@@ -149,7 +149,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
 | **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1, D3 and D4 are accepted. D2 and D5–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1–D4 are accepted. D5–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
@@ -200,6 +200,19 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 **Scope:** add a second (array) storage class under the same logical port contract; bind array inputs to stable output **slots** rather than movable payload addresses. Prove a minimal non-stateful source -> pass-through -> consumer direct-feedthrough chain using the real Compiler/NodeRuntime. Keep scalar fast path unchanged; don't add array history/feedback yet.
 
 **Accept:** compiled matching vector pipeline, fan-out to two readers yields identical payload identity, wrong shape/type preflight fails, scalar CTest regression and a small before/after scalar dispatch benchmark or a documented baseline comparison. If full rollback is not yet present, mark the feature internal/experimental and prevent release use until AV06.
+
+**AV05b evidence:** The headless Release fixture recorded 12 wire reads across four steps. Each read used the address of the source's freshly sealed payload, with zero bytes materialized at the wires. The selected CTest run passed 14 tests, including array validation, scalar rollback, numerical integration, nested schemas and observation.
+
+The scalar benchmark compared AV05a (`2dbda9f`) with AV05b using GCC 16.2.1 Release builds on the same host. Each median uses five interleaved runs of one million steps pinned to CPU 4. All output checksums matched.
+
+| Scalar graph | Before, ns/step | After, ns/step |
+| --- | ---: | ---: |
+| Chain of 512 Gains | 1786.10 | 1791.34 |
+| 512 Gains sharing one source | 1449.97 | 1451.69 |
+| Scalar feedback | 28.99 | 30.41 |
+| Flattened nested feedback | 208.77 | 210.86 |
+
+The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlapped at 29.26–29.42 ns. Recheck this case during release qualification.
 
 ### AV06 — Direct array candidate publication and faults
 
