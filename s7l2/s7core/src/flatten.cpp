@@ -49,6 +49,11 @@ public:
     void add(const Schema& schema, const std::string& path, const std::optional<Rate>& seed,
              const std::optional<Rate>& pin = std::nullopt)
     {
+        if (schema.has_array_ports()) {
+            flat_.errors.push_back("Schema '" + (path.empty() ? schema.name() : path) +
+                                   "' declares array ports. Array execution is not available.");
+            return;
+        }
         Level level{path, {}};
         std::unordered_set<std::string> ids;
         for (const auto& spec : schema.elements()) {

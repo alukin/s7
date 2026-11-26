@@ -25,7 +25,7 @@ struct S7PluginInfo {
 // Query plugin information
 typedef const S7PluginInfo* (*S7PluginQueryFunc)();
 
-// Optional JSON manifest for richer discovery and extension fields.
+// Optional JSON manifest for richer discovery. The query is the ABI authority.
 typedef const char* (*S7PluginManifestJsonFunc)();
 
 // Register elements with registry
@@ -43,7 +43,7 @@ const char* s7_plugin_manifest_json();
 void s7_register_elements(void* registry_ptr);
 
 // Plugin API version - increment on breaking changes
-#define S7_PLUGIN_API_VERSION 1
+#define S7_PLUGIN_API_VERSION 2
 
 #ifdef __cplusplus
 }

@@ -102,48 +102,6 @@ auto listener_url(const bool secure, const std::string& bind_address, const std:
     return std::string(secure ? "wss://" : "ws://") + host + ":" + std::to_string(port);
 }
 
-auto signal_type_from_string(const std::string_view value) -> SignalType
-{
-    return parse_signal_type(value);
-}
-
-auto parse_schema_port_bindings(const boost::json::object& root, const std::string_view field_name)
-    -> std::vector<SchemaPortBinding>
-{
-    std::vector<SchemaPortBinding> bindings;
-    const auto it = root.find(field_name);
-    if (it == root.end()) {
-        return bindings;
-    }
-    if (!it->value().is_array()) {
-        throw std::invalid_argument("Expected array field '" + std::string(field_name) + "'.");
-    }
-
-    for (const auto& binding_value : it->value().as_array()) {
-        if (!binding_value.is_object()) {
-            throw std::invalid_argument("Expected object in field '" + std::string(field_name) + "'.");
-        }
-
-        const auto& binding_object = binding_value.as_object();
-        SchemaPortBinding binding;
-        binding.name = expect_string(binding_object, "name");
-        binding.type = expect_string(binding_object, "type");
-        binding.element = expect_string(binding_object, "element");
-        if (const auto port_it = binding_object.find("port"); port_it != binding_object.end()) {
-            if (port_it->value().is_uint64()) {
-                binding.port = port_it->value().as_uint64();
-            } else if (port_it->value().is_int64() && port_it->value().as_int64() >= 0) {
-                binding.port = static_cast<std::uint64_t>(port_it->value().as_int64());
-            } else {
-                throw std::invalid_argument("Expected non-negative integer 'port' in schema port binding.");
-            }
-        }
-        bindings.push_back(std::move(binding));
-    }
-
-    return bindings;
-}
-
 bool get_bool(const boost::json::object& object, const std::string_view key, bool default_value) {
     const auto it = object.find(key);
     if (it == object.end()) {
@@ -221,8 +179,8 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         }
         definition.dt = dt->to_number<double>();
     }
-    definition.exposed_inputs = parse_schema_port_bindings(root, "exposed_inputs");
-    definition.exposed_outputs = parse_schema_port_bindings(root, "exposed_outputs");
+    definition.exposed_inputs = parse_exposed_ports(root, "exposed_inputs");
+    definition.exposed_outputs = parse_exposed_ports(root, "exposed_outputs");
 
     for (const auto& element_value : expect_array(root, "elements")) {
         const auto& element_obj = expect_object(element_value, "element");
@@ -452,19 +410,8 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
                         static_cast<std::size_t>(connection.to_port));
     }
 
-    for (const auto& binding : definition.exposed_inputs) {
-        schema->expose_input(binding.name,
-                             signal_type_from_string(binding.type),
-                             binding.element,
-                             static_cast<std::size_t>(binding.port));
-    }
-
-    for (const auto& binding : definition.exposed_outputs) {
-        schema->expose_output(binding.name,
-                              signal_type_from_string(binding.type),
-                              binding.element,
-                              static_cast<std::size_t>(binding.port));
-    }
+    for (const auto& port : definition.exposed_inputs) schema->expose_input(port);
+    for (const auto& port : definition.exposed_outputs) schema->expose_output(port);
 
     return schema;
 }

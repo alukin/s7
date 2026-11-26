@@ -338,9 +338,21 @@ ElementDescriptor::ElementDescriptor(
     if (!factory_) {
         throw std::invalid_argument("Factory function cannot be null");
     }
+    for (const auto* ports : {&metadata_.input_ports, &metadata_.output_ports}) {
+        for (const auto& port : *ports) {
+            if (port.array && (port.array->rank() == 0 || port.array->type() != port.type || !port.type_rule.empty())) {
+                throw std::invalid_argument("Element '" + type_name_ + "' has an invalid array descriptor on port '" +
+                                            port.name + "'.");
+            }
+        }
+    }
 }
 
 std::unique_ptr<Element> ElementDescriptor::create(const ElementCreationContext& ctx) const {
+    const auto shaped = [](const PortSpec& port) { return port.array.has_value(); };
+    if (std::ranges::any_of(metadata_.input_ports, shaped) || std::ranges::any_of(metadata_.output_ports, shaped)) {
+        throw std::logic_error("Element '" + type_name_ + "' declares array ports. Array execution is not available.");
+    }
     return factory_(ctx);
 }
 

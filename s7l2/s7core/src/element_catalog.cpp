@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/element_catalog.hpp"
+#include "s7/metadata_json.hpp"
 
 #include <algorithm>
 #include <set>
@@ -11,6 +12,21 @@
 namespace s7 {
 
 namespace {
+boost::json::array port_catalog(const std::vector<PortSpec>& ports)
+{
+    boost::json::array result;
+    result.reserve(ports.size());
+    for (const auto& port : ports) {
+        boost::json::object entry{
+            {"name", port.name}, {"description", port.description}, {"optional", port.optional}};
+        if (port.type_rule.empty()) entry["type"] = signal_type_name(port.type);
+        else entry["type_rule"] = port.type_rule;
+        if (port.array) entry["shape"] = array_shape_json(*port.array);
+        result.emplace_back(std::move(entry));
+    }
+    return result;
+}
+
 int default_port_count(const ElementMetadata& metadata, const VariadicInputSpec& ports, std::size_t fixed) {
     if (!ports.enabled) return static_cast<int>(fixed);
     auto count = std::uint64_t(ports.min_count);
@@ -132,37 +148,8 @@ boost::json::value ElementCatalogService::to_json() const
             element["schema"] = *metadata.schema_definition;
         }
 
-        boost::json::array inputPorts;
-        for (const auto& port : metadata.input_ports) {
-            boost::json::object portJson;
-            portJson["name"] = port.name;
-            portJson["description"] = port.description;
-            // A generic port has a type rule ("T", "component(T)", ...) instead of a fixed type.
-            if (port.type_rule.empty()) {
-                portJson["type"] = std::string(signal_type_name(port.type));
-            } else {
-                portJson["type_rule"] = port.type_rule;
-            }
-            portJson["optional"] = port.optional;
-            inputPorts.push_back(portJson);
-        }
-        element["input_ports"] = inputPorts;
-
-        boost::json::array outputPorts;
-        for (const auto& port : metadata.output_ports) {
-            boost::json::object portJson;
-            portJson["name"] = port.name;
-            portJson["description"] = port.description;
-            // A generic port has a type rule ("T", "component(T)", ...) instead of a fixed type.
-            if (port.type_rule.empty()) {
-                portJson["type"] = std::string(signal_type_name(port.type));
-            } else {
-                portJson["type_rule"] = port.type_rule;
-            }
-            portJson["optional"] = port.optional;
-            outputPorts.push_back(portJson);
-        }
-        element["output_ports"] = outputPorts;
+        element["input_ports"] = port_catalog(metadata.input_ports);
+        element["output_ports"] = port_catalog(metadata.output_ports);
 
         boost::json::array typeVariables;
         for (const auto& variable : metadata.type_variables) {

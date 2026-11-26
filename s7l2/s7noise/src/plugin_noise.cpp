@@ -23,7 +23,6 @@ static const S7PluginInfo plugin_info{
 
 static const char plugin_manifest_json[] = R"json(
 {
-  "api_version": 1,
   "plugin_name": "s7noise",
   "plugin_version": "1.0.0",
   "author": "S7 Project",

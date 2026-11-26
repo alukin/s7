@@ -4,6 +4,7 @@
 #ifndef S7CORE_INCLUDE_S7_SCHEMA_HPP
 #define S7CORE_INCLUDE_S7_SCHEMA_HPP
 
+#include "s7/array_descriptor.hpp"
 #include "s7/element.hpp"
 #include "s7/rate.hpp"
 #include "s7/type_inference.hpp"
@@ -54,6 +55,15 @@ public:
                  std::size_t from_port,
                  std::string to_element,
                  std::size_t to_port);
+    struct ExposedPort {
+        std::string name;
+        SignalType type{SignalType::F64};
+        std::string element;
+        std::size_t port{};
+        std::optional<ArrayDescriptor> array{};
+    };
+    void expose_input(ExposedPort port);
+    void expose_output(ExposedPort port);
     void expose_input(std::string name,
                       SignalType type,
                       std::string to_element,
@@ -75,14 +85,9 @@ public:
 
     // An exposed port: its name and type, and the internal element port it
     // feeds (inputs) or is fed by (outputs).
-    struct ExposedPort {
-        std::string name;
-        SignalType type{SignalType::F64};
-        std::string element;
-        std::size_t port{};
-    };
     [[nodiscard]] const std::deque<ExposedPort>& exposed_inputs() const { return exposed_inputs_; }
     [[nodiscard]] const std::deque<ExposedPort>& exposed_outputs() const { return exposed_outputs_; }
+    [[nodiscard]] bool has_array_ports() const;
 
     // Schema-wide rate seed (doc/S7_Sample_Rate_Model.md section 3): used by
     // RateResolver for every connected set of elements with no rate of its

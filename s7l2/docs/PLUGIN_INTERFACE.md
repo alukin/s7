@@ -14,13 +14,13 @@ Header: `s7core/include/s7/element_plugin.hpp`. A plugin exports these `extern "
 
 | Symbol | Required | Purpose |
 |---|---|---|
-| `const S7PluginInfo* s7_plugin_query()` | yes, unless a manifest is provided | Name, version, author, element count, `api_version` |
-| `const char* s7_plugin_manifest_json()` | optional | UTF-8 JSON manifest; preferred over `s7_plugin_query` when present |
+| `const S7PluginInfo* s7_plugin_query()` | yes | ABI version and basic discovery metadata |
+| `const char* s7_plugin_manifest_json()` | optional | UTF-8 discovery metadata read after ABI validation |
 | `void s7_register_elements(void* registry)` | yes | Registers elements; `registry` is an `s7::ElementRegistry*` |
 
 ```cpp
 struct S7PluginInfo {
-    uint32_t api_version;      // must equal S7_PLUGIN_API_VERSION (currently 1)
+    uint32_t api_version;      // must equal S7_PLUGIN_API_VERSION (currently 2)
     uint32_t element_count;
     const char* plugin_name;
     const char* plugin_version;
@@ -32,7 +32,6 @@ Manifest example (`s7noise`):
 
 ```json
 {
-  "api_version": 1,
   "plugin_name": "s7noise",
   "plugin_version": "1.0.0",
   "author": "S7 Project",
@@ -46,11 +45,11 @@ Manifest example (`s7noise`):
 
 Although the entry points are C functions, the registry pointer and `ElementDescriptor` are C++ types: a plugin must be built with the same compiler, standard library, and S7 headers as the host. The plugin and the host share the one `s7core` shared library (see below).
 
-## Array-port ABI decision for 0.2.0 (not yet approved)
+## Array-port ABI for 0.2.0
 
-Plugin API v1 uses `extern "C"` entry points and exchanges C++ `ElementRegistry` and element-facing layouts. The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral` and `s7wavelet`.
+Plugin API v2 covers the changed C++ port metadata layout. The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral` and `s7wavelet`.
 
-If the shared C++ plugin boundary remains, check the ABI version before passing a registry to plugin code. The [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) records the current manifest parser gap. Qualify the current SDK installation, plugin discovery and the FFT/backend policy (D5).
+The loader checks the query's ABI version before reading the optional manifest or passing a registry to plugin code. This closes the version-check gap recorded in the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
 
 ## Minimal plugin
 
@@ -124,7 +123,7 @@ File names: `libs7*.so*` (Linux), `libs7*.dylib` (macOS), `libs7*.dll` or `s7*.d
 
 Studio additionally tries the build-tree `s7noise` library next to its executable (`../s7noise/`), so a fresh build shows the noise elements without installation. `s7runtime` does not; use `--plugin-dir build/s7noise`.
 
-Loading steps: `dlopen(RTLD_LAZY | RTLD_LOCAL)` (on Windows `LoadLibraryExW`, which also searches the plugin's directory for the DLLs it needs; `s7/platform.hpp`) → read manifest or query info → check `api_version` → call `s7_register_elements` → keep the library loaded until process exit (registered factories point into plugin code). A plugin that fails any step is reported on stderr and skipped; the process continues.
+The loader opens the library with `dlopen(RTLD_LAZY | RTLD_LOCAL)` or `LoadLibraryExW` on Windows. It checks the query's ABI version, reads the optional manifest, then calls `s7_register_elements`. Registered factories keep the library loaded until they are removed. The loader reports and skips failed plugins.
 
 ## Plugins a schema requires
 

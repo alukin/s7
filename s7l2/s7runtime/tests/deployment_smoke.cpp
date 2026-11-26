@@ -1221,8 +1221,24 @@ void test_grid_pacing()
     std::filesystem::remove_all(state_dir);
 }
 
-int main()
+void test_array_schema_declaration()
+{
+    const auto schema = boost::json::parse(R"({
+        "name":"array_metadata", "dt":0.01, "elements":[], "connections":[],
+        "exposed_outputs":[{"name":"field","type":"F64","element":"future","shape":[4,5]}]
+    })");
+    const auto definition = s7::JsonSchemaLoader::load_from_json(schema);
+    const auto& port = definition.exposed_outputs.at(0);
+    expect(port.array && port.array->rank() == 2 && port.array->element_count() == 20,
+           "headless schema preserves the declared array shape");
+}
+
+int main(int argc, char** argv)
 try {
+    if (argc == 2 && std::string_view(argv[1]) == "--array-schema") {
+        test_array_schema_declaration();
+        return 0;
+    }
     s7::register_builtin_elements(s7::ElementRegistry::instance());
     test_canonical_json();
     test_authorization();
