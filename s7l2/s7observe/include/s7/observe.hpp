@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -72,6 +73,8 @@ struct ObservationSnapshot {
     std::vector<ObservationSample> samples;
 };
 
+class CompiledProbes;
+
 // Reads a runtime's outputs without changing it.
 //
 // Threading contract: observation runs between steps on the thread that steps
@@ -85,12 +88,55 @@ public:
 
     [[nodiscard]] ObservationSample sample_output(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] ObservationSnapshot snapshot(const std::vector<ProbePoint>& probes) const;
+    // Resolves probes once, for reading on every step without lookups or
+    // allocation. Unknown outputs throw std::out_of_range here, not later.
+    [[nodiscard]] CompiledProbes compile(const std::vector<ProbePoint>& probes) const;
 
 private:
     void require_stepping_thread() const;
     [[nodiscard]] ObservationSample read(const std::string& element_id, std::size_t port) const;
 
     const NodeRuntime* runtime_;
+};
+
+// Probes resolved to their output storage (ObservationService::compile).
+// Reading copies values directly from that storage: no id lookups, strings or
+// allocation per step. The storage addresses stay valid for the runtime's
+// lifetime, so a CompiledProbes must not outlive the runtime it was compiled
+// from. The same threading contract applies: read between steps, on the
+// stepping thread.
+class CompiledProbes {
+public:
+    struct Point {
+        const void* value{};
+        SignalType type{SignalType::F64};
+        // Explicit, lossy conversion for display; null for complex types.
+        double (*display)(const void*){};
+    };
+
+    [[nodiscard]] std::size_t size() const { return points_.size(); }
+    [[nodiscard]] const Point& point(std::size_t index) const { return points_.at(index); }
+    // True when every probe has a real (non-complex) type.
+    [[nodiscard]] bool displayable() const { return displayable_; }
+
+    // Step and model time of the values read now (see ObservationSample).
+    [[nodiscard]] std::size_t step() const { return runtime_->step_count(); }
+    [[nodiscard]] std::optional<double> model_time_seconds() const { return runtime_->model_time_seconds(); }
+
+    // Writes probe i's display value to out[i], for every probe. Requires
+    // displayable() and out.size() == size().
+    void read_display(std::span<double> out) const;
+    // Copies probe `index`'s native storage (storage_bytes of its type).
+    void read(std::size_t index, void* destination) const;
+
+private:
+    friend class ObservationService;
+    CompiledProbes(const NodeRuntime& runtime, std::vector<Point> points);
+    void require_stepping_thread() const;
+
+    const NodeRuntime* runtime_;
+    std::vector<Point> points_;
+    bool displayable_{true};
 };
 
 } // namespace s7

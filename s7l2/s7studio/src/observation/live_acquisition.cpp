@@ -71,10 +71,22 @@ LiveAcquisition::LiveAcquisition(std::uint64_t id, double dt, QVector<LiveChanne
 }
 void LiveAcquisition::append(std::int64_t step, double time, std::span<const double> values)
 {
-    if (values.size() != static_cast<std::size_t>(channels_.size()) || !std::isfinite(time))
+    append(std::span<const std::int64_t>(&step, 1), std::span<const double>(&time, 1), values);
+}
+void LiveAcquisition::append(std::span<const std::int64_t> steps, std::span<const double> times, std::span<const double> values)
+{
+    // A block of frames under one lock; values[frame * channels + channel].
+    const auto width = static_cast<std::size_t>(channels_.size());
+    if (times.size() != steps.size() || values.size() != steps.size() * width)
         throw std::invalid_argument("Invalid live acquisition frame.");
     std::lock_guard lock(mutex_);
     if (finished_) throw std::logic_error("Live acquisition is finished.");
+    for (std::size_t frame = 0; frame < steps.size(); ++frame)
+        appendLocked(steps[frame], times[frame], values.subspan(frame * width, width));
+}
+void LiveAcquisition::appendLocked(std::int64_t step, double time, std::span<const double> values)
+{
+    if (!std::isfinite(time)) throw std::invalid_argument("Invalid live acquisition frame.");
     bool gap = false;
     if (received_) {
         const auto previous = static_cast<std::size_t>((received_-1) % storagePositions);

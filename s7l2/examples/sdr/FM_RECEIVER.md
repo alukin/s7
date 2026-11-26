@@ -41,9 +41,10 @@ recovers the 38 kHz difference channel from the 19 kHz pilot, blends to mono
 when the pilot fades, and applies 50 µs de-emphasis. Matching anti-alias
 resamplers feed the left and right channels to a 48 kHz audio sink.
 
-Both LAN radios report 671,999 samples/s when asked for 672 kS/s. The
-diagram explicitly allows a 2 ppm readback difference. The graph and audio
-device use nominal rates. The 32,768-frame playback queue absorbs short-term
+Both LAN radios report 671,999 samples/s when asked for 672 kS/s. S7 accepts
+the realized rate and reports it
+([ADR-028](../../../doc/S7_Architectural_Decisions.md#adr-028)). The graph and
+audio device use nominal rates. The 32,768-frame playback queue absorbs short-term
 jitter. If it empties, the sink plays silence while the queue refills, then
 resumes playback. A device disconnection or loss of SDR stream continuity
 still ends the run with an error.

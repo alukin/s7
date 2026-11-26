@@ -948,6 +948,20 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
                 }
                 return network;
             },
+            .execution_status = [this] {
+                // ADR-029: a retry after a fault is inexact when elements with
+                // private state had already stepped.
+                boost::json::object execution{{"inexact_retry_faults", 0}, {"last_inexact_elements", boost::json::array{}}};
+                std::lock_guard<std::mutex> lock(graph_mutex_);
+                if (graph_) {
+                    const auto& retry = graph_->retry_exactness();
+                    execution["inexact_retry_faults"] = retry.inexact_faults;
+                    boost::json::array elements;
+                    for (const auto& id : retry.last_elements) elements.emplace_back(id);
+                    execution["last_inexact_elements"] = std::move(elements);
+                }
+                return execution;
+            },
         });
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
@@ -1088,6 +1102,8 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
     GraphPacing current;
     bool have_generation = false;
     std::int64_t grid_index = 0;  // grid: index of the next step
+    std::uint64_t inexact_reported = 0; // ADR-029 faults already logged for inexact_graph
+    const NodeRuntime* inexact_graph = nullptr;
     auto next_rate_step = started; // rate: when the next step is due
     bool faulted = false;
     std::uint64_t recoveries_at_fault = 0;
@@ -1203,6 +1219,17 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
             recoveries_at_fault = stream_recoveries();
             out << "runtime.execution.stopped=error\n";
             err << "runtime.execution.error=" << ex.what() << '\n';
+            {
+                // ADR-029: say when resuming after recovery cannot be exact.
+                std::lock_guard<std::mutex> lock(graph_mutex_);
+                if (graph_.get() != inexact_graph) { inexact_graph = graph_.get(); inexact_reported = 0; } // a new deployment
+                if (graph_ && graph_->retry_exactness().inexact_faults > inexact_reported) {
+                    inexact_reported = graph_->retry_exactness().inexact_faults;
+                    std::string elements;
+                    for (const auto& id : graph_->retry_exactness().last_elements) elements += (elements.empty() ? "" : ",") + id;
+                    err << "runtime.execution.retry_inexact elements=" << elements << '\n';
+                }
+            }
             out.flush();
             continue;
         }

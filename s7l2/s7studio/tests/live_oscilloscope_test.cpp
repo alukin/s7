@@ -327,7 +327,6 @@ private slots:
         auto frame = live->snapshot(); QVERIFY(frame); QCOMPARE(frame->received, std::uint64_t(200000));
         QCOMPARE(frame->steps.size(), std::size_t(4096)); QVERIFY(frame->finished);
         QCOMPARE(frame->values.back(), std::nextafter(1., 2.));
-        QCOMPARE(runner.takeScopeSamples().samples.size(), std::size_t(0));
         runner.reset(); QCOMPARE(live->snapshot()->received, std::uint64_t(200000));
         LocalSchemaRunner mixed;
         QSignalSpy finished(&mixed, &LocalSchemaRunner::runCompleted);

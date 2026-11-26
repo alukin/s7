@@ -169,12 +169,19 @@ require driver-reported native `CS16` plus respectively full-scale 2048 or
 CI12 values are range-checked. Driver channels use canonical zero-based integer
 IDs; they do not establish that RF connectors exist. Supported stopped options
 are `frequency_hz`, `bandwidth_hz`, `gain_db` and `antenna`, applied to all selected
-channels with readback checks. On receivers with selectable gain control, set
-`gain_mode` to `auto` or `manual`. Automatic gain and `gain_db` are mutually
-exclusive. Sample rate readback is exact by default. Receivers can opt into a
-readback tolerance with `rate_tolerance_ppm`; the graph keeps its nominal rate
-and the descriptor reports the driver readback per channel. A transfer respects
-the driver's reported stream MTU when available.
+channels. On receivers with selectable gain control, set `gain_mode` to `auto`
+or `manual`. Automatic gain and `gain_db` are mutually exclusive.
+Continuous settings (sample rate, frequency, bandwidth, gain) are realized at
+the closest value the device supports and accepted
+([ADR-028](../../doc/S7_Architectural_Decisions.md#adr-028)). For example, an
+AD9361 tunes 100.1 MHz to 100,099,998 Hz and 2.4 MS/s to 2,399,998 S/s. The
+descriptor reports `requested_<setting>` and the realized `<setting>` per
+channel, plus `sample_rate_deviation_ppm`; `s7hw` prints them and Studio logs
+the realized frequency and rate. The graph keeps its nominal rate as model
+time. Discrete settings (`antenna`, `gain_mode`) must read back exactly, or
+preparation fails. Receivers can still opt into a strict sample-rate check with
+`rate_tolerance_ppm`. A transfer respects the driver's reported stream MTU when
+available.
 
 `Descriptor` records the accepted request, randomized session ID, segment and
 configuration/timing revisions, startup prefill, amplitude interpretation and

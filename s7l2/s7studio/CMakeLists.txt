@@ -98,7 +98,8 @@ target_link_libraries(s7studio_run_provenance PUBLIC s7studio_observation s7core
 s7_enable_project_warnings(s7studio_run_provenance)
 target_link_libraries(s7studio_diagram PUBLIC s7studio_run_provenance)
 
-add_library(s7studio_local_runner STATIC src/local_schema_runner.cpp src/local_schema_runner.hpp)
+add_library(s7studio_local_runner STATIC src/local_schema_runner.cpp src/local_schema_runner.hpp
+    src/observation/probe_block_ring.hpp)
 target_include_directories(s7studio_local_runner PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/s7hardware/include ${PROJECT_SOURCE_DIR}/s7transport/include)
 target_link_libraries(s7studio_local_runner PUBLIC s7studio_run_provenance s7observe Threads::Threads)
@@ -158,7 +159,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/quick_support.hpp
     src/viewers/trajectory_geometry.cpp
     src/viewers/trajectory_geometry.hpp
-    src/scope_sample_mailbox.hpp
+    src/scope_sample.hpp
     src/live_oscilloscope_window.cpp src/live_oscilloscope_window.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
@@ -777,6 +778,12 @@ s7_enable_project_warnings(s7studio_observer_panel_benchmark)
 add_executable(s7studio_live_trigger_benchmark EXCLUDE_FROM_ALL tests/live_trigger_benchmark.cpp)
 target_link_libraries(s7studio_live_trigger_benchmark PRIVATE s7studio_observation Threads::Threads)
 s7_enable_project_warnings(s7studio_live_trigger_benchmark)
+
+# Opt-in probe/viewer load on local runs (performance plan WP0);
+# tools/run_observation_benchmark.py drives the measurement matrix.
+add_executable(s7studio_observation_load_benchmark EXCLUDE_FROM_ALL tests/observation_load_benchmark.cpp)
+target_link_libraries(s7studio_observation_load_benchmark PRIVATE s7studio_local_runner Threads::Threads)
+s7_enable_project_warnings(s7studio_observation_load_benchmark)
 
 # Under Wine (the Windows cross build), Qt Quick, Qt Graphs and Qt Quick 3D
 # render through Direct3D 11 in wined3d whatever QT_QUICK_BACKEND says: on a

@@ -26,7 +26,6 @@
 #include "tool_windows.hpp"
 #include "ui_icons.hpp"
 #include "scene_serializer.hpp"
-#include "scope_sample_mailbox.hpp"
 #include "studio_network_service.hpp"
 #include "viewers/quick_support.hpp"
 #include "viewers/viewer_manager.hpp"
@@ -372,12 +371,12 @@ void MainWindow::connectRunnerSignals()
         if (!shuttingDown_ && generation == runGeneration_ && state == RunState::Prepared) {
             for (const auto& descriptor : preparedObservers_) if (descriptor.type == "LiveOscilloscope") applyTriggerPreset(descriptor.id, true);
             viewers_->presentLive(runner_->liveSources());
-            viewers_->present(runner_->recordedSource(), 0, [this](const QString& id) { return observerViewerType(id); });
+            viewers_->present(runner_->recordedSource(), [this](const QString& id) { return observerViewerType(id); });
             if (const auto configuration = runner_->activeConfiguration()) observersPanel_->bindRun(configuration->id, preparedObservers_);
         }
     });
-    connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, [this, generation] {
-        if (!shuttingDown_ && generation == runGeneration_) onScopeSamplesAvailable();
+    connect(runner_, &LocalSchemaRunner::recordingAdvanced, this, [this, generation] {
+        if (!shuttingDown_ && generation == runGeneration_) onRecordingAdvanced();
     });
 }
 
@@ -1043,7 +1042,7 @@ void MainWindow::onStatusChanged(const QString& status)
 void MainWindow::onRunCompleted(bool success, const QString& error)
 {
     if (shuttingDown_) return;
-    onScopeSamplesAvailable(); // final flush/error status, even with no pending preview notification
+    onRecordingAdvanced(); // final samples and status, even with no pending notification
     if (const auto configuration = runner_->activeConfiguration()) observersPanel_->setRunState(runner_->state(), runner_->completedTicks(), configuration->dt, error);
     if (success) {
         appendLog("[studio] run completed");
@@ -1266,25 +1265,15 @@ void MainWindow::showElementProperties(const QString& elementId)
     }
 }
 
-void MainWindow::onScopeSamplesAvailable()
+void MainWindow::onRecordingAdvanced()
 {
     if (shuttingDown_ || !runner_) return;
-    const auto batch = runner_->takeScopeSamples();
-    const auto configuration = runner_->activeConfiguration();
-    if (!configuration || batch.runId != configuration->id) return;
+    runner_->acknowledgeRecordingAdvanced();
+    if (!runner_->activeConfiguration()) return;
     // Capture already happened on the worker; this only attaches read-only data.
     viewers_->presentLive(runner_->liveSources());
-    viewers_->present(runner_->recordedSource(), batch.dropped,
+    viewers_->present(runner_->recordedSource(),
         [this](const QString& observerId) { return observerViewerType(observerId); });
-    if (batch.dropped > 0) {
-        // The runtime produced samples faster than the UI took them; the oldest were dropped.
-        const auto nowMs = QDateTime::currentMSecsSinceEpoch();
-        if (nowMs - lastScopeDropLogMs_ >= 1000) {
-            lastScopeDropLogMs_ = nowMs;
-            appendLog(QStringLiteral("[studio] preview skipped %1 updates; authoritative recording is unaffected")
-                          .arg(viewers_->droppedSampleCount()));
-        }
-    }
 }
 
 auto MainWindow::observerViewerType(const QString& observerId) const -> QString
@@ -2083,6 +2072,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     clearSamplesCheck->setChecked(!document_.clearScopesBeforeRun());
     clearSamplesCheck->setToolTip(QStringLiteral("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
+    auto* recordingMayDropCheck = new QCheckBox(QStringLiteral("Never slow the run for recording (may drop samples)"), &dialog);
+    recordingMayDropCheck->setObjectName(QStringLiteral("run.recordingMayDrop"));
+    recordingMayDropCheck->setChecked(document_.recordingMayDrop());
+    recordingMayDropCheck->setToolTip(QStringLiteral("By default the run waits when the full-run recording cannot keep up, and the log reports how long. "
+        "With this option the run never waits; samples it cannot record are dropped and the recording is marked incomplete. "
+        "Live views never slow a run."));
+
     form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
     form->addRow(QStringLiteral("Model step rate"), frequencySpin);
     form->addRow(QStringLiteral("Model step dt"), dtLabel);
@@ -2092,6 +2088,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     frequencySpin->setToolTip(QStringLiteral("Sets the local simulation rate and effective dt of rate-dependent elements. This is not a real-time pacing limit."));
     layout->addLayout(form);
     layout->addWidget(clearSamplesCheck);
+    layout->addWidget(recordingMayDropCheck);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     auto* durationNotice = new QLabel(&dialog);
@@ -2129,6 +2126,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     if (runtimeSecondsSpin->value() != initialDisplayedDuration)
         document_.setRuntimeSeconds(runtimeSecondsSpin->value());
     document_.setClearScopesBeforeRun(!clearSamplesCheck->isChecked());
+    document_.setRecordingMayDrop(recordingMayDropCheck->isChecked());
     if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == document_.clearScopesBeforeRun()) {
         const QSignalBlocker blocker(overlayScopeTracesAction_);
         overlayScopeTracesAction_->setChecked(!document_.clearScopesBeforeRun());
@@ -2170,7 +2168,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
         return;
     }
     const auto previousRun = runner_->activeConfiguration();
-    onScopeSamplesAvailable(); // consume final samples before retiring their generation
+    onRecordingAdvanced(); // present final samples before retiring their generation
     resetLocalRun();
     runPanel_->clearOutput();
     runPanel_->append(QStringLiteral("Running at %1 Hz, %2.")
@@ -2196,6 +2194,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
     toolWindows_->show(observersDock_);
     if (previousFocus) previousFocus->setFocus(Qt::OtherFocusReason);
     observersPanel_->setRunState(RunState::Preparing, 0, dtSeconds);
+    runner_->setRecordingOverflow(document_.recordingMayDrop() ? RecordingOverflow::Drop : RecordingOverflow::Lossless);
     controller_->run(document_.schema(), dtSeconds, ui::RunExecutionConfig{document_.runtimeSeconds()}, probes);
     viewers_->presentLive(runner_->liveSources());
     refreshActions();

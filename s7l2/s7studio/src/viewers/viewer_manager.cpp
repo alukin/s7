@@ -3,7 +3,7 @@
 
 #include "viewers/viewer_manager.hpp"
 
-#include "scope_sample_mailbox.hpp"
+#include "scope_sample.hpp"
 #include "viewers/viewer_registry.hpp"
 
 #include <QTimer>
@@ -80,7 +80,6 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     emit viewerCreated(typeId, spec.instanceId, viewer);
     if (auto* live = dynamic_cast<LiveObservationViewer*>(viewer)) live->attachLiveSource(liveSources_.value(spec.instanceId));
     else viewer->attachSource(source(), bindingsFor(instances_[key], source()));
-    viewer->setPreviewDroppedCount(externalSource_ ? dropped_ : 0);
     bindComparisons(instances_[key]);
     viewer->refreshSource();
     ++generation_;
@@ -131,7 +130,6 @@ void ViewerManager::deliver(const ScopeSampleBatch& batch,
 }
 
 void ViewerManager::present(std::shared_ptr<const observation::ObservationSource> data,
-                            std::uint64_t previewDropped,
                             const std::function<QString(const QString&)>& observerType)
 {
     if (!data) return;
@@ -144,10 +142,9 @@ void ViewerManager::present(std::shared_ptr<const observation::ObservationSource
         const auto id = observerIdOf(channel.name);
         if (!recordedTypes_.contains(id)) recordedTypes_.insert(id, observerType(id));
     }
-    dropped_ += previewDropped;
     bindViews(false);
-    for (auto* viewer : viewers()) viewer->setPreviewDroppedCount(dropped_);
     refreshViews();
+    dropped_ = source()->status().captureDropped;
 }
 
 QVector<InputBinding> ViewerManager::bindingsFor(const Instance& instance,

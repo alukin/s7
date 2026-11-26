@@ -5,7 +5,7 @@
 // step alignment, Qt Graphs plot state and the Qt Quick 3D trajectory.
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
-#include "scope_sample_mailbox.hpp"
+#include "scope_sample.hpp"
 #include "scope_view_window.hpp"
 #include "viewers/line_plot_view.hpp"
 #include "observation/step_aligner.hpp"
@@ -32,7 +32,9 @@
 #include <QQuickWidget>
 #include <QtGraphs/QLineSeries>
 
+#include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 #include <iostream>
 #include <stdexcept>
@@ -309,17 +311,16 @@ void testWindowIndependentResults()
     manager.beginRun("old", false);
     require(manager.source() != source && source->status().samples == 150000, "New run mutated previous source");
     require(phase->points().isEmpty(), "New source retained old phase alignment/history");
-    manager.present(source, 100, types);
+    manager.present(source, types);
     for (int turn = 0; turn < 40; ++turn) manager.refreshViews();
     require(source->status().samples == 150000 && source->status().captureDropped == 0,
         "Presentation duplicated authoritative samples or changed completeness");
     require(phase->points().size() == 25000, "Authoritative source did not drive phase replay");
-    auto* previewWarning = scope->findChild<QToolButton*>("scope.statusWarning");
-    require(previewWarning && previewWarning->isVisible() && previewWarning->toolTip().contains("preview skipped 100"),
-        "Preview loss is not distinguished from capture loss");
+    auto* warning = scope->findChild<QToolButton*>("scope.statusWarning");
+    require(warning && !warning->isVisible(), "Complete presented recording shown as incomplete");
     QBuffer full; full.open(QIODevice::WriteOnly);
-    require(scope->writeRunResults(full, &error), "Preview loss prevented complete source-backed save");
-    require(!source->status().incomplete(), "Preview loss marked authoritative capture incomplete");
+    require(scope->writeRunResults(full, &error), "Presented recording prevented complete source-backed save");
+    require(!source->status().incomplete(), "Presentation marked authoritative capture incomplete");
 }
 
 void testRunDetails()
@@ -471,6 +472,18 @@ void testTrajectory()
     geometry.setTrajectory(points, bounds, 100);
     require(geometry.vertexCount() <= 102 && geometry.vertexAt(geometry.vertexCount() - 1) == viewers::toScene(points.back(), bounds)
         && geometry.vertexAt(0) == viewers::toScene(points.front(), bounds), "Thinning lost the trajectory ends");
+    // Thinning keeps extremes (plan V1): a one-sample spike on any axis
+    // survives a 100x reduction, as in the 2D Phase Portrait.
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        QList<TrajectoryPoint> spiky;
+        for (int i = 0; i < 100001; ++i) spiky.push_back({std::cos(i * 1e-4), std::sin(i * 1e-4), i * 1e-5});
+        spiky[54321][axis] += 10.0;
+        const auto spikeBounds = viewers::TrajectoryBounds::of(spiky);
+        const auto reduced = viewers::prepareTrajectory(spiky, spikeBounds, 1000, false, {});
+        require(reduced.vertices.size() <= 1000, "Thinned trajectory exceeds its vertex budget");
+        require(std::ranges::find(reduced.vertices, viewers::toScene(spiky[54321], spikeBounds)) != reduced.vertices.end(),
+            ("Thinning dropped a one-sample excursion on axis " + std::to_string(axis)).c_str());
+    }
 
     // The 3D scene loads; the window draws in its own instance.
     ui::PhaseTrajectory3DViewWindow first("a/x", "a/y", "a/z");

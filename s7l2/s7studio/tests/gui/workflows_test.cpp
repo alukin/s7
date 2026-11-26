@@ -4159,7 +4159,7 @@ private slots:
         QVERIFY(viewer); QTRY_VERIFY(viewer->widget()->isVisible());
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>();
         QVERIFY(runner);
-        QSignalSpy samples(runner, &s7studio::LocalSchemaRunner::scopeSamplesAvailable);
+        QSignalSpy samples(runner, &s7studio::LocalSchemaRunner::recordingAdvanced);
         QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
         QVERIFY(configure("action.run", -1));
         QTRY_VERIFY(runner->isRunning());

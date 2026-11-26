@@ -135,6 +135,11 @@ RunConfiguration configurationFromProvenance(const QJsonObject& p) {
     }
     auto schema = json::parse(model.toStdString());
     if (!schema.is_object()) throw std::invalid_argument("Recorded model is not an object.");
-    return {0, std::move(schema), dt, static_cast<long>(steps), std::move(probes)};
+    // Absent in provenance written before D1: those runs recorded losslessly.
+    const auto overflow = p.value("recording_overflow").toString(QStringLiteral("lossless"));
+    if (overflow != QStringLiteral("lossless") && overflow != QStringLiteral("drop"))
+        throw std::invalid_argument("Invalid recorded recording_overflow.");
+    return {0, std::move(schema), dt, static_cast<long>(steps), std::move(probes),
+            overflow == QStringLiteral("drop") ? RecordingOverflow::Drop : RecordingOverflow::Lossless};
 }
 } // namespace s7studio

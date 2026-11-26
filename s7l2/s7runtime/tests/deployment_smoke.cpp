@@ -542,7 +542,11 @@ void test_stream_status_and_recovery()
     s7::ControlPlane control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                         .network = network,
-                                                        .on_stream_recovered = [&recoveries] { ++recoveries; }}};
+                                                        .on_stream_recovered = [&recoveries] { ++recoveries; },
+                                                        .execution_status = [] {
+                                                            return json::object{{"inexact_retry_faults", 1},
+                                                                {"last_inexact_elements", json::array{"oscillator"}}};
+                                                        }}};
     s7::stream::StreamConfig config;
     config.stream_id = s7::wire::parse_stream_id("5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a");
     config.max_wait = std::chrono::milliseconds(20);
@@ -553,6 +557,10 @@ void test_stream_status_and_recovery()
     const json::object status_request{{"type", "GET_STREAM_STATUS"}, {"request_id", "st-1"}, {"protocol_version", 1}};
     auto status = Client(control, ControlPeer{}).send(status_request);
     expect(status.at("type").as_string() == "STREAM_STATUS", "stream status is read-only");
+    // ADR-029: the node reports whether resuming after recovery can be exact.
+    expect(status.at("execution").as_object().at("inexact_retry_faults").to_number<int>() == 1 &&
+               status.at("execution").as_object().at("last_inexact_elements").as_array().at(0).as_string() == "oscillator",
+           "execution status reported: " + json::serialize(status));
     const auto& stream = status.at("streams").as_array().at(0).as_object();
     expect(stream.at("stream_id").as_string() == "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a" &&
                stream.at("role").as_string() == "consumer" && stream.at("data_type").as_string() == "F64" &&

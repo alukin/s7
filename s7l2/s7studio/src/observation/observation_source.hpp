@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <deque>
 #include <vector>
 
@@ -69,6 +70,9 @@ public:
     ChannelId channel(const QString& name, const QString& sourceType = QStringLiteral("f64"));
     [[nodiscard]] QVector<Channel> channels() const;
     bool append(const Sample& sample);
+    // Appends a batch under one lock (a block of frames from the runner's
+    // distributor); file-backed storage writes it in one call.
+    bool append(std::span<const Sample> samples);
     void addCaptureLoss(std::uint64_t count);
     // Flush temporary storage and freeze capture; false means incomplete.
     bool finish(bool stopped = false, const QString& runError = {});

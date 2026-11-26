@@ -3,7 +3,6 @@
 
 #include "local_runtime_v2.hpp"
 #include "local_schema_runner.hpp"
-#include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
 #include "help_dialogs.hpp"
 #include "scope_view_window.hpp"
@@ -227,28 +226,6 @@ int runSmoke()
         runtime.step();
         runtime.step();
 
-        {
-            // The Scope mailbox stays bounded, drops oldest first, keeps order,
-            // and asks for one UI notification at a time.
-            s7studio::ScopeSampleMailbox mailbox{4};
-            bool notified = false;
-            int notifications = 0;
-            for (long step = 0; step < 10; ++step) {
-                notified = mailbox.push(s7studio::ScopeSample{"probe", step, 0.001 * step, static_cast<double>(step)});
-                notifications += notified ? 1 : 0;
-            }
-            assert(notifications == 1);
-            auto batch = mailbox.take();
-            assert(batch.samples.size() == 4 && batch.dropped == 6);
-            for (std::size_t index = 0; index < batch.samples.size(); ++index) {
-                assert(batch.samples[index].step == static_cast<long>(6 + index));
-            }
-            [[maybe_unused]] const bool pushed = mailbox.push(s7studio::ScopeSample{"probe", 10, 0.01, 10.0});
-            assert(pushed);
-            batch = mailbox.take();
-            assert(batch.samples.size() == 1 && batch.dropped == 0);
-        }
-
         std::cout << "s7studio smoke\n";
         std::cout << "schema=" << schema.name() << '\n';
         assert(std::abs(runtime.real_output_of("nested") - 30.0) < 1e-12);
@@ -286,8 +263,8 @@ int runSmoke()
         s7::RuntimeNetContext::set_endpoint(nullptr);
 
         {
-            // A run that produces samples while the UI takes none keeps at most
-            // the mailbox capacity; the rest is counted as dropped.
+            // A run whose UI never reacts to its notifications still records
+            // every sample.
             const auto scopeSchema = boost::json::parse(R"json({
                 "name": "scope_backlog",
                 "dt": 0.001,
@@ -304,11 +281,13 @@ int runSmoke()
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             assert(!runner.isRunning());
-            const auto batch = runner.takeScopeSamples();
-            assert(batch.samples.size() == 200'000);
-            assert(batch.dropped == static_cast<std::uint64_t>(ticks) - 200'000);
-            assert(batch.samples.back().step == ticks);
-            assert(std::abs(batch.samples.back().timeSeconds - static_cast<double>(ticks) * 0.001) < 1e-9);
+            const auto source = runner.recordedSource();
+            assert(source && source->status().finished && !source->status().incomplete());
+            assert(source->status().samples == static_cast<std::uint64_t>(ticks));
+            const auto last = source->read(static_cast<std::uint64_t>(ticks) - 1, 1);
+            assert(last.error.isEmpty() && last.samples.size() == 1);
+            assert(last.samples.back().step == ticks);
+            assert(std::abs(last.samples.back().timeSeconds - static_cast<double>(ticks) * 0.001) < 1e-9);
             runner.reset();
         }
         return 0;
@@ -823,7 +802,7 @@ int runPhasePortraitCheck(int argc, char** argv)
         }
         require(completed && success, "Phase Portrait oscillator run failed or timed out");
         app.processEvents();
-        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        QMetaObject::invokeMethod(&window, "onRecordingAdvanced", Qt::DirectConnection);
         open();
         s7studio::ui::PhasePortraitViewWindow* phase = nullptr;
         for (auto* widget : QApplication::topLevelWidgets()) {
@@ -994,7 +973,7 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
         }
         require(completed && success, "3D Phase Trajectory oscillator run failed or timed out");
         app.processEvents();
-        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        QMetaObject::invokeMethod(&window, "onRecordingAdvanced", Qt::DirectConnection);
         open();
         s7studio::ui::PhaseTrajectory3DViewWindow* phase = nullptr;
         for (auto* widget : QApplication::topLevelWidgets()) {
@@ -1174,7 +1153,7 @@ int runScopeRunCheck(int argc, char** argv)
         }
         if (runner->isRunning()) throw std::runtime_error("Oscillator run timed out");
         app.processEvents();
-        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        QMetaObject::invokeMethod(&window, "onRecordingAdvanced", Qt::DirectConnection);
         const auto open = [&] {
             QMetaObject::invokeMethod(&window, "onProbeOpenScopeRequested", Qt::DirectConnection,
                                       Q_ARG(QString, QStringLiteral("scope_1")));

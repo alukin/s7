@@ -93,8 +93,8 @@ int main(int argc,char** argv) {
         std::cout<<"prepared backend="<<d.actual.backend<<" device="<<d.actual.device<<" rate="<<d.actual.rate.to_string()
             <<" session="<<d.session_id<<" format="<<s7::signal_type_info(d.actual.type).name<<'\n';
         for (const auto& [key,value]:d.backend_details) {
-            if (key.ends_with(".sample_rate_hz") || key.ends_with(".frequency_hz"))
-                std::cout<<key<<'='<<value<<'\n';
+            // Requested and realized settings (ADR-028); native-format evidence too.
+            if (key.starts_with("channel.")) std::cout<<key<<'='<<value<<'\n';
         }
         std::cout<<std::flush;
         std::signal(SIGINT,[](int){interrupted.store(true,std::memory_order_relaxed);});

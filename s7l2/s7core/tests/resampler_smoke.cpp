@@ -17,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <numbers>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -272,8 +273,36 @@ void integer_rate_positions() {
 }
 } // namespace
 
+// The precomputed per-domain counter equals the exact general formula for
+// integer, fractional and co-prime rates, and keeps the overflow error.
+void sample_counter_matches_general() {
+    std::mt19937_64 random(20261125);
+    const auto check = [](const s7::Rate& rate, const s7::Rate& model, std::uint64_t step) {
+        const s7::resampling::SampleCounter counter(rate, model);
+        std::uint64_t expected = 0, actual = 0;
+        bool expectedThrows = false, actualThrows = false;
+        try { expected = s7::resampling::samples_through(step, rate, model); } catch (const std::overflow_error&) { expectedThrows = true; }
+        try { actual = counter.samples_through(step); } catch (const std::overflow_error&) { actualThrows = true; }
+        require(expectedThrows == actualThrows && (expectedThrows || expected == actual),
+                "SampleCounter differs from samples_through at " + rate.to_string() + " / " + model.to_string() +
+                ", step " + std::to_string(step));
+    };
+    const std::vector<s7::Rate> rates{s7::Rate::from_hz(48000), s7::Rate::from_hz(672000), s7::Rate::from_hz(44100),
+        s7::Rate::reduced(5, 2), s7::Rate::reduced(1000, 3), s7::Rate::reduced(18446744073709551557ULL, 3),
+        s7::Rate::reduced(18446744073709551557ULL, 18446744073709551533ULL), s7::Rate::from_hz(1)};
+    for (const auto& rate : rates) {
+        for (const auto& model : rates) {
+            for (const std::uint64_t step : {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{2}, std::uint64_t{999},
+                     std::numeric_limits<std::uint64_t>::max() / 3, std::numeric_limits<std::uint64_t>::max() - 1})
+                check(rate, model, step);
+            for (int i = 0; i < 2000; ++i) check(rate, model, random() >> (random() % 64));
+        }
+    }
+}
+
 int main() try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
+    sample_counter_matches_general();
     interpolation_orders();
     anti_aliasing();
     batched_history();

@@ -48,7 +48,7 @@ public:
     // Retains delivered samples independently of windows, resolves diagram
     // bindings, then refreshes existing presentations with bounded pages.
     void deliver(const ScopeSampleBatch& batch, const std::function<QString(const QString&)>& observerType);
-    void present(std::shared_ptr<const observation::ObservationSource> source, std::uint64_t previewDropped,
+    void present(std::shared_ptr<const observation::ObservationSource> source,
                  const std::function<QString(const QString&)>& observerType);
     void presentLive(observation::LiveSources sources);
     bool setObserverTrigger(const QString& id, const observation::TriggerSettings& settings, QString* error = nullptr, bool updateViewer = true);

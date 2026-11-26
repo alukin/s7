@@ -53,6 +53,17 @@ enum class RunState {
     return "error";
 }
 
+// What a full-run recording does when it cannot keep up with the stepping
+// thread (performance plan decision D1). Live views never make a run wait.
+enum class RecordingOverflow {
+    Lossless, // the run waits for the recording; the wait is reported
+    Drop,     // the run never waits; lost samples mark the recording incomplete
+};
+[[nodiscard]] inline const char* recordingOverflowName(RecordingOverflow overflow)
+{
+    return overflow == RecordingOverflow::Drop ? "drop" : "lossless";
+}
+
 // A run owns this copy independently of subsequent editor/configuration edits.
 // The owner/UI thread may retain a const snapshot after completion or reset.
 struct RunConfiguration {
@@ -61,6 +72,7 @@ struct RunConfiguration {
     double dt;
     long ticks;
     std::vector<RunProbe> probes;
+    RecordingOverflow recordingOverflow = RecordingOverflow::Lossless;
 };
 
 class ISchemaRunner
@@ -73,6 +85,8 @@ public:
     virtual void resume() = 0;
     virtual void stop() = 0;
     virtual void reset() = 0;
+    // Applies to the next run (D1); runners without a recording ignore it.
+    virtual void setRecordingOverflow(RecordingOverflow) {}
 
     [[nodiscard]] virtual RunState state() const = 0;
     [[nodiscard]] virtual bool isRunning() const = 0;

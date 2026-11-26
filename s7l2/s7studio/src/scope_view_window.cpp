@@ -774,7 +774,7 @@ void ScopeViewWindow::updateStatus()
 {
     const auto cacheStatus = recording_.statusText();
     const bool incomplete = recording_.exportMayBeIncomplete() ||
-        (source() && source()->status().incomplete()) || previewDroppedCount() > 0;
+        (source() && source()->status().incomplete());
     warningButton_->setVisible(incomplete);
     warningButton_->setToolTip(sourceStatusText() + (cacheStatus.isEmpty() ? QString()
         : QStringLiteral("\nDisplay cache: ") + cacheStatus));

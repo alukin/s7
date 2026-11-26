@@ -24,7 +24,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/tool_windows.*` | JetBrains-style tool windows: docks with stripe buttons, one window per area, Alt+number toggles, Hide All Tool Windows |
 | `s7studio/src/tool_panels.*` | Tool window contents: Problems, Log, Run, Deploy |
 | `s7studio/src/ui_icons.*` | Tabler icons (`resources/icons/tabler`, MIT) drawn in the palette's text color or a given color |
-| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the functional schema through the registry, runs it on a worker thread, and hands observer samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
+| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp` | Embedded runtime: builds the functional schema through the registry, runs it on a worker thread, records observer samples off the stepping thread, and notifies the UI (one coalesced notification) when the recording has new samples |
 
 The diagram sources build as the `s7studio_diagram` library, shared by `s7studio` and `s7studio_diagram_test`.
 
@@ -84,14 +84,14 @@ preserves the selected zoom.
 Open a diagram (for example `s7studio examples/2int_osc.s7diagram`), use **Run > Run Configuration** to set duration and discretization frequency, then run locally and double-click the Scope observer. Studio embeds `s7core` through `LocalSchemaRunner`; no separate `s7runtime` process, network deployment or certificate configuration is needed for this workflow.
 
 - **Model time:** frequency `f` selects `dt = 1/f` seconds. Studio updates rate-related element parameters and seeds the run's schema rate; validation still rejects incompatible rates/types. The worker steps as fast as it can, with pause/stop controls. Changing `f` changes numerical discretization and the number of steps for a fixed model duration, not a promised wall-clock execution rate. Samples carry the runtime step and model timestamp; causal-memory outputs are published on the next step, so reference comparisons must account for that publication convention.
-- **Observation:** values are read on the runtime worker through `ObservationService`, then delivered to the UI through a bounded mailbox. Scope observers and their links do not participate in functional compilation or execution. Opening, hiding or reopening a Scope does not restart or change the model.
+- **Observation:** values are read on the runtime worker through compiled probes and handed to a distributor thread, which writes the run's recording and live buffers. The UI is notified and its viewers read the recording; no per-sample copy goes to the UI. Scope observers and their links do not participate in functional compilation or execution. Opening, hiding or reopening a Scope does not restart or change the model.
 - **Scope history:** recording starts with the first sample delivered for a Scope, even before its window is shown. Closing hides the view and retains its recording; opening it again does not clear or replace the data. **Clear current** or starting a new run discards the current history; closing the diagram/application releases temporary buffers. **Save Run…** persists the current samples to `.s7scope`; **Open Run…** overlays saved results for comparison. Imported comparisons survive new runs and can be removed separately. See [saving and comparing results](SCOPE_RESULTS.md) for snapshot semantics, completeness metadata and the format.
 - **Viewers:** Scope, Phase Portrait and 3D Phase Trajectory windows are drawn with Qt Graphs and Qt Quick 3D; their registry, lifecycle and tests are described in [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md). A diagram may hold any number of observers, including several of one type, each with its own viewer.
 - **Phase Portrait:** the diagram observer plots its X/Y input states paired by runtime step. It records delivered pairs before its window is opened; closing hides the viewer and reopening preserves the trace. Clear/reset removes old pairs. The bounded trajectory retains at most two million pairs and draws at most 200,000 (a uniform subsample beyond that; export keeps every pair). See the [two-integrator example and verification](../examples/2int_osc_phase_portrait.md).
 - **3D Phase Trajectory:** draws same-step X/Y/Z triples as a continuous 3D curve (Qt Quick 3D): drag rotates, the wheel zooms, and the XY/XZ/YZ buttons show the orthogonal projections. Diagram observers collect while hidden and preserve history on reopening, with a two-million-triple limit. See the [three-integrator helix example](../examples/3int_helix_phase_trajectory.md).
 - **Preview versus recording:** each channel has a bounded preview (20,000 retained points plus the latest endpoint when needed), uniformly thinned over the run as it grows. At the buffer threshold, a temporary disk file retains delivered samples for detailed history/CSV export. Fit full run shows the recorded time extent; zoom/pan can read the disk-backed region; Auto Y rescales values without changing the time axis. Preview thinning cannot guarantee detail for arbitrary high-frequency signals; characterize the supported signal/rate/window combinations before relying on an overview plot alone.
 - **CSV fidelity:** timestamps and values use 17 significant digits and a locale-independent decimal point, preserving finite double values on round trip. Scope/channel fields are CSV-escaped. The [nonlinear-pendulum benchmark](../examples/pendulum/README.md) verifies every captured/exported sample against headless execution over 100 seconds at 1/10 kHz, with two channels and no dropped samples on the tested Linux build.
-- **Completeness and failures:** the mailbox is bounded at 200,000 samples across probes. It drops the oldest when the UI falls behind and reports the loss; temporary disk buffering cannot restore those samples. Scope reports temporary-file/write failures too. **Export Full CSV** exports the recorded samples; its name does not establish completeness if capture loss or a storage warning occurred. Disk use grows with delivered sample count even though preview memory is bounded.
+- **Completeness and failures:** by default the recording is lossless: when it cannot keep up, the run is slowed and the log reports by how much. With **Never slow the run for recording** enabled, blocks are dropped instead; the loss is counted, shown as capture loss and marks the recording incomplete. A UI that falls behind loses nothing, because viewers read the recording. Scope reports temporary-file/write failures too. **Export Full CSV** exports the recorded samples; its name does not establish completeness if capture loss or a storage warning occurred. Disk use grows with delivered sample count even though preview memory is bounded.
 - **Numerical method limits:** a smooth plot alone is not evidence of accurate dynamics. The two-`EulerIntegrator` oscillator has known forward-Euler amplitude growth; a finer `dt` reduces finite-duration error but does not make that method exactly energy-conserving. `SymplecticIntegrator` is available for the documented position/velocity formulation; it is not a general accuracy guarantee for arbitrary nonlinear systems. See [known integrator limits](OPEN_PROBLEMS.md) and the [numerical validation plan](VISUAL_NUMERICAL_TESTS_PLAN.md).
 
 ## Model
@@ -201,7 +201,7 @@ Cancel and failed Save preserve the current document. Dirty state compares the
 persisted document, so undoing back to the saved contents clears it; nested
 schema edits participate through their parent instance. Local run duration and
 clear-trace settings persist in `studio_run`, outside the Functional Graph.
-Replacing a document stops and joins its embedded worker and clears its mailbox.
+Replacing a document stops and joins its embedded worker and releases its run.
 
 ## Local run lifecycle and editing during a run
 
@@ -222,9 +222,9 @@ never mutate the executing graph. A subsequent Run compiles the edited document.
 | Stopped / Completed | Manual stop / requested finite steps finished. Run is enabled; retained configuration identifies the results. |
 | Error | Preparation or worker failure; the Run panel contains the error and Run permits recovery. |
 
-Reset joins the retiring worker, clears its runtime/mailbox/configuration, and
-returns to Idle. Each run/reset invalidates queued owner notifications; sample
-batches and samples carry their originating run ID. The window also guards its
+Reset joins the retiring worker, clears its runtime/recording/configuration, and
+returns to Idle. Each run/reset invalidates queued owner notifications; each
+recording carries its originating run ID. The window also guards its
 queued callbacks by generation and shutdown state. State getters are authoritative:
 a notification overtaken by a newer transition need not be presented as current.
 Runner commands and snapshot access belong to the QObject's owner thread.

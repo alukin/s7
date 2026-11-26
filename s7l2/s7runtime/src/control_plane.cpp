@@ -1491,6 +1491,7 @@ auto ControlPlane::handle_get_stream_status(const boost::json::object& request) 
     out["type"] = "STREAM_STATUS";
     out["request_id"] = as_string(request, "request_id").value_or("");
     out["protocol_version"] = descriptor_.protocol_version;
+    if (options_.execution_status) out["execution"] = options_.execution_status();
     boost::json::array streams;
     if (options_.network) {
         for (const auto& status : options_.network->stream_statuses()) {

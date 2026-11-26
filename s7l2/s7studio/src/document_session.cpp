@@ -22,6 +22,7 @@ void DocumentSession::openSchema(boost::json::value schema, QString sourceLabel)
     streams_.clear();
     runtimeSeconds_ = 60.0;
     clearScopesBeforeRun_ = true;
+    recordingMayDrop_ = false;
     hasSavedDocument_ = false;
 }
 
@@ -37,6 +38,8 @@ void DocumentSession::openDiagram(const diagram::DiagramDocument& document, QStr
         document.runConfiguration.contains("runtime_seconds") ? document.runConfiguration.at("runtime_seconds").to_number<double>() : 60.0;
     clearScopesBeforeRun_ =
         !document.runConfiguration.contains("clear_scope_traces") || document.runConfiguration.at("clear_scope_traces").as_bool();
+    const auto* overflow = document.runConfiguration.if_contains("recording_overflow");
+    recordingMayDrop_ = overflow && overflow->is_string() && overflow->as_string() == "drop";
     if (document.dt > 0.0)
         frequencyHz_ = 1.0 / document.dt;
     hasSavedDocument_ = false;
@@ -52,6 +55,7 @@ void DocumentSession::reset()
     streams_.clear();
     runtimeSeconds_ = 60.0;
     clearScopesBeforeRun_ = true;
+    recordingMayDrop_ = false;
     hasSavedDocument_ = false;
 }
 
@@ -73,6 +77,8 @@ auto DocumentSession::complete(diagram::DiagramDocument document) const -> diagr
 {
     document.description = description_;
     document.runConfiguration = {{"runtime_seconds", runtimeSeconds_}, {"clear_scope_traces", clearScopesBeforeRun_}};
+    // Written only when chosen, so existing documents keep their bytes.
+    if (recordingMayDrop_) document.runConfiguration["recording_overflow"] = "drop";
     document.runtimeNodes = runtimeNodes_;
     document.streams = streams_;
     return document;
