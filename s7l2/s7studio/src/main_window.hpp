@@ -83,7 +83,7 @@ private slots:
     void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
     void showElementProperties(const QString& elementId);
     void editDiagramProperties();
-    void onScopeSamplesAvailable();
+    void onRecordingAdvanced();
     void onProbesChanged();
     void onProbeOpenScopeRequested(const QString& probeName);
     void onProbeOpenPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName);
@@ -285,7 +285,6 @@ private:
     viewers::ViewerManager* viewers_ = nullptr;
     class QTimer* wireTypeTimer_ = nullptr;
     QString lastWireTypeError_;
-    qint64 lastScopeDropLogMs_ = 0;
     QActionGroup* paperSizeGroup_ = nullptr;
     QActionGroup* pageOrientationGroup_ = nullptr;
     QToolBar* diagramDrawToolBar_ = nullptr;

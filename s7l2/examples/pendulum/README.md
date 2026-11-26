@@ -54,7 +54,7 @@ errors are measured on a 1 ms grid plus the last state; energy and implicit
 endpoint residuals are checked at every step. Initial/final values and
 maximum crossing-time drift are reported.
 
-The Studio test must deliver all samples with no mailbox loss, match the
+The Studio test must record all samples with no capture loss, match the
 headless trace within `1e-12`, and export every timestamp/value through Scope
 CSV with exact double round-trip equality. These are numerical and recording
 checks for this workload, not a general overload/performance qualification.

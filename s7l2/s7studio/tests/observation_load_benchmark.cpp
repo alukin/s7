@@ -6,7 +6,7 @@
 // LocalSchemaRunner headlessly. Viewer emulation polls the same observation
 // calls at Studio's refresh intervals: Live Oscilloscope 16 ms
 // (timeSnapshot), Scope repaint 33 ms (tail), Scope/analysis journal paging
-// 40 ms (read), and the UI's Scope mailbox drain on every notification.
+// 40 ms (read), and the UI's acknowledgement of every recording notification.
 // Prints one JSON object. Run through tools/run_observation_benchmark.py.
 
 #include "local_schema_runner.hpp"
@@ -180,14 +180,13 @@ int main(int argc, char** argv)
         probes.push_back(std::move(probe));
     }
 
-    std::uint64_t mailboxSamples = 0, mailboxDropped = 0;
-    CallStats mailbox, journal, tail, envelope;
-    QObject::connect(&runner, &LocalSchemaRunner::scopeSamplesAvailable, &runner, [&] {
+    std::uint64_t notifications = 0;
+    CallStats acknowledge, journal, tail, envelope;
+    QObject::connect(&runner, &LocalSchemaRunner::recordingAdvanced, &runner, [&] {
         const auto start = Clock::now();
-        const auto batch = runner.takeScopeSamples();
-        mailbox.add(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
-        mailboxSamples += batch.samples.size();
-        mailboxDropped += batch.dropped;
+        runner.acknowledgeRecordingAdvanced();
+        acknowledge.add(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+        ++notifications;
     });
 
     bool success = false;
@@ -238,8 +237,8 @@ int main(int argc, char** argv)
         {"completed_ticks", runner.completedTicks()},
         {"wall_s", wall}, {"steps_per_s", static_cast<double>(runner.completedTicks()) / wall},
         {"recorded_samples", status.samples}, {"capture_dropped", status.captureDropped},
-        {"mailbox_samples", mailboxSamples}, {"mailbox_dropped", mailboxDropped},
-        {"calls", boost::json::object{{"mailbox_take", mailbox.json()}, {"journal_read", journal.json()},
+        {"recording_notifications", notifications},
+        {"calls", boost::json::object{{"acknowledge", acknowledge.json()}, {"journal_read", journal.json()},
                                       {"tail", tail.json()}, {"live_time_snapshot", envelope.json()}}}};
     std::cout << boost::json::serialize(result) << std::endl;
     return success && runner.completedTicks() == options.ticks ? 0 : 1;

@@ -3,7 +3,7 @@
 
 #pragma once
 #include "observation/observation_source.hpp"
-#include "scope_sample_mailbox.hpp"
+#include "scope_sample.hpp"
 
 namespace s7studio::observation {
 struct RetainedRun { QString label; std::shared_ptr<const ObservationSource> source; };

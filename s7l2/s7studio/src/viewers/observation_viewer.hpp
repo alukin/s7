@@ -54,8 +54,6 @@ public:
     void setBindings(QVector<InputBinding> bindings) { bindings_ = std::move(bindings); }
     // One bounded page per UI turn. Returns whether more history remains.
     virtual bool refreshSource();
-    void setPreviewDroppedCount(std::uint64_t dropped) { previewDropped_ = dropped; }
-    [[nodiscard]] std::uint64_t previewDroppedCount() const { return previewDropped_; }
     [[nodiscard]] auto source() const { return source_; }
     // Presentation operations: never erase recorded data.
     virtual void clearSamples() = 0;
@@ -80,7 +78,6 @@ private:
     std::uint64_t cursor_ = 0;
     QHash<observation::ChannelId, QString> units_;
     QString readError_;
-    std::uint64_t previewDropped_ = 0;
 };
 
 // Optional viewer capabilities. The manager depends on these contracts rather

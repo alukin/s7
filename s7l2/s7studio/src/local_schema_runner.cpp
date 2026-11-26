@@ -85,7 +85,7 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     waitForCompletion();
     const auto id = ++generation_;
     releaseRuntime();
-    scopeMailbox_.clear(id);
+    recordingNotifyPending_.store(false);
     auto storage = storage_;
     if (storage.temporaryDirectory.isEmpty()) storage.temporaryDirectory = qEnvironmentVariable("S7STUDIO_RECORDING_TEMP_DIR");
     const bool liveOnly = !probes.empty() && std::ranges::none_of(probes, [](const auto& p) { return p.record; });
@@ -351,12 +351,12 @@ void LocalSchemaRunner::captureFrame()
         publishBlock();
 }
 
-void LocalSchemaRunner::publishBlock(const bool allowDrop)
+void LocalSchemaRunner::publishBlock(const bool midRun)
 {
     if (!ring_ || ring_->current().frames == 0) return;
     if (ring_->failed()) throw std::runtime_error("Observation capture failed: " + ring_->error());
     if (ring_->tryPublish()) return;
-    if (allowDrop && activeOverflow_ == RecordingOverflow::Drop) {
+    if (midRun && activeOverflow_ == RecordingOverflow::Drop) {
         // Never wait: count the loss; live views see the step gap.
         auto& block = ring_->current();
         droppedFrames_ += block.frames;
@@ -365,7 +365,8 @@ void LocalSchemaRunner::publishBlock(const bool allowDrop)
         return;
     }
     bool published = false;
-    throttled_ += ring_->publishWaiting(published);
+    const auto waited = ring_->publishWaiting(published);
+    if (midRun) throttled_ += waited;
     if (!published) throw std::runtime_error("Observation capture failed: " + ring_->error());
 }
 
@@ -379,7 +380,6 @@ void LocalSchemaRunner::startObservation(const std::uint64_t id)
     const auto slotCount = std::clamp<std::size_t>(budget / blockBytes, 4, maxSlots);
     ring_ = std::make_unique<observation::ProbeBlockRing>(slotCount, frames, probes_.size());
     recordBatch_.reserve(frames * recordedProbes_.size());
-    scopeBatch_.reserve(frames * recordedProbes_.size());
     for (auto& route : liveRoutes_) route.values.reserve(frames * route.probes.size());
     distributor_ = std::thread([this, id] { distributeBlocks(id); });
 }
@@ -421,19 +421,17 @@ void LocalSchemaRunner::distribute(const observation::ProbeBlock& block, const s
     const auto frames = block.frames;
     if (recording_ && !recordedProbes_.empty()) {
         recordBatch_.clear();
-        scopeBatch_.clear();
         for (std::size_t frame = 0; frame < frames; ++frame) {
             const auto step = block.steps[frame];
             const auto time = block.times[frame];
             const auto* values = block.values.data() + frame * width;
             for (const auto probe : recordedProbes_) {
                 recordBatch_.push_back({probeChannels_[probe], step, time, values[probe]});
-                scopeBatch_.push_back(ScopeSample{probes_[probe].name, static_cast<long>(step), time, values[probe], id});
             }
         }
         if (!recording_->append(std::span<const observation::Sample>(recordBatch_)))
             throw std::runtime_error(recording_->status().storageError.toStdString());
-        if (scopeMailbox_.push(scopeBatch_)) postRunEvent(id, [this] { emit scopeSamplesAvailable(); });
+        if (frames > 0 && !recordingNotifyPending_.exchange(true)) postRunEvent(id, [this] { emit recordingAdvanced(); });
     }
     for (auto& route : liveRoutes_) {
         const auto routeWidth = route.probes.size();
@@ -445,8 +443,6 @@ void LocalSchemaRunner::distribute(const observation::ProbeBlock& block, const s
                              std::span<const double>(block.times.data(), frames), route.values);
     }
 }
-
-auto LocalSchemaRunner::takeScopeSamples() -> ScopeSampleBatch { return scopeMailbox_.take(); }
 
 void LocalSchemaRunner::finalizeRun(std::uint64_t id, bool success, const std::string& error)
 {
@@ -532,7 +528,7 @@ void LocalSchemaRunner::reset()
     liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); distinctValues_.clear();
     probeChannels_.clear(); recordedProbes_.clear(); compiledProbes_.reset(); ring_.reset();
     probes_.clear();
-    scopeMailbox_.clear();
+    recordingNotifyPending_.store(false);
     completedTicks_.store(0);
     totalTicks_ = 0;
     pauseRequested_.store(false);

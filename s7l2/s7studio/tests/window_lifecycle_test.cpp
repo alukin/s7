@@ -207,7 +207,7 @@ private slots:
         std::thread retired([active] {
             emit active->logMessage("SHUTDOWN_SENTINEL");
             emit active->runCompleted(false, "SHUTDOWN_SENTINEL");
-            emit active->scopeSamplesAvailable();
+            emit active->recordingAdvanced();
         }); retired.join();
         if (closeEvent) {
             QVERIFY(!window_->documentModified());

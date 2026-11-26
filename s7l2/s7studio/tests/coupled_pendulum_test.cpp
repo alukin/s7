@@ -64,19 +64,13 @@ int main(int argc, char** argv) try
                     [&](bool ok, const QString& message) { completed = true; success = ok; error = message; });
                 std::size_t received = 0, checkpoint = 0;
                 double max_difference = 0;
-                // The Scope mailbox is a bounded preview that may skip updates
-                // when its reader falls behind (the authoritative recording is
-                // unaffected); drain it as Studio's UI does.
-                const auto drain = [&] { static_cast<void>(runner.takeScopeSamples()); };
                 const long ticks = static_cast<long>(duration * frequency);
                 runner.run(root.at("schema"), dt, ticks, probes);
                 const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(90);
                 while (!completed && std::chrono::steady_clock::now() < deadline) {
                     app.processEvents();
-                    drain();
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
-                drain();
                 // Compare the full-run recording, sample by sample, with the
                 // headless reference.
                 const auto recording = runner.recordedSource();

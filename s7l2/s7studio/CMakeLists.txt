@@ -159,7 +159,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/quick_support.hpp
     src/viewers/trajectory_geometry.cpp
     src/viewers/trajectory_geometry.hpp
-    src/scope_sample_mailbox.hpp
+    src/scope_sample.hpp
     src/live_oscilloscope_window.cpp src/live_oscilloscope_window.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp

@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
             if (paused) { runner->pause(); require(runner->state() == s7studio::RunState::Pausing || runner->isPaused(), "pause requested"); }
             reopened.openPath(input);
             require(!runner->isRunning() && !runner->isPaused(), "replacement stops and joins old run");
-            require(runner->takeScopeSamples().samples.empty(), "replacement clears old mailbox");
+            require(!runner->activeConfiguration() && !runner->recordedSource(), "replacement clears the old run");
         }
         // Queue worker notifications deterministically without processing GUI
         // events. They must be rejected after a document changes generation.
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
             emit runner->logMessage(QStringLiteral("RETIRED_RUN_SENTINEL"));
             emit runner->runCompleted(false, QStringLiteral("RETIRED_RUN_SENTINEL"));
             emit runner->ticksProgress(987654321, 987654321);
-            emit runner->scopeSamplesAvailable();
+            emit runner->recordingAdvanced();
         });
         retiring.join();
         reopened.openPath(input);

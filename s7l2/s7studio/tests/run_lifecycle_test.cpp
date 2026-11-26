@@ -72,10 +72,12 @@ private slots:
         QTRY_COMPARE(runner_->state(), Paused);
         QTRY_VERIFY(controller.actionState().resumeEnabled);
         QCOMPARE(runner_->completedTicks(), 1L);
-        const auto batch = runner_->takeScopeSamples();
-        QCOMPARE(batch.runId, configuration->id);
-        QCOMPARE(batch.samples.size(), std::size_t(1));
-        QCOMPARE(batch.samples.front().runId, configuration->id);
+        // An acknowledged pause has delivered the paused step to the recording.
+        const auto recording = runner_->recordedSource();
+        QVERIFY(recording);
+        QCOMPARE(recording->runId(), configuration->id);
+        QCOMPARE(recording->status().samples, std::uint64_t(1));
+        QCOMPARE(recording->read(0).samples.front().step, std::int64_t(1));
         QCOMPARE(gate_->entered.load(), 1); // acknowledged pause has no in-flight step
         runner_->stop();
         QTRY_COMPARE(runner_->state(), Stopped);
@@ -100,10 +102,12 @@ private slots:
         probes[0].name = "wrong/value";
         gate_->allow();
         QTRY_COMPARE(completed.count(), 1);
-        auto batch = runner_->takeScopeSamples();
-        QCOMPARE(batch.samples.size(), std::size_t(1));
-        QCOMPARE(batch.samples[0].value, 2.5);
-        QCOMPARE(batch.samples[0].probeName, std::string("scope/value"));
+        auto source = runner_->recordedSource();
+        QVERIFY(source);
+        auto page = source->read(0);
+        QCOMPARE(page.samples.size(), qsizetype(1));
+        QCOMPARE(page.samples[0].value, 2.5);
+        QCOMPARE(source->channels().at(page.samples[0].channel).name, QStringLiteral("scope/value"));
         QVERIFY(first->schemaJson != json);
         runner_->run(json, .001, 1, probes_);
         const auto second = runner_->activeConfiguration();
@@ -111,15 +115,18 @@ private slots:
         QTRY_COMPARE(gate_->entered.load(), 2);
         gate_->allow();
         QTRY_COMPARE(completed.count(), 2);
-        batch = runner_->takeScopeSamples();
-        QCOMPARE(batch.runId, second->id);
-        QCOMPARE(batch.samples[0].step, 1L);
-        QCOMPARE(batch.samples[0].value, 9.0);
+        source = runner_->recordedSource();
+        QVERIFY(source);
+        QCOMPARE(source->runId(), second->id);
+        page = source->read(0);
+        QCOMPARE(page.samples.size(), qsizetype(1));
+        QCOMPARE(page.samples[0].step, std::int64_t(1));
+        QCOMPARE(page.samples[0].value, 9.0);
         QCOMPARE(runner_->state(), s7studio::RunState::Completed);
     }
     void queuedEventsAreInvalidAfterResetOrRerun() {
         QSignalSpy completed(runner_.get(), &s7studio::LocalSchemaRunner::runCompleted);
-        QSignalSpy samples(runner_.get(), &s7studio::LocalSchemaRunner::scopeSamplesAvailable);
+        QSignalSpy samples(runner_.get(), &s7studio::LocalSchemaRunner::recordingAdvanced);
         // QTRY's event pumping would deliver notifications: block only on a
         // condition-variable gate and state predicate on a helper thread instead.
         gate_->releaseAll();
@@ -139,7 +146,7 @@ private slots:
         QCoreApplication::sendPostedEvents();
         QCOMPARE(completed.count(), 0);
         QCOMPARE(samples.count(), 0);
-        QVERIFY(runner_->takeScopeSamples().samples.empty());
+        QVERIFY(!runner_->recordedSource());
         runner_->run(schema(), .001, 1, probes_);
         QTRY_COMPARE(completed.count(), 1);
         QCOMPARE(samples.count(), 1);
@@ -166,7 +173,8 @@ private slots:
         gate_->allow();
         QTRY_COMPARE(completed.count(), 2);
         QVERIFY(completed.last().at(0).toBool());
-        QCOMPARE(runner_->takeScopeSamples().samples.front().value, 7.0);
+        QVERIFY(runner_->recordedSource());
+        QCOMPARE(runner_->recordedSource()->read(0).samples.front().value, 7.0);
     }
     void invalidPreparationClearsPriorSamples() {
         QSignalSpy completed(runner_.get(), &s7studio::LocalSchemaRunner::runCompleted);
@@ -177,7 +185,7 @@ private slots:
         runner_->run(boost::json::object{}, .001, 1, probes_);
         QCOMPARE(runner_->state(), s7studio::RunState::Error);
         QVERIFY(runner_->activeConfiguration()->id > oldId);
-        QVERIFY(runner_->takeScopeSamples().samples.empty());
+        QVERIFY(!runner_->recordedSource() || runner_->recordedSource()->status().samples == 0);
         QVERIFY(!completed.last().at(0).toBool());
         runner_->run(schema(), std::numeric_limits<double>::quiet_NaN(), 1, probes_);
         QCOMPARE(runner_->state(), s7studio::RunState::Error);
@@ -243,9 +251,10 @@ private slots:
         QVERIFY(completed.front().at(0).toBool());
         QCOMPARE(runner_->state(), Stopped);
         QVERIFY(hardwareTrace.closedOnWorker.load());
-        auto samples = runner_->takeScopeSamples();
-        QCOMPARE(samples.samples.size(), std::size_t{1});
-        QCOMPARE(samples.samples.front().step, 1L);
+        QVERIFY(runner_->recordedSource());
+        const auto page = runner_->recordedSource()->read(0);
+        QCOMPARE(page.samples.size(), qsizetype(1));
+        QCOMPARE(page.samples.front().step, std::int64_t(1));
     }
     void rapidTransitions() {
         using enum s7studio::RunState;

@@ -94,9 +94,9 @@ The headless test is available with `S7_BUILD_STUDIO=OFF`; omit the Studio test
 target in that build. Both tests load the committed diagrams. They exercise all
 nine at 1/10/100 kHz for 20 model seconds (27 configurations per execution path).
 The Studio test loads each scene, checks observer-channel/probe wiring and
-serialization, then exercises `LocalSchemaRunner` on its worker and drains the
-sample mailbox. It compares every channel with headless checkpoints and checks
-all delivered sample counts, order and model timestamps. It does not render
+serialization, then exercises `LocalSchemaRunner` on its worker and reads its
+recording. It compares every channel with headless checkpoints and checks
+all recorded sample counts, order and model timestamps. It does not render
 Scope or qualify recording/overload behavior; those need separate tests.
 
 Metrics are evaluated on a common 1 ms state-time grid plus initial/final
@@ -119,7 +119,7 @@ Acceptance checks:
   configurations. Implicit Trapezoid maximum relative energy error must
   remain below `1e-8`; Euler energy growth is reported.
 - Bundled/headless checkpoint differences at most `1e-12`; every expected
-  sample delivered, with zero mailbox drops.
+  sample recorded, with no capture loss.
 
 A passing test establishes the stated discrete implementation and accuracy
 budget. It does not make coarse Euler accurate or establish stiff/nonlinear

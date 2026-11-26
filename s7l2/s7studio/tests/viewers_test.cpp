@@ -5,7 +5,7 @@
 // step alignment, Qt Graphs plot state and the Qt Quick 3D trajectory.
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
-#include "scope_sample_mailbox.hpp"
+#include "scope_sample.hpp"
 #include "scope_view_window.hpp"
 #include "viewers/line_plot_view.hpp"
 #include "observation/step_aligner.hpp"
@@ -311,17 +311,16 @@ void testWindowIndependentResults()
     manager.beginRun("old", false);
     require(manager.source() != source && source->status().samples == 150000, "New run mutated previous source");
     require(phase->points().isEmpty(), "New source retained old phase alignment/history");
-    manager.present(source, 100, types);
+    manager.present(source, types);
     for (int turn = 0; turn < 40; ++turn) manager.refreshViews();
     require(source->status().samples == 150000 && source->status().captureDropped == 0,
         "Presentation duplicated authoritative samples or changed completeness");
     require(phase->points().size() == 25000, "Authoritative source did not drive phase replay");
-    auto* previewWarning = scope->findChild<QToolButton*>("scope.statusWarning");
-    require(previewWarning && previewWarning->isVisible() && previewWarning->toolTip().contains("preview skipped 100"),
-        "Preview loss is not distinguished from capture loss");
+    auto* warning = scope->findChild<QToolButton*>("scope.statusWarning");
+    require(warning && !warning->isVisible(), "Complete presented recording shown as incomplete");
     QBuffer full; full.open(QIODevice::WriteOnly);
-    require(scope->writeRunResults(full, &error), "Preview loss prevented complete source-backed save");
-    require(!source->status().incomplete(), "Preview loss marked authoritative capture incomplete");
+    require(scope->writeRunResults(full, &error), "Presented recording prevented complete source-backed save");
+    require(!source->status().incomplete(), "Presentation marked authoritative capture incomplete");
 }
 
 void testRunDetails()

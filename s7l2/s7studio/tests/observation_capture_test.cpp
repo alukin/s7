@@ -94,16 +94,32 @@ private slots:
             [](const s7::ElementCreationContext&) { return std::make_unique<ComplexElement>(); }, metadata));
     }
     void init() { gate_ = currentGate = std::make_shared<Gate>(); gate_->releaseAll(); }
-    void capturesAllSamplesWhenPreviewOverflows() {
+    // Acknowledging re-arms the notification while the run continues.
+    void acknowledgementRearmsNotification() {
+        LocalSchemaRunner runner;
+        QSignalSpy advanced(&runner, &LocalSchemaRunner::recordingAdvanced);
+        runner.run(schema(1.), .001, -1, {{"scope/a", "source", 0}});
+        QTRY_VERIFY_WITH_TIMEOUT(advanced.count() >= 1, 10000);
+        QTest::qWait(50);
+        QCOMPARE(advanced.count(), 1); // nothing more until acknowledged
+        runner.acknowledgeRecordingAdvanced();
+        QTRY_VERIFY_WITH_TIMEOUT(advanced.count() == 2, 10000);
+        runner.stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!runner.isRunning(), 10000);
+        runner.reset();
+    }
+    // The UI never acknowledges: it is notified once, and the recording
+    // still holds every sample.
+    void capturesAllSamplesWithoutUiAcknowledgement() {
         LocalSchemaRunner runner;
         QSignalSpy complete(&runner, &LocalSchemaRunner::runCompleted);
+        QSignalSpy advanced(&runner, &LocalSchemaRunner::recordingAdvanced);
         const double value = std::nextafter(1., 2.);
         runner.run(schema(value), .001, 110000, {{"scope/a", "source", 0}, {"scope/b", "source", 0}});
         QTRY_COMPARE_WITH_TIMEOUT(complete.count(), 1, 15000);
         QCOMPARE(runner.state(), RunState::Completed);
-        const auto preview = runner.takeScopeSamples();
-        QCOMPARE(preview.samples.size(), std::size_t(200000));
-        QCOMPARE(preview.dropped, std::uint64_t(20000));
+        QCoreApplication::processEvents();
+        QCOMPARE(advanced.count(), 1);
         const auto source = runner.recordedSource(); QVERIFY(source);
         QCOMPARE(source->status().samples, std::uint64_t(220000));
         QVERIFY(source->status().finished && !source->status().incomplete());

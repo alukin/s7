@@ -11,7 +11,6 @@ void ObservationViewer::attachSource(std::shared_ptr<const observation::Observat
     source_ = std::move(source);
     bindings_ = std::move(bindings);
     readError_.clear();
-    previewDropped_ = 0;
     if (clear) clearSamples();
     cursor_ = 0;
     units_.clear();
@@ -35,7 +34,6 @@ QString ObservationViewer::sourceStatusText() const
     parts << QStringLiteral("Run #%1 — %2").arg(source_->runId()).arg(state);
     if (status.captureDropped) parts << QStringLiteral("capture lost %1 records").arg(status.captureDropped);
     if (cursor_ < status.samples) parts << QStringLiteral("loading history %1/%2 records").arg(cursor_).arg(status.samples);
-    if (previewDropped_) parts << QStringLiteral("preview skipped %1 updates; recording unaffected").arg(previewDropped_);
     if (!status.storageError.isEmpty()) parts << QStringLiteral("INCOMPLETE: ") + status.storageError;
     if (!status.runError.isEmpty()) parts << QStringLiteral("run failed: ") + status.runError;
     return parts.join(QStringLiteral(" | "));

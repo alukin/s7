@@ -34,7 +34,7 @@ int main(int argc,char** argv) try {
     std::filesystem::create_directories(report_dir);
     std::ofstream summary(report_dir/"recording_summary.csv");
     if (!summary) throw std::runtime_error("Cannot create recording report");
-    summary<<"method,frequency_hz,duration_s,runtime_samples,csv_rows,preview_dropped,max_runtime_difference,csv_round_trip\n";
+    summary<<"method,frequency_hz,duration_s,runtime_samples,csv_rows,max_runtime_difference,csv_round_trip\n";
     for (const auto method:p::methods) {
         for (const int frequency:p::frequencies) {
             const auto root=p::diagram(method,frequency);
@@ -77,12 +77,8 @@ int main(int argc,char** argv) try {
             std::size_t received=0;
             double max_difference=0;
             const double tolerance=p::budgets().at("bundled_headless_max_difference").to_number<double>();
-            std::uint64_t previewDropped = 0;
-            // Preview is intentionally lossy. Verify the worker's authoritative
-            // source, even when delivery is withheld for the entire run.
-            const auto consume=[&] {
-                previewDropped += runner.takeScopeSamples().dropped;
-            };
+            // Verify the worker's authoritative recording; the UI never
+            // reacts to notifications during this run.
             const long steps=static_cast<long>(p::duration*frequency);
             runner.run(document.runtimeSchema,1.0/frequency,steps,probes);
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
@@ -90,15 +86,11 @@ int main(int argc,char** argv) try {
                 app.processEvents();
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
-            consume();
             const auto source = runner.recordedSource();
             if (!completed || !success || !source || !source->status().finished || source->status().incomplete()
                 || source->status().samples != static_cast<std::size_t>(steps)*2) {
                 throw std::runtime_error("Bundled run incomplete: "+error.toStdString());
             }
-            const auto expectedDrops = std::max(std::int64_t(0), std::int64_t(steps)*2-200000);
-            if (previewDropped != static_cast<std::uint64_t>(expectedDrops))
-                throw std::runtime_error("Withheld preview did not account for every skipped sample");
             const auto channels = source->channels();
             for (std::uint64_t cursor = 0; cursor < source->status().samples;) {
                 const auto page = source->read(cursor);
@@ -146,7 +138,7 @@ int main(int argc,char** argv) try {
                 ++counts[channel];++rows;
             }
             if (counts[0]!=static_cast<std::size_t>(steps) || counts[1]!=counts[0]) throw std::runtime_error("Incomplete full-resolution CSV");
-            summary<<method<<','<<frequency<<','<<p::duration<<','<<received<<','<<rows<<','<<previewDropped<<','<<max_difference<<",EXACT\n";
+            summary<<method<<','<<frequency<<','<<p::duration<<','<<received<<','<<rows<<','<<max_difference<<",EXACT\n";
             summary.flush();
             std::cout<<method<<' '<<frequency<<" Hz: "<<received<<" captured samples; "<<rows
                      <<" CSV rows, exact round trip; maximum runtime difference="<<max_difference<<std::endl;

@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
         if (type == "LiveOscilloscope") live.insert(id, std::make_shared<observation::LiveAcquisition>(1,.001,channels,QJsonObject{},1000,1));
         descriptors.push_back(descriptor); selection.push_back(boost::json::object{{"element_id",id.toStdString()},{"type",type.toStdString()},{"collapsed",false}});
     }
-    manager.present(recording,0,[&](const QString& id) { for (const auto& d : descriptors) if (d.id==id) return d.type; return QString{}; }); manager.presentLive(live);
+    manager.present(recording,[&](const QString& id) { for (const auto& d : descriptors) if (d.id==id) return d.type; return QString{}; }); manager.presentLive(live);
     ui::ObserversPanel panel(&manager); panel.resize(600,2400); panel.setDocument("Preview load fixture",descriptors,selection); panel.bindRun(1,descriptors);
     std::atomic<std::int64_t> steps{0};
     std::jthread producer([&](std::stop_token stop) {

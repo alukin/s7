@@ -261,7 +261,7 @@ void examples(bool render) {
         }
         viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
         const QString type = complex ? "ComplexSurface3D" : "Surface3D";
-        manager.present(source, 0, [type](const QString &) { return type; });
+        manager.present(source, [type](const QString &) { return type; });
         auto *viewer = dynamic_cast<viewers::SurfaceWindow *>(manager.ensureObserver(type, "surface"));
         require(viewer, "Surface viewer registration");
         while (viewer->refreshSource()) {

@@ -29,8 +29,8 @@ slower, so the slow profile matters more than the fast one.
 - **WP2:** compiled probes.
 - **WP3:** block ring, distributor thread and the D1 policies, with the Run
   Configuration option.
-- **WP4 (partial):** batched recording and live appends, O(1) Scope mailbox
-  take, and Scope samples pushed per block.
+- **WP4 (partial):** batched recording and live appends. The Scope preview
+  mailbox was removed (D6, 2026-11-26).
 - **WP5:** H2/H5 (ADR-028) and H4 (Linux semaphore waits).
 - **WP6:** per-domain sample counters.
 - **V1:** extreme-preserving 3D trajectory reduction.
@@ -61,16 +61,26 @@ Observation share of run time, baseline → branch:
 
 **Not met:** WP3's acceptance gate of ≤ 5% observation share.
 - **What remains is recording work itself:** copying 4–8 values per step into
-  the journal, the live buffers and the Scope preview.
+  the journal and the live buffers.
 - **Why the slow profile is worst:** it gives the stepping and distributor
   threads 0.6 of one CPU in total, so in lossless mode every sample's delivery
   cost subtracts from stepping.
-- **The largest avoidable part** is the per-sample `ScopeSample` built for a
-  preview the Studio UI does not read. It only uses the drop count, and draws
-  from the recording. Making the mailbox notification-only would change a
-  Studio API that tests use; this needs a decision.
+- **The largest avoidable part was** the per-sample `ScopeSample` built for a
+  preview the Studio UI did not read. D6 removed it (results below).
 - **Viewer call times:** the 60–90 ms maxima on the slow profile come from
   cgroup quota throttling (present in the baseline too), not lock contention.
+
+**D6 measured (2026-11-26): Scope preview removed.** Same matrix, branch
+before → after D6 (median of 3, fresh processes):
+
+| profile | steps/s gain | observation share before → after |
+|---|---|---|
+| fast | 1.05–1.38× | 10–36% → 8–15% |
+| slow (0.6 CPU) | 1.34–1.68× | 57–77% → 41–67% |
+
+The gate is still not met; the rest is the lossless journal and live-buffer
+work. With 4 probes on the fast profile the share was already near its floor,
+so the gain there is small.
 
 **D2 re-measured (2026-11-26): ADR-021 stays.** The same commit was built
 with and without the direct-output snapshot loop and the builds were run
@@ -409,6 +419,22 @@ staging keep their exact behavior (decision D2).
     in `STREAM_STATUS.execution`. No per-step cost, no API break for plugins.
   - Later: exact retry through general state snapshots (roadmap
     "Snapshots/restore"), not a per-element `on_step_commit()` plugin hook.
+
+- **D6 — Scope preview mailbox. DECIDED 2026-11-26: notification-only.**
+  - The Studio UI read only the preview's drop count and drew from the
+    recording, so the per-sample `ScopeSample` copy (with a probe-name string)
+    was pure overhead.
+  - `LocalSchemaRunner` now emits one coalesced `recordingAdvanced()` per
+    acknowledgement (`acknowledgeRecordingAdvanced()`); no samples go to the
+    UI. The "preview skipped N updates" message and counter are gone, and
+    viewers show real capture loss from the recording.
+  - `ScopeSample` and `ScopeSampleBatch` remain as the input of
+    `ObservationSession` and `ViewerManager::deliver` for hosts that deliver
+    samples themselves.
+  - Tests that inspected preview samples now check the recording.
+  - Also fixed: a drop-mode run no longer reports "run throttled by recording"
+    for the lossless hand-over of its last partial block, which waits only
+    after stepping has finished.
 
 ## Verification rules
 

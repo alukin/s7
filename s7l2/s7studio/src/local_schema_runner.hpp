@@ -5,7 +5,6 @@
 
 #include "is_schema_runner.hpp"
 #include "local_runtime_v2.hpp"
-#include "scope_sample_mailbox.hpp"
 #include "observation/observation_source.hpp"
 #include "observation/live_acquisition.hpp"
 #include "observation/probe_block_ring.hpp"
@@ -59,8 +58,10 @@ public:
     [[nodiscard]] bool isPaused() const override;
     [[nodiscard]] bool canPause() const override { return !hardwarePaced_; }
 
-    // UI thread: takes the Scope samples queued since the last call.
-    [[nodiscard]] auto takeScopeSamples() -> ScopeSampleBatch;
+    // UI thread: re-arms recordingAdvanced(). Call it before reading the
+    // recording: samples appended after it notify again, and the exchange
+    // synchronizes with the distributor's, so earlier appends are visible.
+    void acknowledgeRecordingAdvanced() { static_cast<void>(recordingNotifyPending_.exchange(false)); }
 
 signals:
     void stateChanged(s7studio::RunState state);
@@ -69,17 +70,20 @@ signals:
     void runCompleted(bool success, const QString& error);
     // Throttled to at most 20 per second, plus the final count.
     void ticksProgress(long completed, long total);
-    // New samples are waiting in takeScopeSamples(); at most one is pending.
-    void scopeSamplesAvailable();
+    // recordedSource() has new samples. At most one is pending until
+    // acknowledgeRecordingAdvanced().
+    void recordingAdvanced();
 
 private:
     // Observation (plan WP3): the stepping thread copies probe values into
-    // blocks; one distributor thread delivers them to the recording, live
-    // views and the Scope mailbox.
+    // blocks; one distributor thread delivers them to the recording and the
+    // live views, and notifies the UI.
     void captureFrame();
-    // allowDrop: drop mode may discard a block when the ring is full; pause
-    // and completion always deliver (nothing there is time-critical).
-    void publishBlock(bool allowDrop = true);
+    // midRun: a hand-over while stepping continues. Only then may drop mode
+    // discard a block when the ring is full, and only then does waiting for
+    // a slot count as throttling. Pause and the end of the run hand over the
+    // partial block losslessly; stepping has already stopped.
+    void publishBlock(bool midRun = true);
     void startObservation(std::uint64_t id);
     [[nodiscard]] std::string finishObservation();
     void distributeBlocks(std::uint64_t id);
@@ -113,7 +117,7 @@ private:
     std::mutex controlMutex_;
     std::condition_variable controlChanged_;
     std::atomic<bool> stopRequested_{false};
-    ScopeSampleMailbox scopeMailbox_;
+    std::atomic<bool> recordingNotifyPending_{false};
     const observation::StorageOptions storage_;
     std::shared_ptr<observation::ObservationSource> recording_;
     std::vector<observation::ChannelId> probeChannels_;
@@ -137,7 +141,6 @@ private:
     std::uint64_t droppedFrames_ = 0;
     // Distributor scratch, reused for every block.
     std::vector<observation::Sample> recordBatch_;
-    std::vector<ScopeSample> scopeBatch_;
 };
 
 } // namespace s7studio
