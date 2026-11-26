@@ -1,7 +1,8 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status: implementation plan revised after the 2026-11-23 independent review. No D1–D7 acceptance, implementation, test pass or release gate closure is claimed.**
-Approved direction: **preserve scalar element classes and their fast bindings**. Introduce new vector elements that share a small, reusable array/lease/port substrate. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
+**Status:** D1 compatibility policy approved on 2026-11-26. D2–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+
+Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
 Companion documents:
 - [Independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) — findings F1–F12 and proposed, unapproved fixes.
@@ -45,7 +46,7 @@ Single deliverable achieved:
 Positive tests (exact commands, pass/fail):
 Negative/fault tests (exact commands, pass/fail):
 Saved diagram(s) / reference oracle:
-Scalar compatibility / measured allocations or copies:
+Scalar regression / measured allocations or copies:
 GUI screenshot review (if applicable; actual paths/evidence):
 Blocked items, unsupported profiles, remaining risks:
 Next AVxx dependency:
@@ -61,7 +62,7 @@ A standalone implementation session is **not complete** if its promised tests ar
 AV00 baseline, source SHA, D1–D7 decision register
   +-- [D4] --> AV01 descriptors --> AV02 metadata --> AV03 exact shape/type checks
   |                                       |                 |
-  |                              [D1 before ABI edits]    |
+  |                              [D1 policy]              |
   +-- [D3] --> AV04 CPU producer pools/leases <-------------+
                                               |
                                      AV05a stable slot API
@@ -86,9 +87,9 @@ AV00 baseline, source SHA, D1–D7 decision register
                           |                              |         |
                       +---+-----------+                  |         |
                       |               |                  |         |
-                  [D5] AV10a      [D6] AV12 U8           AV14a pin+shape
+                       AV10a      [D6] AV12 U8           AV14a pin+shape
                        |               |                  |
-                    AV10b FFT          |                  AV14b registry/routing <--- AV13b
+               [D5] AV10b FFT          |                  AV14b registry/routing <--- AV13b
                        |               |                  |
                    [D5/D6] AV11a       |                  |
                        |               |                  |
@@ -113,30 +114,30 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 | Session | Required predecessor / decision | One bounded deliverable and acceptance |
 | --- | --- | --- |
-| **AV00** | Current main | Freeze base SHA, source/CTest inventory, old plugin binary and installed SDK, scalar dispatch time/allocations on specified host/build, ADR-021/022/024 fault/rate baselines, review D1–D7 with maintainer; evidence ledger (no code). |
+| **AV00** | Current main | Freeze base SHA, source/CTest inventory, installed SDK and rebuilt repository plugin smoke, scalar dispatch time/allocations on a specified host/build, ADR-021/022/024/029 fault and rate baselines, and the decision register. Record an evidence ledger. |
 | **AV01** | AV00 + **D4** | Validated concrete rank/extents/byte/stride CPU descriptors; test positive/zero/invalid extent, overflow before allocation, out-of-bounds/padding and scalar rank-zero unchanged. |
-| **AV02** | AV01 + **D1 if headers change ABI** | Metadata JSON parser -> registry -> catalog -> serialized schema version; old scalar metadata and diagrams still load, malformed format/rank rejected; SDK compatibility decision recorded. |
-| **AV03** | AV02 | Compiler/headless exact numeric type/rank/extents/format matching, scalar/vector negative, no symbolic/broadcast/reshape, forbidden array coupled-trial and invalid-cycle cases; old scalar compile. |
+| **AV02** | AV01 + **D1 policy** | Metadata JSON parser -> registry -> catalog -> canonical schema representation. Update repository-owned metadata and fixtures as needed. Reject malformed format and rank. |
+| **AV03** | AV02 | Headless exact numeric type/rank/extents/format validation, scalar/vector mismatch, no symbolic/broadcast/reshape, forbidden array coupled-trial and invalid-cycle cases. Exercise compiler rejection and scalar compilation. The first executable array fixture is AV05b. |
 | **AV04** | AV01 + **D3** (parallel to AV02/03) | Headless candidate writable pool, read leases, stale-generation/cancel safety, execution-reserved bytes vs optional retention budget; tiny-pool slow-viewer/stalled-consumer producer-progress and bounded skip tests. |
 | **AV05a** | AV03 + AV04 + **D1** | Stable array output slot/input binding and typed lifetime rules; unit tests for slot swap, borrow/retained lease, mixed scalar+array ports, no byte-copied owner. No public vector registration. |
 | **AV05b** | AV05a + **D2 contract approved** | Real Compiler/NodeRuntime source -> pass-through -> dual consumers, same payload identity and instrumented zero wire copies; negative shape checks, scalar CTest and before/after scalar benchmark. Experimental/internal only. |
 | **AV06a** | AV05b + **D2** | Per-domain direct candidate vs externally committed snapshot machinery, fallible admission before nonthrowing commit; smoke mixed scalar+array outputs and observer invisibility until commit. |
 | **AV06b** | AV06a | Late direct and multi-output exceptions, repeated retries, retained observers, exhausted pool, later-domain fault/committed-prefix checks vs unfaulted oracle; no payload copy on handle rollback. **Unlocks internal array fixtures.** |
 | **AV07a** | AV06b | Causal-memory previous valid and next staged handle phases; first/last memory-fault retries preserve previous staging and scalar semantics. |
-| **AV07b** | AV07a | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, original sample provenance retained, no implicit sample-level delay. |
+| **AV07b** | AV07a + **D6 forwarding rule** | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, original sample provenance retained, no implicit sample-level delay. |
 | **AV08a** | AV07b + **D7** | Flattened nested exposed-port slot aliases, direct/Delay inline-vs-nested oracle, mismatch and placeholder-byte negative cases. Standalone array Schema unsupported unless D7 adds separately scoped work. |
-| **AV08b** | AV08a | Schema+Studio save/open/save, shape/format/required layout capability round-trip, legacy scalar diagrams, exposed aliasing and invalid ranks. No remote profile work. |
+| **AV08b** | AV08a | Schema+Studio save/open/save in the current format. Cover shape/format/layout capability, exposed aliases, invalid ranks and current scalar diagrams. No remote profile work. |
 | **AV09a** | AV06b | Minimal **internal-only** deterministic array source/forwarding headless fixture; repeated steps, copy/alloc ledger and fault injection, not public library. May precede AV07/AV08. |
 | **AV09b** | AV07b + AV08b + AV09a | Public new VectorConstant/PassThrough/Gain and saved compiled diagrams, independent elementwise oracle, preallocated reference profile, mixed status scalar port, no scalar element rewrite. |
-| **AV10a** | AV09b + **D5 backend decision** | Audit 4 existing FFT paths, select C32/C64 conversions/scratch, out-of-tree plugin/SDK/linkage and supported transform lengths; an independent DFT fixture. No duplicate FFT engine by default. |
-| **AV10b** | AV10a | Whole-vector FFT C32[N] and/or explicitly approved conversion, impulse/DC/+/- tone/two-tone/inverse and normalization/bin-order tests vs independent DFT; tracked copies/allocations, plugin load smoke. |
+| **AV10a** | AV09b | Audit the four existing FFT paths and propose the D5 backend, C32/C64 conversions and scratch, SDK linkage, supported lengths and FFT conventions. Prepare an independent DFT fixture. |
+| **AV10b** | AV10a + **D5 FFT decision** | Whole-vector FFT C32[N] and/or explicitly approved conversion, impulse/DC/+/- tone/two-tone/inverse and normalization/bin-order tests vs independent DFT; tracked copies/allocations, plugin load smoke. |
 | **AV11a** | AV10b + **D5/D6** | Written PSD/window/floor/power/bin-order, sample-rate/first-index/provenance contract, valid unknown-rate and gap policy; reference frequency-axis/PSD oracle. |
 | **AV11b** | AV11a | Headless PSD/magnitude element and saved array path; DC, zero/floor, signed bins, tones, power/tolerance, shape/rate mismatch and discontinuity tests. |
 | **AV12** | AV09b + **D4/D6**, independent of AV15 | Deterministic U8 [H,W]/[H,W,3] frame fixture with frame ID and explicit layout capability; exact independent checkerboard/moving-bar pixel oracle, padded rows **if supported**, invalid shape/format and headless saved diagram. Split AV12a/b if this cannot fit five hours. |
 | **AV13a** | AV06b + **D3** | Headless committed-array Observation API, coherent domain snapshots, retained lease after advancement, cancellation and tiny-pool no-starvation oracle; preserve scalar Observation/Scope. |
 | **AV13b** | AV13a | Bounded thread-safe stepping-to-Studio mailbox; skip counters, attach/detach/paused/closed slow viewer, sanitizer/lifetime evidence and cross-domain position disclosure. |
 | **AV14a** | AV03 + AV08b | Studio ordinary **and observer** pin numeric/rank/shape/format checking; metadata JSON/catalog/labels, invalid drag/drop and round-trip GUI tests. |
-| **AV14b** | AV14a + AV13b | Waterfall/Video registry, saved bindings, source routing, rebind/open/close lifecycle; legacy scalar Studio behavior unchanged. No rendering claimed. |
+| **AV14b** | AV14a + AV13b | Waterfall/Video registry, saved bindings, source routing, rebind/open/close lifecycle and scalar Studio regression. No rendering claimed. |
 | **AV15a** | AV11b + AV13b + AV14b + **D5/D6** | Bounded deterministic PSD row->image mapping with frequency/time axes, gaps/unknown-rate policy, range/palette reference-pixel oracle. |
 | **AV15b** | AV15a | Actual Waterfall GUI, scale/controls, pause/reopen/rebind/skip evidence and reviewed screenshot/image comparisons; printing input contract ready, no model-state changes. |
 | **AV16a** | AV12 + AV13b + AV14b | U8 grayscale/RGB frame->image adapter; exact pixel/stride/aspect oracle, bounded newest-frame and explicit unsupported-format/skip behavior. |
@@ -146,9 +147,9 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18a** | AV17b | Candidate-SHA headless graph, negative shape, nested, rollback, independent FFT/PSD/frame oracles and G1/V evidence ledger. |
 | **AV18b** | AV17b | Candidate-SHA bounded pool/copies/allocations, scalar benchmark comparison, sanitizer and multi-rate fault evidence; explicit results/skips. |
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
-| **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK/old-binary ABI policy, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
+| **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1–D7 all remain **OPEN** in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). AV00 collects proposals, not approvals. No agent should infer that design notes authorize ABI or causal model changes. Architectural decision documents must record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1 records the accepted compatibility policy. D2–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
@@ -158,23 +159,23 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Scope:** inspect \`s7core\`, \`s7observe\`, \`s7studio\`, plugin SDK, metadata generator/build rules, existing test names, CTest registration and diagram schema syntax. Produce a short concrete test matrix and API decision note (array port slot ownership, numeric type plus fixed shape, supported rank/type matrix). Run representative baseline scalar tests; capture measurement environment, without a fabricated speedup target.
 
-**Accept:** links to actual files/tests, baseline commands/results, explicit open architectural questions, no new arrays claimed. If publication or plugin ABI needs maintainer approval, stop and ask before subsequent invasive sessions.
+**Accept:** source and test links, baseline commands/results, and explicit open architectural questions. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
 
 ### AV01 — Fixed shape and view descriptors
 
-**Depends:** AV00.
+**Depends:** AV00 and D4 approval.
 
 **Scope:** add a small core-only, validated rank/extents and CPU layout/view descriptor API. For 0.2.0 support rank 0 (conceptual scalar), rank 1, and rank 2/3 required for U8 image fixtures. Define byte bounds, stride/overflow/error checks. Do not modify runtime publication or existing scalar Port registration in this session.
 
-**Accept:** unit tests for empty rank, valid extents, zero/negative/overflow extents as applicable, stride/offset bounds, contiguous vs padded rows; complete core build and selected regressions. Include a negative test proving unsafe large shape fails before allocation.
+**Accept:** unit tests for empty rank, valid extents, zero/negative/overflow extents as applicable, stride/offset bounds and rejection of unsupported layouts. Complete the core build and selected regressions. Include a negative test proving an unsafe large shape fails before allocation.
 
 ### AV02 — Port metadata and schema declaration
 
 **Depends:** AV01.
 
-**Scope:** extend \`PortSpec\`, metadata/registry and diagram schema as needed to declare concrete fixed-shape array ports while leaving old scalar metadata valid. Preserve current numeric \`SignalType\` IDs and explicit conversion semantics. Do not yet wire execution buffers.
+**Scope:** extend \`PortSpec\`, metadata/registry and the runtime schema to declare concrete fixed-shape array ports. Use one canonical format for scalar and vector ports. Keep numeric type separate from shape and conversions explicit. Execution bindings are AV05.
 
-**Accept:** metadata parsing/serialization/creation tests, old scalar element metadata still resolves, malformed rank/extent rejected. Avoid adding array fields to every scalar element's JSON by hand.
+**Accept:** metadata parse/serialize/create tests, current scalar element metadata resolution, and malformed rank/extent rejection. Represent scalar defaults centrally.
 
 ### AV03 — Numeric + shape inference and compile-time rejection
 
@@ -182,7 +183,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Scope:** extend resolver, connection validation and compiler preflight to match both numeric type and exact fixed shape. No implicit broadcast or scalar-to-vector coercion. Add explicit unsupported cases for coupled/implicit numerical trials and prohibited feedback. Keep existing scalar wiring tests intact.
 
-**Accept:** tests connecting matching/mismatching F32/C32 and U8 shapes, scalar-to-vector mismatch, different rank, illegal cycles, required explicit failure of array numerical-trial case; old scalar diagrams still compile.
+**Accept:** validator tests for matching/mismatching F32/C32 and U8 shapes, scalar-to-vector mismatch, different rank, illegal cycles and array numerical-trial rejection. Exercise the compiler's error path and compile current scalar diagrams.
 
 ### AV04 — CPU buffer leases and bounded pool
 
@@ -220,7 +221,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Depends:** AV07.
 
-**Scope:** expose array ports through nested schema boundaries and flattened bindings; round-trip a saved diagram/schema with fixed array shape. Preserve ordinary scalar exposed-port behavior, plugin element metadata and compatibility of old diagrams. Do not add remote array schema negotiation.
+**Scope:** expose array ports through nested schema boundaries and flattened bindings. Round-trip saved array and scalar diagrams in the current format and verify ordinary scalar exposed-port behavior. Keep array shape negotiation local.
 
 **Accept:** direct and nested graph numerical equivalence, array pass-through and delay through exposed ports, save/open/save equivalence and negative mismatch tests, scalar nested/flattening tests.
 
@@ -270,7 +271,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Scope:** show correct array shape on pins/wire labels, validate incompatible drag-connections, register Waterfall/Video Player viewer types and editor metadata, keep saved observer bindings/settings. Provide a minimal no-op or test presentation adapter only; full renderers belong to AV15/AV16. Avoid modifying \`external/\` libraries.
 
-**Accept:** saved diagram round-trip with array wire label, type/shape error UI, registry discovery, attach/rebind lifecycle, invalid selection errors, legacy scalar Studio tests. Screenshots explicitly reviewed if GUI toolchain is available.
+**Accept:** saved diagram round-trip with array wire label, type/shape error UI, registry discovery, attach/rebind lifecycle, invalid selection errors and scalar Studio regressions. Screenshots explicitly reviewed if GUI toolchain is available.
 
 ### AV15 — Waterfall viewer rendering (G4/W)
 

@@ -5,6 +5,8 @@
 **Status:** Independent findings and *proposed* fixes; **not an accepted ADR or completed implementation**. No production code, tests or existing planning documents are changed by this review.
 **Evidence:** Source and documentation inspected; no builds, tests, performance measurements, GUI screenshots or installed-package verification performed. A code constraint below is not necessarily an existing bug. Architectural risks are hypotheses to validate, not reproduced failures.
 
+The [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) records later measurements and the maintainer's D1 decision that S7 has no compatibility obligations to earlier versions or third-party plugins.
+
 ## Executive assessment
 
 **Direction: sound; implementation plan: revise before AV01.** Keep native scalar elements and their fast path; add separate array/vector elements behind a common logical port/wire model. One `step()` is one causal computation/state transition, never an implicit per-sample scheduler loop. Zero payload copies are realistic for local bindings, fan-out, forwarding, handle staging and rollback; FFT, gain, conversions, image rendering and transport may require separate output storage or copies. Keep observer processing outside the functional graph.
