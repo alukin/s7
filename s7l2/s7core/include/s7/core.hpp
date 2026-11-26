@@ -4,6 +4,7 @@
 #ifndef S7CORE_INCLUDE_S7_CORE_HPP
 #define S7CORE_INCLUDE_S7_CORE_HPP
 
+#include "s7/array_descriptor.hpp"
 #include "s7/compiler.hpp"
 #include "s7/convert.hpp"
 #include "s7/builtin_element_registry.hpp"

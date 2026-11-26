@@ -10,6 +10,7 @@ configure_file(resources/schema_elements.hpp.in generated/s7_schema_elements.hpp
 # Shared, so that the host and every plugin use one copy of the registry and
 # element code.
 add_library(s7core SHARED
+    src/array_descriptor.cpp
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
@@ -131,6 +132,10 @@ s7_add_test_executable(s7core_smoke
 target_link_libraries(s7core_smoke PRIVATE s7core)
 
 add_test(NAME s7core_smoke COMMAND s7core_smoke)
+
+s7_add_test_executable(s7core_array_descriptor_smoke tests/array_descriptor_smoke.cpp)
+target_link_libraries(s7core_array_descriptor_smoke PRIVATE s7core)
+add_test(NAME s7core_array_descriptor_smoke COMMAND s7core_array_descriptor_smoke)
 
 s7_add_test_executable(s7core_indexed_execution_smoke tests/indexed_execution_smoke.cpp)
 target_link_libraries(s7core_indexed_execution_smoke PRIVATE s7core)

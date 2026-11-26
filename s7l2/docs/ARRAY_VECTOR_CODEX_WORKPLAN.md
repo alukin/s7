@@ -1,6 +1,6 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status:** D1 compatibility policy approved on 2026-11-26. D2–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+**Status:** D1 compatibility policy and D4 descriptor foundation approved. D2, D3 and D5–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
 
 Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
@@ -115,7 +115,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | Session | Required predecessor / decision | One bounded deliverable and acceptance |
 | --- | --- | --- |
 | **AV00** | Current main | Freeze base SHA, source/CTest inventory, installed SDK and rebuilt repository plugin smoke, scalar dispatch time/allocations on a specified host/build, ADR-021/022/024/029 fault and rate baselines, and the decision register. Record an evidence ledger. |
-| **AV01** | AV00 + **D4** | Validated concrete rank/extents/byte/stride CPU descriptors; test positive/zero/invalid extent, overflow before allocation, out-of-bounds/padding and scalar rank-zero unchanged. |
+| **AV01** | AV00 + **D4** | Generic fixed numeric shape and compact CPU view descriptors. Test positive, zero and invalid extents, overflow before allocation, alignment and backing ranges. Cover native rank zero, DSP and video, and F64 rank-two and rank-four spatial shapes. |
 | **AV02** | AV01 + **D1 policy** | Metadata JSON parser -> registry -> catalog -> canonical schema representation. Update repository-owned metadata and fixtures as needed. Reject malformed format and rank. |
 | **AV03** | AV02 | Headless exact numeric type/rank/extents/format validation, scalar/vector mismatch, no symbolic/broadcast/reshape, forbidden array coupled-trial and invalid-cycle cases. Exercise compiler rejection and scalar compilation. The first executable array fixture is AV05b. |
 | **AV04** | AV01 + **D3** (parallel to AV02/03) | Headless candidate writable pool, read leases, stale-generation/cancel safety, execution-reserved bytes vs optional retention budget; tiny-pool slow-viewer/stalled-consumer producer-progress and bounded skip tests. |
@@ -149,7 +149,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
 | **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1 records the accepted compatibility policy. D2–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1 and D4 are accepted. D2, D3 and D5–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
@@ -165,9 +165,9 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Depends:** AV00 and D4 approval.
 
-**Scope:** add a small core-only, validated rank/extents and CPU layout/view descriptor API. For 0.2.0 support rank 0 (conceptual scalar), rank 1, and rank 2/3 required for U8 image fixtures. Define byte bounds, stride/overflow/error checks. Do not modify runtime publication or existing scalar Port registration in this session.
+**Scope:** implement [D4](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics) with rank-generic numeric extents and a separate validated compact, aligned CPU view. Rank zero describes native scalar storage. Exercise rank one for DSP, ranks two and three for U8 images, and ranks two and four for F64 fields. Domain validation, runtime publication and port registration belong to later cards.
 
-**Accept:** unit tests for empty rank, valid extents, zero/negative/overflow extents as applicable, stride/offset bounds and rejection of unsupported layouts. Complete the core build and selected regressions. Include a negative test proving an unsafe large shape fails before allocation.
+**Accept:** tests for empty rank, valid extents, zero and negative extents, derived dense strides, offset bounds and alignment. The view API accepts only compact CPU backing. Complete the core build and selected regressions. Include a negative test proving an unsafe large shape fails before payload allocation.
 
 ### AV02 — Port metadata and schema declaration
 

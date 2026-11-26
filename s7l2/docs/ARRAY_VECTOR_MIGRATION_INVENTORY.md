@@ -117,7 +117,7 @@ For bounded sessions, issue ordering and exact handoff records see [ARRAY_VECTOR
 
 ## H. Independent-review migration checkpoints and acceptance boundaries
 
-The [2026-11-23 independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) records source constraints and proposed remedies. The [design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) records the accepted D1 compatibility policy and open decisions D2–D7. The [AV session DAG](ARRAY_VECTOR_CODEX_WORKPLAN.md) defines execution boundaries.
+The [2026-11-23 independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) records source constraints and proposed remedies. The [design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) records accepted decisions D1 and D4 and open decisions D2, D3 and D5–D7. The [AV session DAG](ARRAY_VECTOR_CODEX_WORKPLAN.md) defines execution boundaries.
 
 | Source / interface to re-audit | Required migration and negative evidence | Work sessions |
 | --- | --- | --- |

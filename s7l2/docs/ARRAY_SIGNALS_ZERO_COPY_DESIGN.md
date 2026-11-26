@@ -1,7 +1,7 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy accepted on 2026-11-26. D2–D7 remain open.**
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) is the live release acceptance record; these notes define the reusable architecture and the narrow first slice. The [source-based migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [five-hour Codex session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe what must change and a bounded delivery order. **Existing scalar elements stay intact; vector behavior uses new elements.** No code, tests or hardware qualifications are claimed by adding these documents.
+**Design notes — maintainer-approved scope. D1 compatibility policy and D4 descriptor foundation accepted. D2, D3 and D5–D7 remain open.**
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
 
@@ -21,7 +21,15 @@ Invariants:
 
 Treat the logical signal contract as (numeric element type, rank, extents, optional domain interpretation), where **rank zero is the current scalar**. Shapes are part of the declared/compiled port contract. For a first implementation use concrete positive extents; symbolic dimension unification and bounded dynamic extents follow after independent tests.
 
-Examples:
+### D4 — Fixed shape, CPU layout and domain semantics
+
+The maintainer approved a rank-generic numeric descriptor on 2026-11-26. The first API, [`ArrayDescriptor` and `DenseCpuArrayView`](../s7core/include/s7/array_descriptor.hpp), separates the numeric type and positive extents from the physical backing range. The descriptor accepts all S7 numeric types, checks element and byte counts before allocating extent metadata, and represents rank zero as one native value. The borrowed, read-only CPU view covers rank one and above. It validates the actual address alignment, offset and byte range and derives compact row-major strides from the extents. Its descriptor and storage must remain valid for the lifetime of the view. Owning storage and publication are later cards.
+
+DSP, images and spatial fields share this substrate. Port metadata will express typed domain requirements separately, such as RGB channel ordering or a spatial grid and sample placement. Match those requirements when compiling a connection. Equal extents alone are insufficient for comparing fields on distinct grids. A cell-centered field and two face-centered components can use separate ports over the same grid with distinct shapes. Grid or mesh topology and degree-of-freedom mapping belong to a later field contract. Padding, halo interiors and other storage layouts can use additional validated views while retaining the same logical shape.
+
+AV01 exercises spatial F64 rank-two and rank-four arrays alongside DSP and video. After whole-array causal memory works, validate a small two-dimensional heat-equation graph against an independent discrete recurrence. Give the spatial operator an explicit boundary rule and let the field integrator stage the next state using the model's `dt`. Test incompatible grid placement when typed spatial ports are available.
+
+### Example shapes
 
 | Value | Numeric type | Logical shape |
 | --- | --- | --- |
@@ -125,7 +133,7 @@ A bounded producer pool needs an **execution-critical reserve independent of opt
 
 ### Shapes, nested schemas, Studio and provenance (F5–F10)
 
-Require **exact numeric type, concrete positive rank/extents and required semantic format** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. The proposed first profile is F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
+Require **exact numeric type, concrete positive rank/extents and required domain semantics** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. Initial release elements use F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format on the generic D4 foundation. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
 
 **Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **Standalone array-valued `Schema::step()` is deferred/unsupported pending D7**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
 
@@ -144,12 +152,12 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D1 | **Accepted.** Earlier versions and third-party plugins carry no compatibility obligations. Qualify repository-owned consumers of the current interfaces and formats. | AV02, AV05, release SDK |
 | D2 | Approve candidate/staging/committed transition table and fallible resource reservation before nonthrowing **per-domain** commit. | AV05b/AV06/AV07 |
 | D3 | Approve producer reserve, optional viewer retention limits, drops/counters, cancellation and separate lossless recording profile. | AV04/AV13 |
-| D4 | **Open.** Review the [AV00 descriptor proposal](ARRAY_VECTOR_AV00_BASELINE.md#d4-proposal-for-av01) for logical shape, minimum CPU layout and validation bounds. | AV01/AV02/AV12 |
+| D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
 | D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. Resolve the whole-array Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
 
-**D2–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D2, D3 and D5–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 
