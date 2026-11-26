@@ -9,10 +9,30 @@ goes. Evaluate block-oriented processing and overlapping capture with graph
 execution while preserving causal ordering, bounded queues and explicit
 continuity reporting.
 
-Use the [FM receiver](../examples/sdr/FM_RECEIVER.md) as a repeatable benchmark
-in Studio and headless runs. Measure CPU time per second of audio, throughput
-headroom, underruns and stop latency under sustained load and with observers
-enabled. Include long runs to expose drift between the RF and audio clocks.
+GNU Radio limits each scheduling call by available buffer space and a work
+size cap, and its rational resampler uses a polyphase FIR. Use these as
+references when measuring the cost of scalar dispatch and resampling in S7.
+Any batching experiment must preserve sample order, filter state and the
+existing causal execution semantics across block boundaries.
+[GNU Radio block executor](https://github.com/gnuradio/gnuradio/blob/main/gnuradio-runtime/lib/block_executor.cc#L245),
+[GNU Radio rational resampler](https://wiki.gnuradio.org/index.php/Rational_Resampler).
+
+SDRangel's broadcast FM sink stages stereo frames before writing them to an
+audio FIFO. S7 already has a bounded playback queue. Measure whether changing
+the transfer size at the device boundary reduces wakeups, and record queue
+occupancy and short transfers alongside underruns. Keep the existing S7
+continuity reporting and playback recovery behavior.
+[SDRangel broadcast FM sink](https://github.com/f4exb/sdrangel/blob/master/plugins/channelrx/demodbfm/bfmdemodsink.cpp#L208-L224).
+
+Use the [FM receiver](../examples/sdr/FM_RECEIVER.md) for matched Studio and
+headless runs on the same release build, radio and audio device. Start with
+the existing 60-second headless command at nominal 672 kS/s and match its
+duration in Studio. Record the realized rates, CPU time per second of audio,
+graph throughput headroom, underruns and stop latency. Repeat Studio with
+observers enabled. Compare one change at a time and include a longer run
+with queue occupancy sampled over time to expose drift between the RF and
+audio clocks. See the [performance plan](SIMULATION_OBSERVATION_PERFORMANCE_PLAN.md#wp5--hardware-bound-fixes-h2-h3-h4-h5)
+for related hardware and observation work.
 
 ## Mixed observer/full-viewer load — 0.1.1 qualification
 
