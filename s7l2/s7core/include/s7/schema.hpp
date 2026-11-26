@@ -19,6 +19,7 @@
 namespace s7 {
 
 class NodeRuntime;
+struct ElementMetadata;
 
 struct Connection {
     std::string from_element;
@@ -33,6 +34,7 @@ struct ElementSpec {
     std::string id;
     ElementFactory factory;
     GenericElement generic;
+    std::shared_ptr<const ElementMetadata> array_metadata{}; // Declaration-only array ports.
 };
 
 class Schema : public Element {

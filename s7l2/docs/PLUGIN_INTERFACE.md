@@ -20,7 +20,7 @@ Header: `s7core/include/s7/element_plugin.hpp`. A plugin exports these `extern "
 
 ```cpp
 struct S7PluginInfo {
-    uint32_t api_version;      // must equal S7_PLUGIN_API_VERSION (currently 2)
+    uint32_t api_version;      // must equal S7_PLUGIN_API_VERSION (currently 3)
     uint32_t element_count;
     const char* plugin_name;
     const char* plugin_version;
@@ -47,7 +47,7 @@ Although the entry points are C functions, the registry pointer and `ElementDesc
 
 ## Array-port ABI for 0.2.0
 
-Plugin API v2 covers the changed C++ port metadata layout. The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral` and `s7wavelet`.
+Plugin API v2 covered the changed C++ port metadata layout. API v3 covers the new array declaration metadata in `ElementSpec`. The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral` and `s7wavelet`.
 
 The loader checks the query's ABI version before reading the optional manifest or passing a registry to plugin code. This closes the version-check gap recorded in the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
 

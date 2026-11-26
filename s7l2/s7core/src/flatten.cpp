@@ -64,6 +64,10 @@ public:
                 continue;
             }
             const auto id = level.id_of(spec.id);
+            if (spec.array_metadata) {
+                add_spec(ElementSpec{id, spec.factory, spec.generic, spec.array_metadata}, seed);
+                continue;
+            }
             if (!spec.factory) { // generic: never a schema
                 add_spec(ElementSpec{id, {}, spec.generic}, seed);
                 continue;

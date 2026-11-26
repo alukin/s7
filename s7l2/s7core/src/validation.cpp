@@ -39,7 +39,8 @@ Parents parents_of(const Schema& schema) {
 // with a trial state are replayed; independent sources stay held.
 std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& parents,
                                    const std::unordered_set<std::string>& roots,
-                                   const std::unordered_set<std::string>& varying_states, bool restricted,
+                                   const std::unordered_set<std::string>& varying_states,
+                                   const std::unordered_set<std::string>& array_elements, bool restricted,
                                    std::vector<std::string>& errors) {
     std::vector<std::string> rhs;
     std::unordered_map<std::string, bool> varying;
@@ -83,7 +84,10 @@ std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& 
             varying[id] = depends;
             if (depends) {
                 const auto* element = instances.at(id);
-                if (element->has_state()) {
+                if (array_elements.contains(id)) {
+                    errors.emplace_back((restricted ? "Coupled integration" : "Implicit TrapezoidIntegrator") +
+                        std::string(" trial cannot replay element '") + id + "' with array ports.");
+                } else if (element->has_state()) {
                     errors.emplace_back((restricted ? "Coupled integration" : "Implicit TrapezoidIntegrator") +
                         std::string(" derivative depends on stateful direct-feedthrough element '") + id +
                         "'; only stateless feedback operations may be reevaluated.");
@@ -577,8 +581,10 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
         }
         if (!implicit.empty() || !checked.coupled_regions.empty()) {
             const auto parents = parents_of(schema);
+            std::unordered_set<std::string> array_elements;
+            for (const auto& spec : schema.elements()) if (spec.array_metadata) array_elements.insert(spec.id);
             if (!implicit.empty())
-                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, implicit, false, checked.errors);
+                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, implicit, array_elements, false, checked.errors);
             if (!checked.coupled_regions.empty()) {
                 const auto dependencies = memory_dependencies(instances, parents);
                 AdjacencyMap memory_graph;
@@ -718,7 +724,7 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                     std::unordered_set<std::string> varying(region.states.begin(), region.states.end());
                     varying.insert(region.upstream_states.begin(), region.upstream_states.end());
                     const std::unordered_set<std::string> roots(region.states.begin(), region.states.end());
-                    region.rhs = trial_rhs(instances, parents, roots, varying, true, checked.errors);
+                    region.rhs = trial_rhs(instances, parents, roots, varying, array_elements, true, checked.errors);
                 }
             }
         }
@@ -726,14 +732,27 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
     return checked;
 }
 
-CheckedSchema check_schema(const Schema& schema) { return check_schema_impl(schema, true); }
-CheckedSchema check_schema_structure(const Schema& schema) { return check_schema_impl(schema, false); }
+static CheckedSchema check_executable_schema(const Schema& schema, const bool resolve_timing)
+{
+    auto checked = check_schema_impl(schema, resolve_timing);
+    if (checked.errors.empty()) {
+        const auto& elements = checked.flat->elements();
+        const auto array = std::ranges::find_if(elements, [](const ElementSpec& spec) { return spec.array_metadata != nullptr; });
+        if (array != elements.end()) {
+            checked.errors.push_back("Element '" + array->id + "' declares array ports. Array execution is not available.");
+        }
+    }
+    return checked;
+}
+
+CheckedSchema check_schema(const Schema& schema) { return check_executable_schema(schema, true); }
+CheckedSchema check_schema_structure(const Schema& schema) { return check_executable_schema(schema, false); }
 
 } // namespace detail
 
 ValidationResult Validator::validate(const Schema& schema) {
     ValidationResult result;
-    result.errors = detail::check_schema(schema).errors;
+    result.errors = detail::check_schema_impl(schema, true).errors;
     return result;
 }
 

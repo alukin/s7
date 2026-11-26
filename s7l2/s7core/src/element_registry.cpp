@@ -205,11 +205,26 @@ boost::json::object checked_params(const std::string& id, const ElementMetadata&
     return result;
 }
 
+static bool declares_array_ports(const ElementMetadata& metadata)
+{
+    const auto shaped = [](const PortSpec& port) { return port.array.has_value(); };
+    return std::ranges::any_of(metadata.input_ports, shaped) || std::ranges::any_of(metadata.output_ports, shaped);
+}
+
 ElementSpec make_element_spec(std::string id, const ElementDescriptor& descriptor, boost::json::object params) {
     // The spec keeps its own copy: registry storage may move when more
     // elements are registered.
     auto shared = std::make_shared<const ElementDescriptor>(descriptor);
     const auto& metadata = shared->metadata();
+    std::shared_ptr<const ElementMetadata> array_metadata;
+    if (declares_array_ports(metadata) && !metadata.schema_definition) {
+        if (metadata.variadic_inputs.enabled || metadata.variadic_outputs.enabled) {
+            throw std::invalid_argument("Element '" + id + "': array declarations require fixed port counts.");
+        }
+        // Validate defaults without turning them into explicit numeric pins.
+        static_cast<void>(checked_params(id, metadata, params));
+        array_metadata = std::shared_ptr<const ElementMetadata>(shared, &metadata);
+    }
     if (metadata.type_variables.empty()) {
         return ElementSpec{id,
                            [shared, id, params = std::move(params)] {
@@ -223,7 +238,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                                    throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
                                }
                            },
-                           {}};
+                           {}, std::move(array_metadata)};
     }
 
     std::vector<std::string> names;
@@ -319,7 +334,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
             throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
         }
     };
-    return ElementSpec{std::move(id), {}, std::move(generic)};
+    return ElementSpec{std::move(id), {}, std::move(generic), std::move(array_metadata)};
 }
 
 // ============================================================================
@@ -349,8 +364,7 @@ ElementDescriptor::ElementDescriptor(
 }
 
 std::unique_ptr<Element> ElementDescriptor::create(const ElementCreationContext& ctx) const {
-    const auto shaped = [](const PortSpec& port) { return port.array.has_value(); };
-    if (std::ranges::any_of(metadata_.input_ports, shaped) || std::ranges::any_of(metadata_.output_ports, shaped)) {
+    if (declares_array_ports(metadata_)) {
         throw std::logic_error("Element '" + type_name_ + "' declares array ports. Array execution is not available.");
     }
     return factory_(ctx);
