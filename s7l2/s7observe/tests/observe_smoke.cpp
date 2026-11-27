@@ -23,15 +23,16 @@ const s7::ArrayDescriptor shape(s7::SignalType::F32, extent);
 
 class MixedSource final : public s7::ArrayElement {
 public:
-    MixedSource()
+    explicit MixedSource(std::optional<s7::Rate> rate = std::nullopt, const bool* fail = nullptr)
         : ArrayElement("mixed_source"),
           pool_(shape, 2, 1, std::make_shared<s7::ArrayMemoryBudget>(3 * shape.byte_size())),
-          output_(register_array_output("array", shape))
+          output_(register_array_output("array", shape)), rate_(rate), fail_(fail)
     {
         register_output(1, "scalar", s7::SignalType::F64, &value_);
     }
 
     s7::ArrayPool::Retention admit_reader() { return pool_.make_retention(1, shape.byte_size()); }
+    std::optional<s7::Rate> declared_rate() const override { return rate_; }
 
     void step() override
     {
@@ -39,11 +40,14 @@ public:
         ++value_;
         std::ranges::fill(write.values<s7::SignalType::F32>(), static_cast<float>(value_));
         static_cast<void>(output_.exchange({std::move(write).seal()}));
+        if (fail_ && *fail_) throw std::runtime_error("later domain fault");
     }
 
 private:
     s7::ArrayPool pool_;
     s7::ArrayOutputSlot& output_;
+    std::optional<s7::Rate> rate_;
+    const bool* fail_;
     double value_{};
 };
 
@@ -114,6 +118,53 @@ void check_committed_array_observation()
     });
     other.join();
     assert(refused);
+}
+
+void check_array_snapshot()
+{
+    bool fail = false;
+    const auto fast = s7::Rate::from_hz(100);
+    const auto slow = s7::Rate::from_hz(50);
+    s7::Schema schema("array_snapshot");
+    schema.add_element("fast", [&] { return std::make_unique<MixedSource>(fast); });
+    schema.add_element("slow", [&] { return std::make_unique<MixedSource>(slow, &fail); });
+    auto graph = s7::Compiler::compile_experimental_arrays(schema);
+    std::array admissions{
+        static_cast<MixedSource&>(*graph.elements.at("fast")).admit_reader(),
+        static_cast<MixedSource&>(*graph.elements.at("slow")).admit_reader()
+    };
+    s7::NodeRuntime runtime(std::move(graph));
+    const s7::ObservationService observation(runtime);
+    const std::array probes{s7::ArrayProbePoint{{"fast", 0}, admissions},
+                            s7::ArrayProbePoint{{"slow", 0}, admissions}};
+    runtime.step();
+    fail = true;
+    bool threw = false;
+    try { runtime.step(); }
+    catch (const std::runtime_error& error) {
+        threw = std::string_view(error.what()) == "later domain fault";
+    }
+    assert(threw);
+    {
+        const auto snapshot = observation.array_snapshot(probes).value();
+        assert(snapshot.outer_step == 1 && snapshot.samples.size() == 2);
+        assert(snapshot.samples[0].rate == fast && snapshot.samples[0].domain_step == 2);
+        assert(snapshot.samples[1].rate == slow && snapshot.samples[1].domain_step == 1);
+
+        fail = false;
+        runtime.step();
+        for (int index = 0; index < 12; ++index) runtime.step();
+        const auto skipped = observation.array_snapshot(probes);
+        assert(!skipped && skipped.error() == s7::ArrayPoolError::Exhausted);
+        assert(runtime.step_count() == 14);
+        assert(snapshot.samples[0].value.lease.values<s7::SignalType::F32>().front() == 2.0f);
+        assert(snapshot.samples[1].value.lease.values<s7::SignalType::F32>().front() == 1.0f);
+    }
+    admissions[1].close();
+    const auto cancelled = observation.array_snapshot(probes);
+    assert(!cancelled && cancelled.error() == s7::ArrayPoolError::Closed);
+    const auto still_available = observation.try_retain_array_output(probes[0]);
+    assert(still_available && still_available->domain_step == 14);
 }
 } // namespace
 
@@ -258,6 +309,7 @@ int main() try
     assert(refused);
 
     check_committed_array_observation();
+    check_array_snapshot();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7observe smoke: fatal error: " << ex.what() << '\n';

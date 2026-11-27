@@ -323,6 +323,10 @@ Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independ
 
 **Accept:** selected output snapshot coherence, retention after producer advances, slow subscriber/pool exhaustion, attach/detach, explicit gaps and counters, thread safety, error cancellation; measured payload copies for local observation, scalar \`s7observe\` regressions.
 
+**AV13a evidence:** `ObservationService::array_snapshot` captures committed leases in request order. It selects a pre-admitted token from the actual backing pool and releases partial acquisitions on refusal. The smoke records different domain positions after a partial commit. It then advances the producers while their old samples remain retained, checks bounded admission, and verifies cancellation.
+
+**AV13b mailbox evidence:** The stepping thread can offer a committed sample to a one-entry `ArrayMailbox`. Pausing keeps delivery bounded. Replacement and admission skips have separate counters, and each sample retains its source metadata and domain position. The threaded smoke holds an old frame while new frames arrive, closes the subscription, and verifies retained lifetime. ASan and UBSan passed for the mailbox, pool and descriptor paths. Studio subscription and viewer routing follow in AV14b.
+
 ### AV14 — Studio metadata, wiring and observer registration
 
 **Depends:** AV14a on AV03/AV08b; AV14b on AV14a + AV13b. Observer pin checking must not wait for rendering.
