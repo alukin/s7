@@ -1,0 +1,213 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "library": "s7video",
+  "elements": [
+    {
+      "type_name": "VideoEncoder",
+      "stateless": true,
+      "display_name": "Video Encoder",
+      "description": "Encodes one complete Gray8 or RGB8 frame as an independent MJPEG packet.",
+      "category": "video",
+      "version": "0.1.0",
+      "tags": [
+        "video",
+        "mjpeg"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Complete decoded frame",
+          "type": "U8",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            240,
+            320,
+            3
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Complete MJPEG packet",
+          "type": "U8",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            1048576
+          ],
+          "packet": {
+            "codec": "mjpeg",
+            "width": 320,
+            "height": 240
+          }
+        }
+      ],
+      "parameters": [
+        {
+          "name": "width",
+          "type": "int",
+          "description": "Frame width in pixels.",
+          "default": 320,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 4096
+        },
+        {
+          "name": "height",
+          "type": "int",
+          "description": "Frame height in pixels.",
+          "default": 240,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 4096
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "description": "Decoded image pixel format.",
+          "default": "rgb8",
+          "required": false,
+          "enum_values": [
+            "gray8",
+            "rgb8"
+          ]
+        },
+        {
+          "name": "packet_capacity",
+          "type": "int",
+          "description": "Maximum bytes per encoded packet. Connect ports with the same capacity and geometry.",
+          "default": 1048576,
+          "required": false,
+          "enum_values": [],
+          "min": 4,
+          "max": 33554432
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "C32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "VideoDecoder",
+      "stateless": true,
+      "display_name": "Video Decoder",
+      "description": "Decodes one complete MJPEG packet to Gray8 or RGB8 for video processing or display.",
+      "category": "video",
+      "version": "0.1.0",
+      "tags": [
+        "video",
+        "mjpeg"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Complete MJPEG packet",
+          "type": "U8",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            1048576
+          ],
+          "packet": {
+            "codec": "mjpeg",
+            "width": 320,
+            "height": 240
+          }
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Complete decoded frame",
+          "type": "U8",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            240,
+            320,
+            3
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "width",
+          "type": "int",
+          "description": "Frame width in pixels.",
+          "default": 320,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 4096
+        },
+        {
+          "name": "height",
+          "type": "int",
+          "description": "Frame height in pixels.",
+          "default": 240,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 4096
+        },
+        {
+          "name": "format",
+          "type": "string",
+          "description": "Decoded image pixel format.",
+          "default": "rgb8",
+          "required": false,
+          "enum_values": [
+            "gray8",
+            "rgb8"
+          ]
+        },
+        {
+          "name": "packet_capacity",
+          "type": "int",
+          "description": "Maximum bytes per encoded packet. Connect ports with the same capacity and geometry.",
+          "default": 1048576,
+          "required": false,
+          "enum_values": [],
+          "min": 4,
+          "max": 33554432
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "C32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

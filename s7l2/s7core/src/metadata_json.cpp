@@ -14,6 +14,9 @@ std::optional<ArrayDescriptor> parse_port_array(const boost::json::object& port,
                                                 const SignalType type, const std::string_view context)
 {
     const auto* shape = port.if_contains("shape");
+    const auto* packet = port.if_contains("packet");
+    if (packet && !shape)
+        throw std::invalid_argument(std::string(context) + ": 'packet' requires a fixed capacity in 'shape'.");
     if (!shape) return std::nullopt;
 
     const auto prefix = std::string(context) + ": 'shape' ";
@@ -30,6 +33,29 @@ std::optional<ArrayDescriptor> parse_port_array(const boost::json::object& port,
         } else {
             throw std::invalid_argument(prefix + "extents must be integers in int64 range.");
         }
+    }
+    if (packet) {
+        const auto packet_error = [&] {
+            return std::invalid_argument(std::string(context) + ": 'packet' requires U8[capacity] and codec, width and height.");
+        };
+        if (type != SignalType::U8 || extents.size() != 1 || extents.front() < 0 ||
+            extents.front() > static_cast<std::int64_t>(MjpegPacketFormat::max_capacity) || !packet->is_object())
+            throw packet_error();
+        const auto& object = packet->as_object();
+        const auto* codec = object.if_contains("codec");
+        if (object.size() != 3 || !codec || !codec->is_string() || codec->as_string() != "mjpeg")
+            throw packet_error();
+        const auto dimension = [&](const char* key) {
+            const auto* entry = object.if_contains(key);
+            if (!entry || (!entry->is_int64() && !entry->is_uint64())) throw packet_error();
+            const auto value = entry->is_uint64() ? entry->as_uint64() :
+                static_cast<std::uint64_t>(std::max(std::int64_t{0}, entry->as_int64()));
+            if (value < 1 || value > MjpegPacketFormat::max_dimension)
+                throw packet_error();
+            return static_cast<int>(value);
+        };
+        return ArrayDescriptor::mjpeg_packet(static_cast<std::size_t>(extents.front()),
+                                            {dimension("width"), dimension("height")});
     }
     try {
         return ArrayDescriptor(type, extents);
@@ -117,7 +143,7 @@ std::vector<PortSpec> ports(const object& source, const char* key, const std::st
     std::set<std::string> names;
     for (const auto& field : array(source, key, context)) {
         const auto& p = as_object(field, context + "." + key);
-        keys(p, {"name", "description", "type", "optional", "type_rule", "shape"}, context);
+        keys(p, {"name", "description", "type", "optional", "type_rule", "shape", "packet"}, context);
         PortSpec port;
         port.name = string(p, "name", context);
         unique(names, port.name, context + "." + key);

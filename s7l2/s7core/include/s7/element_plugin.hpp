@@ -43,7 +43,7 @@ const char* s7_plugin_manifest_json();
 void s7_register_elements(void* registry_ptr);
 
 // Plugin API version - increment on breaking changes
-#define S7_PLUGIN_API_VERSION 4
+#define S7_PLUGIN_API_VERSION 5
 
 #ifdef __cplusplus
 }

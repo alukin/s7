@@ -142,7 +142,7 @@ std::vector<Schema::ExposedPort> parse_exposed_ports(const boost::json::object& 
         binding.name = string_value(binding_object, "name");
         for (const auto& member : binding_object) {
             const std::string_view key = member.key();
-            if (key != "name" && key != "type" && key != "element" && key != "port" && key != "shape") {
+            if (key != "name" && key != "type" && key != "element" && key != "port" && key != "shape" && key != "packet") {
                 throw std::invalid_argument("Unknown exposed port field '" + std::string(key) + "'.");
             }
         }

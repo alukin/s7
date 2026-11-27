@@ -217,6 +217,32 @@ void check_mixed_ports()
     require(consumer.result == 17, "consumer follows slot replacement without rebinding");
 }
 
+void check_packet_port()
+{
+    const auto signature = ArrayDescriptor::mjpeg_packet(32, {7, 5});
+    const ArrayDescriptor plain(SignalType::U8, std::array<std::int64_t, 1>{32});
+    require(signature != plain && signature != ArrayDescriptor::mjpeg_packet(32, {5, 7}),
+            "packet type must include format and geometry");
+    ArrayPool pool(signature, 2, 1, std::make_shared<ArrayMemoryBudget>(96));
+    ArrayOutputSlot out(signature);
+    ArrayInputBinding input(plain);
+    rejects<std::invalid_argument>([&] { input.bind(out); }, "opaque packet bound to numeric input");
+    auto writer = pool.try_acquire().value();
+    std::ranges::fill(writer.bytes(), std::byte{42});
+    s7::ArrayValue packet{std::move(writer).seal()};
+    rejects<std::invalid_argument>([&] { static_cast<void>(out.exchange(std::move(packet))); }, "packet missing valid length");
+    packet.packet_bytes = 33;
+    rejects<std::invalid_argument>([&] { static_cast<void>(out.exchange(std::move(packet))); }, "packet length exceeds capacity");
+    packet.packet_bytes = 8;
+    packet.media_timing = s7::ArrayMediaTiming{std::nullopt, true};
+    static_cast<void>(out.exchange(std::move(packet)));
+    auto admission = pool.make_retention(1, 32);
+    const auto sample = out.try_retain(admission).value();
+    require(sample.encoded_bytes().size() == 8 && sample.media_timing->discontinuity_before,
+            "observation lost packet extent or media timing");
+    rejects<std::invalid_argument>([&] { static_cast<void>(sample.lease.values<SignalType::U8>()); }, "packet read as numeric vector");
+}
+
 void check_execution_guard()
 {
     s7::Schema schema("mixed_factory");
@@ -291,6 +317,7 @@ int main() try {
     check_execution_guard();
     check_compiled_fanout();
     check_compiled_shape_validation();
+    check_packet_port();
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

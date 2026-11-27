@@ -7,6 +7,14 @@
 
 namespace s7 {
 
+std::span<const std::byte> ArrayValue::encoded_bytes() const &
+{
+    const auto view = lease.view();
+    if (!view.descriptor().mjpeg() || !packet_bytes || *packet_bytes < 4 || *packet_bytes > view.bytes().size())
+        throw std::invalid_argument("Invalid MJPEG packet lease or payload length.");
+    return view.bytes().first(*packet_bytes);
+}
+
 ArrayOutputSlot::ArrayOutputSlot(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))
 {
     if (descriptor_.rank() == 0) throw std::invalid_argument("An array output requires a positive rank.");
@@ -23,7 +31,7 @@ DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().lease.v
 
 ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
 {
-    if (!next && (next.origin || next.sample_window || next.spectrum || next.image)) {
+    if (!next && (next.origin || next.sample_window || next.spectrum || next.image || next.packet_bytes || next.media_timing)) {
         throw std::invalid_argument("An empty array value cannot carry metadata.");
     }
     if (next.lease.retention_) {
@@ -31,6 +39,20 @@ ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
     }
     if (next && next.lease.view().descriptor() != descriptor_) {
         throw std::invalid_argument("Array lease does not match the output descriptor.");
+    }
+    if (next && descriptor_.mjpeg()) {
+        if (next.image || next.sample_window || next.spectrum)
+            throw std::invalid_argument("MJPEG packets can carry source identity and media timing.");
+        static_cast<void>(next.encoded_bytes());
+    } else if (next.packet_bytes) {
+        throw std::invalid_argument("Packet payload length requires an encoded port.");
+    }
+    if (next.media_timing) {
+        if (!next.image && !descriptor_.mjpeg())
+            throw std::invalid_argument("Media timing requires an image or encoded packet.");
+        if (const auto& time = next.media_timing->presentation_time;
+            time && (!time->ticks_per_second.numerator || !time->ticks_per_second.denominator))
+            throw std::invalid_argument("Media presentation time requires a positive time base.");
     }
     if (next.image) {
         const auto extents = descriptor_.extents();
@@ -77,7 +99,8 @@ std::expected<ArrayValue, ArrayPoolError> ArrayOutputSlot::try_retain(
     if (mode_ != Mode::Standalone && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
     auto lease = retention.try_retain(published_.lease);
     if (!lease) return std::unexpected(lease.error());
-    return ArrayValue{std::move(*lease), published_.origin, published_.sample_window, published_.spectrum, published_.image};
+    return ArrayValue{std::move(*lease), published_.origin, published_.sample_window, published_.spectrum,
+                      published_.image, published_.packet_bytes, published_.media_timing};
 }
 
 ArrayInputBinding::ArrayInputBinding(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))

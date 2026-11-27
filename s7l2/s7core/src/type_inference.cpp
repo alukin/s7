@@ -341,6 +341,9 @@ private:
         };
         const auto describe = [](const ArrayDescriptor* array) {
             if (!array) return std::string("scalar");
+            if (const auto& packet = array->mjpeg())
+                return "MJPEG[" + std::to_string(packet->width) + "x" + std::to_string(packet->height) +
+                       ", " + std::to_string(array->byte_size()) + " bytes]";
             std::string description(signal_type_name(array->type()));
             description += '[';
             for (const auto extent : array->extents()) {
@@ -362,7 +365,7 @@ private:
             if (output == input || (output && input && *output == *input)) continue;
             result_.errors.push_back("Array port mismatch: " + label(edge.from_element, "output", edge.from_port) +
                                      " (" + describe(output) + ") -> " + label(edge.to_element, "input", edge.to_port) +
-                                     " (" + describe(input) + "). Array ports require identical numeric type and extents.");
+                                     " (" + describe(input) + "). Array ports require identical type, extents and format.");
         }
     }
 

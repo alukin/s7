@@ -57,7 +57,8 @@ public:
         [[nodiscard]] std::span<const signal_storage_t<Type>> values() const &
         {
             const auto data = view();
-            if (data.descriptor().type() != Type) throw std::invalid_argument("Array lease type mismatch.");
+            if (data.descriptor().type() != Type || data.descriptor().mjpeg())
+                throw std::invalid_argument("Array lease is incompatible with numeric access.");
             return {reinterpret_cast<const signal_storage_t<Type>*>(data.bytes().data()),
                     data.descriptor().element_count()};
         }
@@ -96,7 +97,8 @@ public:
         [[nodiscard]] std::span<signal_storage_t<Type>> values() &
         {
             const auto& shape = descriptor();
-            if (shape.type() != Type) throw std::invalid_argument("Array lease type mismatch.");
+            if (shape.type() != Type || shape.mjpeg())
+                throw std::invalid_argument("Array lease is incompatible with numeric access.");
             return {reinterpret_cast<signal_storage_t<Type>*>(bytes().data()), shape.element_count()};
         }
 

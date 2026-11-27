@@ -21,6 +21,8 @@ QString label(s7::SignalType type, const s7::ArrayDescriptor* shape)
 {
     auto result = QString::fromUtf8(s7::signal_type_name(type));
     if (!shape) return result;
+    if (const auto& packet = shape->mjpeg())
+        return QStringLiteral("MJPEG[%1×%2]").arg(packet->width).arg(packet->height);
     QStringList extents;
     for (const auto extent : shape->extents()) extents.push_back(QString::number(extent));
     return result + QStringLiteral("[") + extents.join(QLatin1Char(',')) + QStringLiteral("]");

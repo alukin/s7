@@ -78,21 +78,16 @@ Encoded source → VideoDecoder → decoded-frame processing → VideoEncoder �
 
 A source such as PipeWire can supply an encoded format such as MJPEG or H.264,
 or publish a decoded frame directly when its raw layout matches the S7 input.
-The proposed typed packet connections are used at the encoded edges of the
+Typed packet connections are used at the encoded edges of the
 pipeline. The initial codec provider links FFmpeg's `libavcodec`,
 `libavutil` and `libswscale`. The production GStreamer media adapter has
 its own qualification gate.
 
-The encoded port contract needs review before registration. It must identify
-the codec and required initialization data, bound the packet payload and
-queue, and preserve access-unit boundaries, input timestamps and stream
-discontinuities. It must also define zero, one and multiple output events
-per input, draining at EOS, cancellation and what happens to codec state
-after a failed graph evaluation. A first explicit MJPEG profile can qualify
-one complete independently coded image per packet before adding buffered
-and reordered codecs such as H.264. The codec tests should use deterministic
-fixtures and cover malformed packets, budget limits, format mismatch,
-flush and restart without opening a camera.
+Each additional codec profile needs to identify its required initialization
+data, bound the packet payload and queue, and preserve access-unit boundaries,
+input timestamps and discontinuities. Profiles with buffered output need
+explicit rules for output cardinality, EOS draining, cancellation and codec
+state after a failed graph evaluation.
 
 #### Initial MJPEG profile
 
@@ -104,31 +99,45 @@ independently decodable JPEG image, with matching dimensions and a byte
 length bounded by the caller's capacity and the 32 MiB backend limit. The
 length is the exact payload length including the final JPEG marker.
 
-The proposed graph port carries a local typed packet lease and valid byte
-length, with codec and expected dimensions in its descriptor. The packet
-descriptor is distinct from the decoded array's pixel descriptor. An encoder
+The approved MJPEG graph port carries a local typed packet lease and valid byte
+length. The descriptor matches codec, width, height and capacity at compile
+time. Backing storage is compact U8, and numeric port bindings require a
+different descriptor. An encoder
 or decoder evaluation produces one complete output or reports an error before
 publishing. The backend currently starts fresh codec state on every call.
 One complete packet can be retried after a graph failure, provided the
-publisher still owns the input. The first profile carries source occurrence
-and any available capture timestamp through the conversion. Packet metadata
-must preserve an absent timestamp and identify any reported discontinuity.
+publisher still owns the input. The elements preserve source occurrence and
+optional media timing in both directions. Timing carries signed presentation
+ticks with a positive rational ticks-per-second time base and a discontinuity
+flag. Graph domain time remains a separate axis.
 H.264 requires separate review for buffering, reordering and EOS drain.
 
-The linked backend is available for testing. The typed packet port and the
-registered `VideoEncoder` and `VideoDecoder` wrappers depend on review of
-the graph contract above.
+Set matching `packet_capacity`, `width` and `height` on the codec elements.
+Each codec's `format` selects its decoded Gray8 or RGB8 side. To expose an
+encoded port across a nested schema, declare `"type": "U8"`,
+`"shape": [65536]` and `"packet": {"codec": "mjpeg", "width": 65, "height": 33}`
+with the matching capacity and dimensions. A packet observer reads the exact
+prefix via `ArrayValue::encoded_bytes()`.
+
+Build and test the optional plugin against the current installed SDK. The
+packet representation requires [plugin API v5](PLUGIN_INTERFACE.md).
 
 ```bash
 cmake --install build-release --component s7sdk --prefix /tmp/s7-video-sdk
 cmake -S s7video -B /tmp/s7-video-build -DCMAKE_PREFIX_PATH=/tmp/s7-video-sdk
 cmake --build /tmp/s7-video-build
 ctest --test-dir /tmp/s7-video-build --output-on-failure --no-tests=error
+build-release/s7runtime/s7runtime --schema s7video/examples/schema_mjpeg_roundtrip.json --plugin-dir /tmp/s7-video-build --state-dir /tmp/s7-video-runtime-state
 ```
 
 The smoke test checks odd-width grayscale and RGB pixel reconstruction to
 a declared lossy tolerance. It checks truncation, concatenated images,
 bad marker framing, wrong geometry and insufficient packet capacity.
+The installed-plugin graph test covers a saved deterministic round trip,
+a nested encoded port, rejected capacity and geometry mismatches, rejection
+of a numeric U8 wire, media timing and rollback after a downstream fault.
+The headless runtime loaded the installed plugin and executed five steps.
+Studio showed the codec type and configured dimensions on the encoded wire.
 On Fedora 45 with FFmpeg 9.0.2, the Release and Clang ASan/UBSan builds
 passed. Both 65×33 reference frames had a maximum absolute error of
 2 levels per channel. The existing no-device FFmpeg experiment also

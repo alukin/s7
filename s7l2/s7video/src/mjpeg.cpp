@@ -26,8 +26,8 @@ using Codec = std::unique_ptr<AVCodecContext, AvFree<AVCodecContext, avcodec_fre
 using Frame = std::unique_ptr<AVFrame, AvFree<AVFrame, av_frame_free>>;
 using Packet = std::unique_ptr<AVPacket, AvFree<AVPacket, av_packet_free>>;
 
-constexpr int maxDimension = 4096;
-constexpr std::int64_t maxPixels = 1 << 23;
+constexpr int maxDimension = s7::MjpegPacketFormat::max_dimension;
+constexpr std::int64_t maxPixels = s7::MjpegPacketFormat::max_pixels;
 
 void checked(int result, const char* operation)
 {

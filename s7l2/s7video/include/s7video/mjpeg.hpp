@@ -21,7 +21,7 @@ struct FrameFormat {
 // and conversion. The tail of the encoded output span is left to the caller.
 class MjpegCodec {
 public:
-    static constexpr std::size_t maxPacketBytes = 32U << 20;
+    static constexpr std::size_t maxPacketBytes = s7::MjpegPacketFormat::max_capacity;
 
     explicit MjpegCodec(FrameFormat format);
     [[nodiscard]] std::size_t frame_bytes() const noexcept;

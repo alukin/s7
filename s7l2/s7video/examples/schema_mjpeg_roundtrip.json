@@ -1,0 +1,14 @@
+{
+  "name": "mjpeg_roundtrip",
+  "dt": 0.04,
+  "simulation": {"periods": 1, "sample_rate_hz": 25, "frequency_hz": 5},
+  "elements": [
+    {"id": "camera_fixture", "type": "TestPatternFrame", "params": {"width": 65, "height": 33, "format": "gray8", "source_id": 11}},
+    {"id": "encode", "type": "VideoEncoder", "params": {"width": 65, "height": 33, "format": "gray8", "packet_capacity": 65536}},
+    {"id": "decode", "type": "VideoDecoder", "params": {"width": 65, "height": 33, "format": "gray8", "packet_capacity": 65536}}
+  ],
+  "connections": [
+    {"from_element": "camera_fixture", "from_port": 0, "to_element": "encode", "to_port": 0},
+    {"from_element": "encode", "from_port": 0, "to_element": "decode", "to_port": 0}
+  ]
+}

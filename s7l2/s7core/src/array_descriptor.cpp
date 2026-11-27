@@ -4,6 +4,7 @@
 #include "s7/array_descriptor.hpp"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -35,6 +36,19 @@ ArrayDescriptor::ArrayDescriptor(const SignalType type, const std::span<const st
         bytes *= count;
     }
     extents_.assign(extents.begin(), extents.end());
+}
+
+ArrayDescriptor ArrayDescriptor::mjpeg_packet(const std::size_t capacity, const MjpegPacketFormat format)
+{
+    if (capacity < 4 || capacity > MjpegPacketFormat::max_capacity)
+        throw std::invalid_argument("MJPEG packet capacity must be between 4 bytes and 32 MiB.");
+    if (format.width < 1 || format.width > MjpegPacketFormat::max_dimension ||
+        format.height < 1 || format.height > MjpegPacketFormat::max_dimension ||
+        std::int64_t{format.width} * format.height > MjpegPacketFormat::max_pixels)
+        throw std::invalid_argument("MJPEG dimensions exceed the supported bounds.");
+    ArrayDescriptor descriptor(SignalType::U8, std::array{static_cast<std::int64_t>(capacity)});
+    descriptor.mjpeg_ = format;
+    return descriptor;
 }
 
 std::size_t ArrayDescriptor::element_count() const noexcept

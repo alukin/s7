@@ -49,14 +49,30 @@ struct ArrayImage {
     ImagePixelFormat pixel_format;
 };
 
+struct MediaPresentationTime {
+    std::int64_t ticks;
+    Rate ticks_per_second;
+    bool operator==(const MediaPresentationTime&) const = default;
+};
+
+struct ArrayMediaTiming {
+    std::optional<MediaPresentationTime> presentation_time;
+    bool discontinuity_before{};
+    bool operator==(const ArrayMediaTiming&) const = default;
+};
+
 struct ArrayValue {
     ArrayPool::ReadLease lease;
     std::optional<ArraySourceOccurrence> origin{};
     std::optional<ArraySampleWindow> sample_window{};
     std::optional<ArraySpectrum> spectrum{};
     std::optional<ArrayImage> image{};
+    std::optional<std::size_t> packet_bytes{};
+    std::optional<ArrayMediaTiming> media_timing{};
 
     explicit operator bool() const noexcept { return static_cast<bool>(lease); }
+    [[nodiscard]] std::span<const std::byte> encoded_bytes() const &;
+    std::span<const std::byte> encoded_bytes() const && = delete;
 };
 
 } // namespace s7

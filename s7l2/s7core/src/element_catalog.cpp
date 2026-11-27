@@ -21,7 +21,11 @@ boost::json::array port_catalog(const std::vector<PortSpec>& ports)
             {"name", port.name}, {"description", port.description}, {"optional", port.optional}};
         if (port.type_rule.empty()) entry["type"] = signal_type_name(port.type);
         else entry["type_rule"] = port.type_rule;
-        if (port.array) entry["shape"] = array_shape_json(*port.array);
+        if (port.array) {
+            entry["shape"] = array_shape_json(*port.array);
+            if (const auto& packet = port.array->mjpeg())
+                entry["packet"] = boost::json::object{{"codec", "mjpeg"}, {"width", packet->width}, {"height", packet->height}};
+        }
         result.emplace_back(std::move(entry));
     }
     return result;

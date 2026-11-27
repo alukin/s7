@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -13,11 +14,22 @@
 
 namespace s7 {
 
+struct MjpegPacketFormat {
+    static constexpr int max_dimension = 4096;
+    static constexpr std::int64_t max_pixels = 1 << 23;
+    static constexpr std::size_t max_capacity = 32U << 20;
+    int width;
+    int height;
+    bool operator==(const MjpegPacketFormat&) const = default;
+};
+
 /// Fixed numeric type and extents, independent of storage and domain metadata.
 /// An empty extent list denotes one native scalar.
 class ArrayDescriptor {
 public:
     explicit ArrayDescriptor(SignalType type, std::span<const std::int64_t> extents = {});
+    [[nodiscard]] static ArrayDescriptor mjpeg_packet(std::size_t capacity, MjpegPacketFormat format);
+    [[nodiscard]] const std::optional<MjpegPacketFormat>& mjpeg() const noexcept { return mjpeg_; }
 
     [[nodiscard]] SignalType type() const noexcept { return type_; }
     [[nodiscard]] std::span<const std::size_t> extents() const noexcept { return extents_; }
@@ -33,6 +45,7 @@ private:
     SignalType type_;
     std::size_t element_size_;
     std::size_t element_alignment_;
+    std::optional<MjpegPacketFormat> mjpeg_;
 };
 
 /// Borrowed read-only view of an aligned, tightly packed row-major CPU array.
