@@ -370,6 +370,22 @@ Resume with AV15a for the Waterfall row and frequency-axis mapping. AV16a can pr
 
 **Accept:** canonical saved IQ -> FFT -> PSD -> Waterfall diagram; numeric oracle and deterministic image/axis screenshots checked against reference, 1-step vs block-rate metadata consistency, skipped-row/pause/close/reopen/fast producer behavior, unchanged graph output on viewer attach/detach.
 
+**AV15a checkpoint (2026-11-27, base `84b6735`).** `WaterfallHistory` produces a coherent raster, row metadata and axes for the renderer. Columns ascend by signed DFT bin. Even-length spectra start with negative Nyquist. The physical axis uses the supplied sampling rate when known and uses signed bin numbers otherwise. Row time is the committed domain step divided by the model-domain cadence. The source occurrence and sample interval travel with each row.
+
+The history stores linear F32 power for up to 256 rows by default, with a configurable cap of 1024 rows and a 16 MiB power payload limit. The raster presents oldest rows first and inserts one blue stripe before each row with a known gap. The row metadata distinguishes skipped domain steps from source discontinuities. A large skip has the same raster height as a small skip, while its exact count remains in metadata. An axis change starts a new segment and reports the change to the caller. A snapshot can recolor all retained rows using either palette, a positive reference in the input power units and a dB range. Exact zero maps to the lower bound through the existing spectrum dB conversion.
+
+The exact-pixel oracle covers the shift, both palettes, zero, sub-floor values and a change of reference. The history test also checks malformed inputs, signed bins with unknown rate, distinct gap causes, source epochs, duplicate delivery, eviction, immutable snapshots and the raster bound with gap stripes. Native Release passed the seven focused Studio and observation tests and the installed-SDK spectral smoke. The saved `schema_vector_psd.json` fixture executed ten steps with the rebuilt plugin. The new adapter and its test passed with Clang 22.1.8 ASan and UBSan against the Release dependencies.
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7studio_waterfall_history_test s7studio_array_persistence_test s7studio_viewers_test s7studio_scope_lifecycle_test s7studio_time_frequency_test --parallel 6
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -R '^(s7studio_(waterfall_history|array_persistence|viewers|scope_lifecycle|time_frequency)|s7observe(_array_mailbox)?_smoke)$'
+CMAKE_BUILD_PARALLEL_LEVEL=4 ctest --test-dir build-release --output-on-failure -R '^s7spectral_sdk_smoke$'
+build-release/s7runtime/s7runtime --schema s7runtime/examples/schema_vector_psd.json --plugin-dir build-release/s7runtime/plugin_sdk_test/build --state-dir /tmp/s7-av15a-psd-state
+```
+
+AV15b connects the history to the Waterfall window and qualifies the rendered axes, controls and saved observer diagram. AV16a can proceed independently from AV14.
+
 ### AV16 — Basic Video Player viewer rendering (G4/V)
 
 **Depends:** AV12, AV13, AV14.
