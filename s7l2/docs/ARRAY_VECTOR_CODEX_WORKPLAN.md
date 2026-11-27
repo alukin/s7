@@ -337,6 +337,10 @@ Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independ
 
 **AV14a evidence:** The Qt Release persistence and wiring test passed. Studio shows the configured numeric type and shape on wires and port tooltips. It rejects incompatible array lengths and component types, including when an unrelated element is unresolved. Existing scalar observers reject array connections. The broader diagram test still reports the soft-fill assertion recorded in AV00. Viewer-specific format checks and delivery routing remain open.
 
+**Reboot checkpoint (2026-11-27):** The implementation checkpoint is `d13f680` on `feature/array-av01`. D1–D7 are accepted. Resume with the remaining AV14a viewer-format checks and AV14b Studio subscription and routing. Reuse `ObservationService::array_snapshot` and `ArrayMailbox`. Resolve retention against the actual backing pool when a source changes. Keep the Waterfall and Video Player renderers with AV15 and AV16, followed by printing and release qualification. The maintainer asked to continue through items that need no further design decision.
+
+The latest headless Release run passed all 106 tests, including the installed-SDK spectral smoke. The focused Studio Release test passed at the implementation checkpoint. The broader Studio diagram test reproduced the AV00 assertion “element families and nested schemas use distinct soft fills.” The temporary headless build can be recreated after reboot. From `s7l2/`, configure with `cmake -S . -B build-headless -G Ninja -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF`, run `cmake --build build-headless --target build-tests --parallel 6`, then run `CMAKE_BUILD_PARALLEL_LEVEL=4 ctest --test-dir build-headless --output-on-failure -j 6`. The Studio build is in `build-release/`. Run its focused test with `QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release -R '^s7studio_array_persistence$' --output-on-failure`.
+
 ### AV15 — Waterfall viewer rendering (G4/W)
 
 **Depends:** AV11, AV13, AV14.
