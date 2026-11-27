@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Fedora 45.
 #
-# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-hardware] [--no-extras] [--native-packages] [--dry-run]
+# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-video] [--no-hardware] [--no-extras] [--native-packages] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-gui-tests skip Xvfb/Mesa/drag tools and disable the native GUI regression suite
 #   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
+#   --no-video    skip FFmpeg development packages for the headless s7video codec backend
 #   --no-hardware skip public PortAudio, PipeWire and SoapySDR development packages
 #   --no-extras    skip optional build, plotting and AppDir packaging tools
 #   --dry-run      print the dnf command instead of running it
@@ -18,6 +19,7 @@ set -euo pipefail
 
 WITH_STUDIO=1
 WITH_SPECTRAL=1
+WITH_VIDEO=1
 WITH_EXTRAS=1
 WITH_HARDWARE=1
 WITH_GUI_TESTS=1
@@ -29,6 +31,7 @@ for arg in "$@"; do
     --no-studio) WITH_STUDIO=0 ;;
     --no-gui-tests) WITH_GUI_TESTS=0 ;;
     --no-spectral) WITH_SPECTRAL=0 ;;
+    --no-video) WITH_VIDEO=0 ;;
     --no-extras) WITH_EXTRAS=0 ;;
     --no-hardware) WITH_HARDWARE=0 ;;
     --windows)
@@ -101,6 +104,9 @@ fi
 # Studio uses binary64 FFTW; s7spectral independently uses single precision.
 if (( WITH_STUDIO || WITH_SPECTRAL )); then
   PACKAGES+=(fftw-devel)
+fi
+if (( WITH_VIDEO )); then
+  PACKAGES+=(libavcodec-free-devel libavutil-free-devel libswscale-free-devel)
 fi
 
 # Optional helpers: faster builds, sample plotting and tools/linux/package.sh.

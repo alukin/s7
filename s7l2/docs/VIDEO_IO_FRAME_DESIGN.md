@@ -85,6 +85,50 @@ and reordered codecs such as H.264. The codec tests should use deterministic
 fixtures and cover malformed packets, budget limits, format mismatch,
 flush and restart without opening a camera.
 
+#### Initial MJPEG profile
+
+The reference backend in `s7video` links FFmpeg directly and operates on
+caller-owned spans. It supports compact Gray8 and RGB8 images with declared
+width and height. The picture can have up to 4096 pixels per side and up to
+8,388,608 pixels total. Each encoded packet carries one complete 8-bit,
+independently decodable JPEG image, with matching dimensions and a byte
+length bounded by the caller's capacity and the 32 MiB backend limit. The
+length is the exact payload length including the final JPEG marker.
+
+The proposed graph port carries a local typed packet lease and valid byte
+length, with codec and expected dimensions in its descriptor. The packet
+descriptor is distinct from the decoded array's pixel descriptor. An encoder
+or decoder evaluation produces one complete output or reports an error before
+publishing. The backend currently starts fresh codec state on every call.
+One complete packet can be retried after a graph failure, provided the
+publisher still owns the input. The first profile carries source occurrence
+and any available capture timestamp through the conversion. Packet metadata
+must preserve an absent timestamp and identify any reported discontinuity.
+H.264 requires separate review for buffering, reordering and EOS drain.
+
+The linked backend is available for testing. The typed packet port and the
+registered `VideoEncoder` and `VideoDecoder` wrappers depend on review of
+the graph contract above.
+
+```bash
+cmake --install build-release --component s7sdk --prefix /tmp/s7-video-sdk
+cmake -S s7video -B /tmp/s7-video-build -DCMAKE_PREFIX_PATH=/tmp/s7-video-sdk
+cmake --build /tmp/s7-video-build
+ctest --test-dir /tmp/s7-video-build --output-on-failure --no-tests=error
+```
+
+The smoke test checks odd-width grayscale and RGB pixel reconstruction to
+a declared lossy tolerance. It checks truncation, concatenated images,
+bad marker framing, wrong geometry and insufficient packet capacity.
+On Fedora 45 with FFmpeg 9.0.2, the Release and Clang ASan/UBSan builds
+passed. Both 65×33 reference frames had a maximum absolute error of
+2 levels per channel. The existing no-device FFmpeg experiment also
+passed its raw, JPEG and H.264 cases. The linked S7 backend qualifies MJPEG.
+The Ubuntu installer was checked by dry run on Fedora.
+The Fedora and Ubuntu development installers include the required FFmpeg
+headers. Use `--no-video` for builds that do not include the standalone
+backend. [Build dependencies](BUILD_DEPENDENCIES.md)
+
 ## 2. Frame ownership and integration
 
 Propose a typed, immutable **frame lease** with geometry, pixel/color format,

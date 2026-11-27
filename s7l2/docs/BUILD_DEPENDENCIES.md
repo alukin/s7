@@ -24,6 +24,7 @@ first CMake configuration; Windows cross builds have a separate toolchain.
 | Studio | Qt Widgets, QML/Quick, Graphs, Quick 3D, Wayland and SVG support, fonts, double-precision FFTW | `--no-studio` |
 | Native Studio GUI regression suite | Qt Test/Quick Test support, Xvfb, Mesa software OpenGL and xdotool | `--no-gui-tests`, or `--no-studio` |
 | External spectral plugin | Single-precision FFTW development files | `--no-spectral`; Studio still needs FFTW |
+| Headless `s7video` codec backend | FFmpeg codec, utility and pixel conversion development files | `--no-video` |
 | Public hardware providers | PortAudio, native PipeWire/SPA and SoapySDR development files | `--no-hardware` |
 | Extra tools | Ninja, gnuplot, curl, patchelf and binutils for build/plotting/AppDir preparation | `--no-extras` |
 
@@ -46,7 +47,7 @@ workspace API. Installing only the headers can silently omit this codec.
 For a minimal headless development environment:
 
 ```sh
-tools/install_deps_ubuntu.sh --no-studio --no-spectral --no-hardware --no-extras
+tools/install_deps_ubuntu.sh --no-studio --no-spectral --no-video --no-hardware --no-extras
 # Or use install_deps_fedora.sh with the same options.
 cmake -S . -B build-headless -DS7_BUILD_STUDIO=OFF \
   -DS7_PORTAUDIO=OFF -DS7_PIPEWIRE=OFF -DS7_SOAPYSDR=OFF
