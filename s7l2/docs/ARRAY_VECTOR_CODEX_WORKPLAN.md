@@ -248,6 +248,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **AV08a evidence:** Two levels of exposed array ports compile to the same producer slot. The headless fixture compares nested delay feedback to the inlined recurrence and verifies direct forwarding, buffer identity, source occurrence and committed position through output aliases. It rejects invalid type and shape, a nested direct-only cycle, scalar reads of an array alias and standalone array schema execution. All 22 selected headless Release tests passed, including scalar nested schema regressions.
 
+**AV08b evidence:** The Qt offscreen Release test saves a diagram with mixed scalar and shaped exposed ports, reopens it from disk, and compares its second save. The runtime port parser verifies the descriptor and alias endpoints. Studio rejects malformed rank and unsupported format/layout declarations on open. This verifies persistence for the current compact CPU profile. Registry-backed execution is covered by AV09b.
+
 ### AV09 — Minimal new vector element library + deterministic diagrams
 
 `PackVector` assembles N scalar inputs of one numeric type into a rank-one vector of length N. `UnpackVector` writes one scalar output per vector component. N is fixed at compile time and at least two. Each element runs once per domain evaluation and preserves component order by port index. Inputs and outputs require exact numeric types and shape. Packing writes into an execution-reserved buffer and leaves source provenance absent for independent scalar inputs. Unpacking writes native scalar values. Verify both directions with distinct component values and negative tests for mismatched types, lengths and rates.

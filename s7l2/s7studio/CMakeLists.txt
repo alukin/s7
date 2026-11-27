@@ -388,6 +388,10 @@ foreach(layout_case wire_types_ok layout_loops)
 endforeach()
 
 # Diagram editing: connection rules, wire trees, routing, undo, file round trips.
+s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_test.cpp)
+target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram)
+add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
+
 s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)
 target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(s7studio_diagram_test PROPERTIES AUTOMOC ON)
