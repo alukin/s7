@@ -61,6 +61,30 @@ negotiated passthrough path can avoid decode/re-encode when no operation require
 decoded images. Receiver processing decodes where necessary. Selecting such a
 path must not silently skip processing elements present in the schema.
 
+### Codec elements in `s7video`
+
+`VideoDecoder` will consume an encoded video stream and publish complete
+decoded S7 frames. `VideoEncoder` will consume complete decoded S7 frames
+and publish encoded packets. A PipeWire source can negotiate raw video or an
+encoded format such as MJPEG or H.264. Raw video can go directly to frame
+processing when its layout matches. Encoded capture can feed the decoder
+before processing or display. Plan optional linkage to FFmpeg's `libavcodec`
+and `libavutil` in the codec provider, with pixel conversion where the
+negotiated format requires it. The Studio viewer consumes the resulting
+decoded frame port. The production GStreamer media adapter has its own
+qualification gate.
+
+The encoded port contract needs review before registration. It must identify
+the codec and required initialization data, bound the packet payload and
+queue, and preserve access-unit boundaries, input timestamps and stream
+discontinuities. It must also define zero, one and multiple output events
+per input, draining at EOS, cancellation and what happens to codec state
+after a failed graph evaluation. A first explicit MJPEG profile can qualify
+one complete independently coded image per packet before adding buffered
+and reordered codecs such as H.264. The codec tests should use deterministic
+fixtures and cover malformed packets, budget limits, format mismatch,
+flush and restart without opening a camera.
+
 ## 2. Frame ownership and integration
 
 Propose a typed, immutable **frame lease** with geometry, pixel/color format,
