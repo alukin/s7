@@ -30,7 +30,7 @@ public:
         auto output = writer->values<s7::SignalType::C32>();
         std::ranges::copy(input.values<s7::SignalType::C32>(), output.begin());
         transform_.apply(output, inverse_);
-        static_cast<void>(output_.exchange({std::move(*writer).seal(), input.origin()}));
+        static_cast<void>(output_.exchange({std::move(*writer).seal(), input.origin(), input.sample_window()}));
     }
 
 private:

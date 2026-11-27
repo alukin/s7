@@ -5,6 +5,7 @@
 #include "s7spectral/fourier_element.hpp"
 #include "s7spectral/spectral_window.hpp"
 #include "s7spectral/vector_fft.hpp"
+#include "s7spectral/vector_psd.hpp"
 
 #include "s7/metadata_json.hpp"
 #include "spectral_metadata.hpp"
@@ -21,7 +22,7 @@
 
 static const S7PluginInfo plugin_info{
     .api_version = S7_PLUGIN_API_VERSION,
-    .element_count = 3,
+    .element_count = 4,
     .plugin_name = "s7spectral",
     .plugin_version = "1.0.0",
     .author = "S7 Project",
@@ -33,8 +34,8 @@ static const char plugin_manifest_json[] = R"json(
   "plugin_version": "1.0.0",
   "author": "S7 Project",
   "description": "Spectral analysis elements; reference out-of-tree plugin.",
-  "element_count": 3,
-  "elements": ["WindowedFFT", "FourierCoefficient", "VectorFFT"]
+  "element_count": 4,
+  "elements": ["WindowedFFT", "FourierCoefficient", "VectorFFT", "VectorPSD"]
 }
 )json";
 
@@ -84,6 +85,16 @@ void s7_register_elements(void* registry_ptr)
                 static_cast<std::size_t>(ctx.get_int("components")), ctx.params.at("inverse").as_bool(),
                 static_cast<std::size_t>(ctx.get_int("execution_slots")));
         }, metadata.at("VectorFFT"), true));
+    if (!registry->find("VectorPSD")) registry->register_element(s7::ElementDescriptor(
+        "VectorPSD", [](const s7::ElementCreationContext& ctx) {
+            const auto sample_rate = ctx.get_real("sample_rate_hz");
+            const auto rate = sample_rate > 0 ? std::optional{s7::Rate::from_hz(sample_rate)} : std::nullopt;
+            const auto units = ctx.get_string("units") == "per_hz" ? s7::SpectrumUnits::PowerPerHz
+                                                                  : s7::SpectrumUnits::PowerPerBin;
+            return std::make_unique<s7spectral::VectorPSD>(
+                static_cast<std::size_t>(ctx.get_int("components")), units, rate,
+                static_cast<std::size_t>(ctx.get_int("execution_slots")));
+        }, metadata.at("VectorPSD"), true));
     if (!registry->find("WindowedFFT")) registry->register_element(s7::ElementDescriptor(
         "WindowedFFT",
         [](const s7::ElementCreationContext& ctx) {

@@ -68,6 +68,7 @@ public:
     /// the producer's execution reserve.
     [[nodiscard]] ArrayValue share() const;
     [[nodiscard]] std::optional<ArraySourceOccurrence> origin() const { return source().graph_value().origin; }
+    [[nodiscard]] std::optional<ArraySampleWindow> sample_window() const { return source().graph_value().sample_window; }
 
     template <SignalType Type>
     [[nodiscard]] std::span<const signal_storage_t<Type>> values() const & {

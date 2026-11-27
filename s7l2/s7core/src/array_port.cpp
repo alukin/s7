@@ -23,8 +23,8 @@ DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().lease.v
 
 ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
 {
-    if (!next && next.origin) {
-        throw std::invalid_argument("An empty array value cannot carry source provenance.");
+    if (!next && (next.origin || next.sample_window || next.spectrum)) {
+        throw std::invalid_argument("An empty array value cannot carry metadata.");
     }
     if (next.lease.retention_) {
         throw std::invalid_argument("An array output requires an execution lease.");
@@ -68,7 +68,7 @@ std::expected<ArrayValue, ArrayPoolError> ArrayOutputSlot::try_retain(
     if (mode_ != Mode::Standalone && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
     auto lease = retention.try_retain(published_.lease);
     if (!lease) return std::unexpected(lease.error());
-    return ArrayValue{std::move(*lease), published_.origin};
+    return ArrayValue{std::move(*lease), published_.origin, published_.sample_window, published_.spectrum};
 }
 
 ArrayInputBinding::ArrayInputBinding(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))

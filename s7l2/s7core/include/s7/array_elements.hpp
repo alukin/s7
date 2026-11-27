@@ -87,7 +87,8 @@ public:
         auto output = writer->template values<Type>();
         const auto input = array_input(0).template values<Type>();
         std::ranges::transform(input, output.begin(), [this](const auto& sample) { return sample * gain_; });
-        static_cast<void>(output_.exchange({std::move(*writer).seal(), array_input(0).origin()}));
+        static_cast<void>(output_.exchange({std::move(*writer).seal(), array_input(0).origin(),
+                                            array_input(0).sample_window()}));
     }
 
 private:

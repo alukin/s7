@@ -295,6 +295,14 @@ The direct long-double DFT oracle lives in `s7spectral/tests/direct_dft.hpp`. Fo
 
 **Scope:** new vector magnitude/power or PSD element(s) with explicit window/normalization/sample-rate/frequency indexing. Specify whether bins are FFT-shifted or not; avoid introducing hidden sample rate inference. Expose traceable block/sequence information for presentation and data-quality gaps if source provides it.
 
+**AV11a contract:** One `VectorPSD` evaluation consumes a complete rank-one C32 sample block and emits a rank-one F32 vector of the same length. Apply the periodic Hann window before the transform. Use two-sided linear power, with DC at bin 0 and Nyquist at bin N/2 interpreted as the negative endpoint. For even N, the signed bin number is k for k < N/2 and k−N otherwise. Its physical frequency is that signed number times Fs/N. Keep the FFT ordering on the wire. The viewer may display the signed bins from negative to positive frequency.
+
+The element supports explicit power-per-bin and per-Hz modes. The per-Hz mode needs a positive physical source rate supplied by the source metadata or an element parameter. If both are present they must agree. The per-bin mode can run with an unknown physical rate and still exposes signed bin numbers. Preserve any supplied source identity, interval and discontinuity before the block. A block with missing samples inside the interval or an explicit valid sample count other than N is rejected before publication. Origin fields that the source omits stay absent. Domain position, source sample position and PSD axis are independent. The output remains linear, including exact zero; a viewer applies a user-selected dB reference and floor.
+
+Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independent normalization check equates the total power over all bins to the weighted time-domain mean square `sum(w² × |x|²) / sum(w²)`. In per-Hz mode integrate by multiplying the density sum by `Fs/N`. Include zero, complex DC, a positive/negative tone pair and a sample-block discontinuity. Reject length and rate mismatches in the executable fixture.
+
+**AV11b evidence:** Both out-of-tree spectral tests passed. The PSD oracle checks every bin and integrated power in both units. It covers exact zero, complex DC, a signed tone pair, source provenance, discontinuity before a valid block, and rollback on missing samples, length and rate mismatches. An unknown physical rate is accepted in per-bin mode and rejected in per-Hz mode. The headless runtime loaded the installed-SDK plugin and ran `schema_vector_psd.json` for ten steps.
+
 **Accept:** independent PSD and frequency-axis checks using known IQ blocks, zero-input and near-zero floor behavior, shape validation, no magic dB epsilon without documentation, discontinuity policies. Produce Waterfall's reference array input schema.
 
 ### AV12 — Deterministic U8 whole-frame source (rank 2/3)

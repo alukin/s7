@@ -270,6 +270,102 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "VectorPSD",
+      "stateless": true,
+      "display_name": "Vector PSD",
+      "description": "Publish a two-sided periodic-Hann power spectrum of a C32 block.",
+      "category": "signal_processing",
+      "version": "1.0.0",
+      "tags": [
+        "psd",
+        "spectral",
+        "vector"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Complex vector",
+          "type": "C32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Linear power in standard DFT order",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "components",
+          "type": "int",
+          "description": "Power-of-two vector length",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 1048576
+        },
+        {
+          "name": "units",
+          "type": "enum",
+          "description": "Output normalization",
+          "default": "per_bin",
+          "required": false,
+          "enum_values": [
+            "per_bin",
+            "per_hz"
+          ]
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Physical sample rate; zero selects source metadata",
+          "default": 0,
+          "required": false,
+          "enum_values": [],
+          "min": 0
+        },
+        {
+          "name": "execution_slots",
+          "type": "int",
+          "description": "Preallocated execution buffers",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 64
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "C32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

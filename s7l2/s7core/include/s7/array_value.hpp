@@ -5,6 +5,7 @@
 #define S7CORE_INCLUDE_S7_ARRAY_VALUE_HPP
 
 #include "s7/array_pool.hpp"
+#include "s7/rate.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -21,9 +22,31 @@ struct ArraySourceOccurrence {
     bool operator==(const ArraySourceOccurrence&) const = default;
 };
 
+struct ArraySampleWindow {
+    std::optional<Rate> sample_rate;
+    std::optional<std::uint64_t> first_sample;
+    std::optional<std::uint64_t> valid_sample_count;
+    bool discontinuity_before{};
+    bool missing_samples{};
+
+    bool operator==(const ArraySampleWindow&) const = default;
+};
+
+enum class SpectrumUnits { PowerPerBin, PowerPerHz };
+enum class SpectrumWindow { PeriodicHann };
+
+// The vector holds all bins in standard DFT order.
+struct ArraySpectrum {
+    SpectrumUnits units;
+    SpectrumWindow window;
+    std::optional<Rate> sample_rate;
+};
+
 struct ArrayValue {
     ArrayPool::ReadLease lease;
     std::optional<ArraySourceOccurrence> origin{};
+    std::optional<ArraySampleWindow> sample_window{};
+    std::optional<ArraySpectrum> spectrum{};
 
     explicit operator bool() const noexcept { return static_cast<bool>(lease); }
 };
