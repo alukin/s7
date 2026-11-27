@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <optional>
 
-#include "s7/array_pool.hpp"
+#include "s7/array_value.hpp"
 #include "s7/element.hpp"
 
 namespace s7 {
@@ -27,27 +27,27 @@ public:
 
     /// An empty lease clears a direct or standalone slot. Causal memory
     /// stages an initialized value. A rejected exchange preserves both leases.
-    [[nodiscard]] ArrayPool::ReadLease exchange(ArrayPool::ReadLease&& next);
+    [[nodiscard]] ArrayValue exchange(ArrayValue&& next);
     /// Retain the last committed value in a runtime-managed slot.
     /// Standalone slots expose the value most recently exchanged.
-    [[nodiscard]] std::expected<ArrayPool::ReadLease, ArrayPoolError> try_retain(
+    [[nodiscard]] std::expected<ArrayValue, ArrayPoolError> try_retain(
         const ArrayPool::Retention& retention) const;
 
 private:
     friend class ArrayInputBinding;
     friend class NodeRuntime;
     enum class Mode { Standalone, Direct, MemoryIdle, MemoryEvaluating };
-    [[nodiscard]] const ArrayPool::ReadLease& graph_value() const noexcept;
+    [[nodiscard]] const ArrayValue& graph_value() const noexcept;
     void commit(std::uint64_t domain_step) noexcept;
     void abort_evaluation() noexcept;
 
     const ArrayDescriptor descriptor_;
-    ArrayPool::ReadLease published_;
+    ArrayValue published_;
     // A disengaged candidate holds the published value. An engaged empty
     // lease explicitly clears it at the next commit.
-    std::optional<ArrayPool::ReadLease> candidate_;
+    std::optional<ArrayValue> candidate_;
     // For causal memory, staging from the preceding successful evaluation.
-    std::optional<ArrayPool::ReadLease> staged_;
+    std::optional<ArrayValue> staged_;
     std::uint64_t committed_step_{};
     Mode mode_{Mode::Standalone};
 };
@@ -66,11 +66,11 @@ public:
 
     /// Alias the current input for a graph output. This lease counts toward
     /// the producer's execution reserve.
-    [[nodiscard]] ArrayPool::ReadLease share() const;
+    [[nodiscard]] ArrayValue share() const;
 
     template <SignalType Type>
     [[nodiscard]] std::span<const signal_storage_t<Type>> values() const & {
-        return source().graph_value().values<Type>();
+        return source().graph_value().lease.values<Type>();
     }
     template <SignalType Type>
     std::span<const signal_storage_t<Type>> values() const && = delete;

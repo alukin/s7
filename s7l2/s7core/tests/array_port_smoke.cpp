@@ -16,6 +16,7 @@ using s7::ArrayInputBinding;
 using s7::ArrayMemoryBudget;
 using s7::ArrayOutputSlot;
 using s7::ArrayPool;
+using s7::ArrayValue;
 using s7::SignalType;
 
 static_assert(!std::is_copy_constructible_v<ArrayOutputSlot>);
@@ -39,11 +40,11 @@ void rejects(Fn operation, std::string_view reason)
     throw std::runtime_error(std::string(reason));
 }
 
-ArrayPool::ReadLease frame(ArrayPool& pool, float sample)
+ArrayValue frame(ArrayPool& pool, float sample)
 {
     auto write = pool.try_acquire().value();
     std::ranges::fill(write.values<SignalType::F32>(), sample);
-    return std::move(write).seal();
+    return {std::move(write).seal()};
 }
 
 class Producer final : public ArrayElement {
@@ -56,7 +57,7 @@ public:
         register_array_output("other", shape);
     }
 
-    void set_frame(ArrayPool::ReadLease&& value) { static_cast<void>(frame_->exchange(std::move(value))); }
+    void set_frame(ArrayValue&& value) { static_cast<void>(frame_->exchange(std::move(value))); }
     void step() override {}
 
 private:
@@ -112,7 +113,7 @@ public:
     void step() override
     {
         auto value = frame(pool_, ++sample_);
-        trace_.source = value.view().bytes().data();
+        trace_.source = value.lease.view().bytes().data();
         static_cast<void>(output_.exchange(std::move(value)));
     }
 
@@ -158,7 +159,7 @@ void check_slot_exchange()
     rejects<std::logic_error>([&] { static_cast<void>(input.view()); }, "empty producer slot");
 
     auto first = frame(pool, 1);
-    const auto* first_address = first.view().bytes().data();
+    const auto* first_address = first.lease.view().bytes().data();
     require(!slot.exchange(std::move(first)) && !first && input.view().bytes().data() == first_address,
             "input borrows the slot's original payload");
     const auto held = slot.try_retain(retention).value();
@@ -168,12 +169,12 @@ void check_slot_exchange()
     require(optional_lease && input.view().bytes().data() == first_address,
             "rejecting an optional lease preserves ownership and output");
     auto next = frame(pool, 2);
-    const auto* next_address = next.view().bytes().data();
+    const auto* next_address = next.lease.view().bytes().data();
     auto previous = slot.exchange(std::move(next));
-    require(!next && previous.view().bytes().data() == first_address &&
+    require(!next && previous.lease.view().bytes().data() == first_address &&
             input.view().bytes().data() == next_address && next_address != first_address &&
             input.values<SignalType::F32>().front() == 2 &&
-            held.values<SignalType::F32>().front() == 1,
+            held.lease.values<SignalType::F32>().front() == 1,
             "slot replacement changes borrowed input while retaining the old payload");
     previous = {};
     auto bad = frame(other, 9);
@@ -183,7 +184,7 @@ void check_slot_exchange()
     require(bad && input.view().bytes().data() == next_address, "a failed exchange or binding preserves ownership and source");
     static_cast<void>(slot.exchange({}));
     rejects<std::logic_error>([&] { static_cast<void>(input.view()); }, "cleared producer slot");
-    require(held.values<SignalType::F32>().front() == 1, "clearing a slot leaves retained reads valid");
+    require(held.lease.values<SignalType::F32>().front() == 1, "clearing a slot leaves retained reads valid");
 }
 
 void check_mixed_ports()

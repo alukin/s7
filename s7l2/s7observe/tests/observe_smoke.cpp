@@ -38,7 +38,7 @@ public:
         auto write = pool_.try_acquire().value();
         ++value_;
         std::ranges::fill(write.values<s7::SignalType::F32>(), static_cast<float>(value_));
-        static_cast<void>(output_.exchange(std::move(write).seal()));
+        static_cast<void>(output_.exchange({std::move(write).seal()}));
     }
 
 private:
@@ -90,7 +90,7 @@ void check_committed_array_observation()
             assert(!sample && sample.error() == s7::ArrayPoolError::InvalidLease);
         } else {
             assert(sample && sample->domain_step == checked - 1 && sample->rate == rate);
-            auto previous = sample->lease.values<s7::SignalType::F32>();
+            auto previous = sample->value.lease.values<s7::SignalType::F32>();
             assert(previous.data() == committed_address && previous.data() != candidate_address);
             assert(previous.front() == static_cast<float>(checked - 1));
         }
@@ -101,7 +101,7 @@ void check_committed_array_observation()
     for (std::uint64_t step = 1; step <= 3; ++step) {
         runtime.step();
         const auto sample = observation.try_retain_array_output(probe, retention).value();
-        const auto values = sample.lease.values<s7::SignalType::F32>();
+        const auto values = sample.value.lease.values<s7::SignalType::F32>();
         assert(sample.domain_step == step && sample.rate == rate && checked == step);
         assert(values.data() == candidate_address && values.front() == static_cast<float>(step));
         assert(observation.sample_output("source", 1).as_real() == static_cast<double>(step));

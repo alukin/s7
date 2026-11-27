@@ -236,6 +236,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **AV07a evidence:** `s7core_array_memory_smoke` exercises two mixed scalar/array memory elements in a feedback loop. Both elements and a direct probe read the same current values throughout evaluation. The test injects faults in the first and last memory elements, including consecutive faults, and checks the published addresses, retained values and subsequent recurrence. Runtime construction rejects an array memory output with no initializer. All 19 selected headless Release tests passed. The fixture uses the experimental compiler entry point.
 
+**AV07b evidence:** `VectorDelay` is available in the public C++ API. `s7core_vector_delay_smoke` checks a whole-array feedback recurrence, rejects a direct-only cycle, and verifies that rollback preserves the staged source occurrence. Two occurrences use the same upstream buffer with different sequence numbers, and a new epoch can reuse a sequence. The initializer remains readable across the switch to the upstream pool, and retention charged to the wrong pool is refused. All 20 selected headless Release tests passed. Registry-backed diagrams follow the schema and persistence work in AV08/AV09.
+
 ### AV08 — Nested schema and persistence round-trip
 
 **Depends:** AV07.

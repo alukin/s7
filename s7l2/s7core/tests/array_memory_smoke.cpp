@@ -54,7 +54,7 @@ private:
         auto data = writable.values<SignalType::F32>();
         data[0] = value;
         data[1] = -value;
-        static_cast<void>(array_.exchange(std::move(writable).seal()));
+        static_cast<void>(array_.exchange({std::move(writable).seal()}));
     }
 
     const Fault& fault_;
@@ -143,7 +143,7 @@ void check_memory()
                             "initializer was externally visible before successful evaluation");
                 } else {
                     require(retained && retained->domain_step == position - 1 &&
-                                retained->lease.values<SignalType::F32>().front() == previous_first,
+                                retained->value.lease.values<SignalType::F32>().front() == previous_first,
                             "memory fault changed retained data");
                 }
             }
@@ -153,8 +153,8 @@ void check_memory()
         const auto published_first = runtime.try_retain_array_output("first", 0, first_admission).value();
         const auto published_last = runtime.try_retain_array_output("last", 0, last_admission).value();
         require(published_first.domain_step == position && published_last.domain_step == position &&
-                    published_first.lease.values<SignalType::F32>().front() == expected_first &&
-                    published_last.lease.values<SignalType::F32>().front() == expected_last,
+                    published_first.value.lease.values<SignalType::F32>().front() == expected_first &&
+                    published_last.value.lease.values<SignalType::F32>().front() == expected_last,
                 "published arrays differ from the independent recurrence");
         previous_probe = expected_first - expected_last;
         require(runtime.real_output_of("probe") == previous_probe, "direct probe read next memory staging");

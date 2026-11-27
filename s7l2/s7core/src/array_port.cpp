@@ -12,21 +12,24 @@ ArrayOutputSlot::ArrayOutputSlot(ArrayDescriptor descriptor) : descriptor_(std::
     if (descriptor_.rank() == 0) throw std::invalid_argument("An array output requires a positive rank.");
 }
 
-const ArrayPool::ReadLease& ArrayOutputSlot::graph_value() const noexcept
+const ArrayValue& ArrayOutputSlot::graph_value() const noexcept
 {
     if (mode_ == Mode::MemoryEvaluating && staged_) return *staged_;
     if (mode_ == Mode::Direct && candidate_) return *candidate_;
     return published_;
 }
 
-DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().view(); }
+DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().lease.view(); }
 
-ArrayPool::ReadLease ArrayOutputSlot::exchange(ArrayPool::ReadLease&& next)
+ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
 {
-    if (next.retention_) {
+    if (!next && next.origin) {
+        throw std::invalid_argument("An empty array value cannot carry source provenance.");
+    }
+    if (next.lease.retention_) {
         throw std::invalid_argument("An array output requires an execution lease.");
     }
-    if (next && next.view().descriptor() != descriptor_) {
+    if (next && next.lease.view().descriptor() != descriptor_) {
         throw std::invalid_argument("Array lease does not match the output descriptor.");
     }
     if (mode_ == Mode::Standalone) return std::exchange(published_, std::move(next));
@@ -59,11 +62,13 @@ void ArrayOutputSlot::abort_evaluation() noexcept
     if (mode_ == Mode::MemoryEvaluating) mode_ = Mode::MemoryIdle;
 }
 
-std::expected<ArrayPool::ReadLease, ArrayPoolError> ArrayOutputSlot::try_retain(
+std::expected<ArrayValue, ArrayPoolError> ArrayOutputSlot::try_retain(
     const ArrayPool::Retention& retention) const
 {
     if (mode_ != Mode::Standalone && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
-    return retention.try_retain(published_);
+    auto lease = retention.try_retain(published_.lease);
+    if (!lease) return std::unexpected(lease.error());
+    return ArrayValue{std::move(*lease), published_.origin};
 }
 
 ArrayInputBinding::ArrayInputBinding(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))
@@ -87,7 +92,7 @@ const ArrayOutputSlot& ArrayInputBinding::source() const
 
 DenseCpuArrayView ArrayInputBinding::view() const & { return source().view(); }
 
-ArrayPool::ReadLease ArrayInputBinding::share() const
+ArrayValue ArrayInputBinding::share() const
 {
     const auto& current = source().graph_value();
     if (!current) throw std::logic_error("Array input has no value.");

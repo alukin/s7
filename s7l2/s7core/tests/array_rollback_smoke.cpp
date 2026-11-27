@@ -63,7 +63,7 @@ private:
             throw Fault::PoolExhausted;
         }
         for (auto& value : writable->values<SignalType::F32>()) value = start++;
-        static_cast<void>(output.exchange(std::move(*writable).seal()));
+        static_cast<void>(output.exchange({std::move(*writable).seal()}));
     }
 
     const Fault& fault_;
@@ -144,7 +144,7 @@ void check_direct()
     fault = Fault::None;
     runtime.step();
     const auto held = runtime.try_retain_array_output("forward", 0, retention).value();
-    const auto* held_address = held.lease.view().bytes().data();
+    const auto* held_address = held.value.lease.view().bytes().data();
 
     for (int position = 2; position <= 4; ++position) {
         const auto* first_address = first.view().bytes().data();
@@ -181,10 +181,10 @@ void check_direct()
                     forwarded.view().bytes().data() == trace.first, "successful retry copied a candidate");
         check_values(first, static_cast<float>(position));
         check_values(second, -static_cast<float>(position));
-        require(held.domain_step == 1 && held.lease.view().bytes().data() == held_address,
+        require(held.domain_step == 1 && held.value.lease.view().bytes().data() == held_address,
                 "retained payload identity changed during retries");
         float expected = 1.0f;
-        for (auto sample : held.lease.values<SignalType::F32>()) {
+        for (auto sample : held.value.lease.values<SignalType::F32>()) {
             require(sample == expected++, "retained payload changed during retries");
         }
     }
@@ -278,12 +278,12 @@ void check_prefix(bool clocked)
         expect_fault(runtime, fault);
         const auto sample = runtime.try_retain_array_output("source", 0, retention).value();
         require(sample.domain_step == expected_fast_step && sample.rate == fast &&
-                    sample.lease.values<SignalType::F32>().front() == static_cast<float>(reference.real_output_of("source", 2)),
+                    sample.value.lease.values<SignalType::F32>().front() == static_cast<float>(reference.real_output_of("source", 2)),
                 "retry reran the committed prefix");
         require(!bridge || bridge->captures() == expected_fast_step, "retry recaptured the upstream sample");
         require(runtime.step_count() == before_fault &&
                     runtime.real_output_of("later") == previous_later, "failed domain advanced");
-        const auto* address = sample.lease.view().bytes().data();
+        const auto* address = sample.value.lease.view().bytes().data();
         require(!committed || committed == address, "retry replaced the committed prefix payload");
         committed = address;
     }

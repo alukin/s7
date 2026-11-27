@@ -711,9 +711,9 @@ std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_arra
         throw std::invalid_argument("Output is not an array port.");
     }
     const auto& slot = array->array_output(port);
-    auto lease = slot.try_retain(retention);
-    if (!lease) return std::unexpected(lease.error());
-    return CommittedArraySample{graph_.rates.at(element_id), slot.committed_step_, std::move(*lease)};
+    auto value = slot.try_retain(retention);
+    if (!value) return std::unexpected(value.error());
+    return CommittedArraySample{graph_.rates.at(element_id), slot.committed_step_, std::move(*value)};
 }
 
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {

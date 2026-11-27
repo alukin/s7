@@ -4,7 +4,7 @@
 #ifndef S7CORE_INCLUDE_S7_RUNTIME_HPP
 #define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
-#include "s7/array_pool.hpp"
+#include "s7/array_value.hpp"
 #include "s7/graph.hpp"
 #include "s7/resampler.hpp"
 #include "s7/rate.hpp"
@@ -29,7 +29,7 @@ class ArrayOutputSlot;
 struct CommittedArraySample {
     Rate rate;
     std::uint64_t domain_step{};
-    ArrayPool::ReadLease lease;
+    ArrayValue value;
 };
 
 // Not thread-safe: step() and every read of outputs or step_count() must run on

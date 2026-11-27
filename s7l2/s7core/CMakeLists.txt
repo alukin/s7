@@ -13,6 +13,7 @@ add_library(s7core SHARED
     src/array_descriptor.cpp
     src/array_pool.cpp
     src/array_port.cpp
+    src/array_elements.cpp
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
@@ -159,6 +160,10 @@ add_test(NAME s7core_array_rollback_smoke COMMAND s7core_array_rollback_smoke)
 s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smoke.cpp)
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)
 add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smoke)
+
+s7_add_test_executable(s7core_vector_delay_smoke tests/vector_delay_smoke.cpp)
+target_link_libraries(s7core_vector_delay_smoke PRIVATE s7core)
+add_test(NAME s7core_vector_delay_smoke COMMAND s7core_vector_delay_smoke)
 
 s7_add_test_executable(s7core_indexed_execution_smoke tests/indexed_execution_smoke.cpp)
 target_link_libraries(s7core_indexed_execution_smoke PRIVATE s7core)
