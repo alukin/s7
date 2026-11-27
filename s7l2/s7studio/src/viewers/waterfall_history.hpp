@@ -14,6 +14,7 @@
 namespace s7studio::viewers {
 
 enum class WaterfallPalette { Gray, Heat };
+[[nodiscard]] QRgb waterfallColor(double level, WaterfallPalette palette);
 
 struct WaterfallScale {
     double minimumDb = -100.0;
@@ -64,7 +65,8 @@ public:
     explicit WaterfallHistory(std::size_t rowLimit = 256);
     [[nodiscard]] Append append(const s7::CommittedArraySample& sample);
     void clear();
-    [[nodiscard]] WaterfallSnapshot snapshot(WaterfallScale scale = {}) const;
+    // A narrower raster combines consecutive bins by peak power.
+    [[nodiscard]] WaterfallSnapshot snapshot(WaterfallScale scale = {}, int maxColumns = static_cast<int>(maxBins)) const;
 
 private:
     struct Row {

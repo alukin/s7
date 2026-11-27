@@ -386,6 +386,8 @@ build-release/s7runtime/s7runtime --schema s7runtime/examples/schema_vector_psd.
 
 AV15b connects the history to the Waterfall window and qualifies the rendered axes, controls and saved observer diagram. AV16a can proceed independently from AV14.
 
+**AV15b checkpoint (2026-11-27, base `979a6d9`).** The live Waterfall renders its frequency axis, committed model-time ticks, dB legend and gap stripes. The user can edit the dB range, power reference and palette for the open window. Display pause leaves model execution and mailbox admission active. The rendered raster combines adjacent bins by peak power beyond 1024 columns. The [saved PSD fixture](../s7studio/tests/waterfall_psd.s7diagram) executes the installed plugin's Hann-window FFT periodogram and routes the whole result to Waterfall. The test checks its DC and Nyquist power, a physical rate independent of graph cadence, rendered colors, pause/resume and range/palette changes. Xvfb captures of the real PSD path and the deterministic gap fixture were inspected.
+
 ### AV16 — Basic Video Player viewer rendering (G4/V)
 
 **Depends:** AV12, AV13, AV14.
@@ -393,6 +395,19 @@ AV15b connects the history to the Waterfall window and qualifies the rendered ax
 **Scope:** consume decoded/generated whole U8 grayscale/RGB frame arrays, fit-to-window/aspect, presentation-only play/pause (no change to model), frame step/sequence/geometry/format status, bounded newest-frame policy and visible presentation-skip counters. No webcam, media-file decoding, arbitrary seek or FFmpeg/GStreamer requirement.
 
 **Accept:** checkerboard/moving-bar saved diagram; pixel exactness (including tested stride), aspect/fit, pause/resume and late frames, same graph outputs with/without viewer, close/reopen/rebind, unsupported format/error, memory bound. Check actual rendered image screenshots, not only widget creation.
+
+**AV16a/b checkpoint (2026-11-27).** The Video Player owns one displayed image with a 32 MiB limit and fits it to the window at the original aspect ratio. The [saved frame fixture](../s7studio/tests/video_patterns.s7diagram) supplies compact odd-width Gray8 and RGB8 frames. The test compares every pixel, verifies Qt row padding, checks the rendered letterbox and rejects inconsistent pixel metadata. It also verifies close/reopen, rebind and frame progression in a continuous run during display pause. Both rendered frames were inspected under Xvfb.
+
+Seven focused Release tests passed on Fedora 45 with GCC 16.2.1. The optional Xvfb spectral case loaded the installed-SDK plugin and ran the saved diagram. The checked-in diagrams passed structural validation.
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7studio s7studio_array_persistence_test s7studio_waterfall_history_test s7studio_viewers_test s7studio_scope_lifecycle_test s7studio_time_frequency_test --parallel 6
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -R '^(s7studio_(waterfall_history|array_persistence|viewers|scope_lifecycle|time_frequency)|s7observe(_array_mailbox)?_smoke)$'
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av15b-av16-verified --capture build-release/s7studio/s7studio_gui_capture --timeout 45 -- env S7_ARRAY_TEST_SPECTRAL_PLUGIN=build-release/s7runtime/plugin_sdk_test/build/libs7spectral.so build-release/s7studio/s7studio_array_persistence_test
+```
+
+AV17 covers printing and installation. The separate codec-element work needs a reviewed encoded port contract. [Video codec elements](VIDEO_IO_FRAME_DESIGN.md#codec-elements-in-s7video)
 
 ### AV17 — PDF/print, installation and documentation of new viewers
 

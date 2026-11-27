@@ -85,6 +85,11 @@ void checkAxisAndPixels()
     const auto changed = history.snapshot({-20, 0, 10, WaterfallPalette::Gray});
     require(changed.image.pixel(4, 0) == qRgb(128, 128, 128) && changed.image.pixel(5, 0) == qRgb(0, 0, 0),
             "Changing the dB reference did not recolor existing rows");
+    const auto reduced = history.snapshot({-60, 0, 1, WaterfallPalette::Gray}, 4);
+    require(reduced.axes->bins == 8 && reduced.image.width() == 4 &&
+                reduced.image.pixel(0, 0) == qRgb(255, 255, 255) && reduced.image.pixel(1, 0) == qRgb(85, 85, 85) &&
+                reduced.image.pixel(2, 0) == qRgb(255, 255, 255) && reduced.image.pixel(3, 0) == qRgb(170, 170, 170),
+            "Narrow raster lost peak power or logical axes");
 }
 
 void checkContinuityAndBounds()

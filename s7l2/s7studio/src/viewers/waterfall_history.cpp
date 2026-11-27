@@ -66,15 +66,20 @@ QRgb powerColor(float power, const WaterfallScale& scale)
     const auto db = analysis::spectrumDecibels(power, analysis::SpectrumQuantity::Power, scale.reference);
     const auto level = (std::clamp(db, scale.minimumDb, scale.maximumDb) - scale.minimumDb)
         / (scale.maximumDb - scale.minimumDb);
+    return waterfallColor(level, scale.palette);
+}
+
+} // namespace
+
+QRgb waterfallColor(double level, WaterfallPalette palette)
+{
     const auto channel = [](double value) { return static_cast<int>(std::lround(255.0 * std::clamp(value, 0.0, 1.0))); };
-    if (scale.palette == WaterfallPalette::Gray) {
+    if (palette == WaterfallPalette::Gray) {
         const auto gray = channel(level);
         return qRgb(gray, gray, gray);
     }
     return qRgb(channel(3.0 * level), channel(3.0 * level - 1.0), channel(3.0 * level - 2.0));
 }
-
-} // namespace
 
 int WaterfallAxes::signedBin(int column) const
 {
@@ -142,8 +147,9 @@ void WaterfallHistory::clear()
     axes_.reset();
 }
 
-WaterfallSnapshot WaterfallHistory::snapshot(WaterfallScale scale) const
+WaterfallSnapshot WaterfallHistory::snapshot(WaterfallScale scale, int maxColumns) const
 {
+    if (maxColumns < 1) throw std::invalid_argument("Waterfall raster width must be positive.");
     if (!std::isfinite(scale.minimumDb) || !std::isfinite(scale.maximumDb - scale.minimumDb) ||
         scale.maximumDb <= scale.minimumDb || !std::isfinite(scale.reference) || scale.reference <= 0.0 ||
         (scale.palette != WaterfallPalette::Gray && scale.palette != WaterfallPalette::Heat))
@@ -154,17 +160,27 @@ WaterfallSnapshot WaterfallHistory::snapshot(WaterfallScale scale) const
     int lineCount = static_cast<int>(rows_.size());
     for (const auto& row : rows_)
         if (row.position.skippedDomainSteps || row.position.sourceDiscontinuity) ++lineCount;
-    snapshot.image = QImage(axes_->bins, lineCount, QImage::Format_RGB32);
+    const auto width = std::min(axes_->bins, maxColumns);
+    snapshot.image = QImage(width, lineCount, QImage::Format_RGB32);
     if (snapshot.image.isNull()) throw std::runtime_error("Could not allocate the Waterfall image.");
     snapshot.lines.reserve(static_cast<std::size_t>(lineCount));
     for (const auto& row : rows_) {
         if (row.position.skippedDomainSteps || row.position.sourceDiscontinuity) {
             auto* line = reinterpret_cast<QRgb*>(snapshot.image.scanLine(static_cast<int>(snapshot.lines.size())));
-            std::fill_n(line, axes_->bins, gapColor);
+            std::fill_n(line, width, gapColor);
             snapshot.lines.emplace_back(std::nullopt);
         }
         auto* line = reinterpret_cast<QRgb*>(snapshot.image.scanLine(static_cast<int>(snapshot.lines.size())));
-        std::ranges::transform(row.powers, line, [&](float power) { return powerColor(power, scale); });
+        if (width == axes_->bins) {
+            std::ranges::transform(row.powers, line, [&](float power) { return powerColor(power, scale); });
+            snapshot.lines.emplace_back(row.position);
+            continue;
+        }
+        for (int column = 0; column < width; ++column) {
+            const auto begin = row.powers.begin() + static_cast<std::ptrdiff_t>(std::int64_t{column} * axes_->bins / width);
+            const auto end = row.powers.begin() + static_cast<std::ptrdiff_t>(std::int64_t{column + 1} * axes_->bins / width);
+            line[column] = powerColor(*std::max_element(begin, end), scale);
+        }
         snapshot.lines.emplace_back(row.position);
     }
     return snapshot;

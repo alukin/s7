@@ -6,23 +6,30 @@
 #include "diagram_document.hpp"
 #include "local_schema_runner.hpp"
 #include "scene_serializer.hpp"
+#include "viewers/video_frame.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
+#include "viewers/waterfall_history.hpp"
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
+#include <s7/plugin_loader.hpp>
 #include <s7/schema_library.hpp>
 
 #include <QApplication>
+#include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QLabel>
+#include <QPushButton>
 #include <QTemporaryDir>
 #include <QThread>
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -254,6 +261,30 @@ void check_delivery()
     runner.run(model, 0.01, 2, {invalid});
     require(runner.state() == RunState::Error && runner.arraySources().isEmpty(),
             "runner accepted a scalar as a frame");
+
+    runner.run(model, 0.01, -1, {probe("gray")});
+    manager.presentArrays(runner.arraySources());
+    const auto waitUntil = [&](auto done) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!done() && runner.isRunning() && timer.elapsed() < 5000) QThread::msleep(1);
+        require(done(), "continuous frame producer did not advance");
+    };
+    waitUntil([&] { return runner.completedTicks() >= 6; });
+    manager.refreshViews();
+    auto* pause = viewer->widget()->findChild<QPushButton*>("arrayViewer.pause");
+    require(pause, "Video Player has no pause control");
+    pause->click();
+    const auto pausedStep = status().section('\n', 0, 0);
+    const auto modelAtPause = runner.completedTicks();
+    waitUntil([&] { return runner.completedTicks() >= modelAtPause + 100; });
+    manager.refreshViews();
+    require(status().section('\n', 0, 0) == pausedStep && runner.state() == RunState::Running,
+            "presentation pause held the model or advanced the displayed frame");
+    runner.stop();
+    wait();
+    pause->click();
+    require(status().section('\n', 0, 0) != pausedStep, "resuming did not present the newest admitted frame");
 }
 
 void check_spectrum_routing()
@@ -263,7 +294,8 @@ void check_spectrum_routing()
     s7::ArrayPool pool(bins, 1, 2, std::make_shared<s7::ArrayMemoryBudget>(3 * bins.byte_size()));
     auto admission = pool.make_retention(2, 2 * bins.byte_size());
     auto write = pool.try_acquire().value();
-    std::ranges::fill(write.values<s7::SignalType::F32>(), 0.0f);
+    const std::array<float, 4> powers{1, 0.01f, 0, 0.001f};
+    std::ranges::copy(powers, write.values<s7::SignalType::F32>().begin());
     const auto buffer = std::move(write).seal();
     const auto rate = s7::Rate::from_hz(100);
     const auto feed = std::make_shared<s7::ArrayMailbox>();
@@ -279,14 +311,138 @@ void check_spectrum_routing()
     feed->offer(s7::CommittedArraySample{rate, 1, {admission.try_retain(buffer).value()}});
     manager.refreshViews();
     require(status->text().contains("no spectrum metadata"), "Waterfall accepted an unlabelled vector");
-    feed->offer(s7::CommittedArraySample{rate, 2, {admission.try_retain(buffer).value(), {}, {},
-        s7::ArraySpectrum{s7::SpectrumUnits::PowerPerBin, s7::SpectrumWindow::PeriodicHann, std::nullopt}}});
+    const auto offer = [&](std::uint64_t step) {
+        feed->offer(s7::CommittedArraySample{rate, step, {admission.try_retain(buffer).value(), {}, {},
+            s7::ArraySpectrum{s7::SpectrumUnits::PowerPerBin, s7::SpectrumWindow::PeriodicHann, s7::Rate{800, 1}}}});
+    };
+    offer(2);
     manager.refreshViews();
     require(status->text().contains("Committed domain step 2"), "Waterfall did not receive a valid spectrum");
+    auto* pause = waterfall->widget()->findChild<QPushButton*>("arrayViewer.pause");
+    auto* plot = waterfall->widget()->findChild<QWidget*>("waterfall.plot");
+    auto* palette = waterfall->widget()->findChild<QComboBox*>("waterfall.palette");
+    auto* minimum = waterfall->widget()->findChild<QDoubleSpinBox*>("waterfall.minimumDb");
+    require(pause && plot && palette && minimum, "Waterfall controls or plot are missing");
+    pause->click();
+    for (const auto step : {3U, 4U, 5U}) offer(step);
+    manager.refreshViews();
+    require(status->text().contains("Committed domain step 2") && status->text().contains("Replaced 2"),
+            "Waterfall pause consumed pending rows or hid replacements");
+    pause->click();
+    require(status->text().contains("Committed domain step 5"), "Waterfall did not resume at the newest row");
+    const auto heat = plot->grab().toImage();
+    const auto hasColor = [](const QImage& image, QRgb color) {
+        for (int y = 0; y < image.height(); ++y)
+            for (int x = 0; x < image.width(); ++x)
+                if (image.pixel(x, y) == color) return true;
+        return false;
+    };
+    require(hasColor(heat, viewers::WaterfallHistory::gapColor) && hasColor(heat, qRgb(255, 255, 102)),
+            "Waterfall did not render the gap stripe and known heat color");
+    palette->setCurrentIndex(1);
+    const auto gray = plot->grab().toImage();
+    require(hasColor(gray, viewers::WaterfallHistory::gapColor) && hasColor(gray, qRgb(204, 204, 204)) && gray != heat,
+            "Changing the palette did not recolor retained rows");
+    minimum->setValue(-50);
+    require(hasColor(plot->grab().toImage(), qRgb(153, 153, 153)), "Changing the range did not recolor retained rows");
     const QString artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
-    if (!artifacts.isEmpty())
-        require(waterfall->widget()->grab().save(QDir(artifacts).filePath("waterfall-delivery.png")),
+    if (!artifacts.isEmpty()) {
+        minimum->setValue(-100);
+        palette->setCurrentIndex(0);
+        require(waterfall->widget()->grab().save(QDir(artifacts).filePath("waterfall-rendered.png")),
                 "could not capture the viewer");
+    }
+}
+
+void check_saved_views(const QString& fileName, bool spectral)
+{
+    using namespace s7studio;
+    QFile file(QDir(QStringLiteral(S7_ARRAY_VIEW_FIXTURES)).filePath(fileName));
+    require(file.open(QIODevice::ReadOnly), "cannot open saved observer fixture");
+    const auto bytes = file.readAll();
+    const auto document = DiagramDocument::fromJson(boost::json::parse(
+        std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size()))));
+    DiagramScene scene;
+    SceneSerializer{}.deserialize(document, scene);
+    QString typeError;
+    static_cast<void>(updateWireTypeLabels(scene, &typeError));
+    require(typeError.isEmpty(), typeError.toStdString());
+    const NetModel graph(scene);
+    require(graph.observationConnections().size() == (spectral ? 1U : 2U), "saved viewer bindings were lost");
+
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    LocalSchemaRunner runner;
+    std::vector<RunProbe> probes;
+    for (const auto& wire : graph.observationConnections()) {
+        const auto node = scene.elementNode(wire.to.element);
+        const auto* viewer = viewers::ViewerRegistry::instance().find(QString::fromStdString(node->element().type));
+        require(viewer && wire.to.port == 0, "saved observer type or input could not be resolved");
+        probes.push_back({wire.to.element + "/" + viewer->inputSuffixes.front().toStdString(),
+            wire.from.element, wire.from.port, {}, false, {}, viewer->arrayKind});
+    }
+    runner.run(document.runtimeSchema, document.dt, 6, probes);
+    QElapsedTimer timeout;
+    timeout.start();
+    while (runner.isRunning() && timeout.elapsed() < 5000) QThread::msleep(1);
+    require(runner.state() == RunState::Completed && runner.completedTicks() == 6, "saved array graph did not complete");
+    manager.presentArrays(runner.arraySources());
+    const auto artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
+    for (const auto& probe : probes) {
+        const auto name = QString::fromStdString(probe.name);
+        const auto id = viewers::ViewerManager::observerIdOf(name);
+        const auto type = QString::fromStdString(std::string(arrayObserverType(probe.arrayObserver)));
+        auto* window = manager.openObserver(type, id);
+        require(window, "saved observer did not open");
+        auto* widget = window->widget();
+        const auto* status = widget->findChild<QLabel*>("arrayViewer.status");
+        require(status && status->text().contains("Committed domain step 6"), "saved observer did not receive final step");
+        const auto mailbox = runner.arraySources().value(name).mailbox;
+        const auto sample = mailbox->latest();
+        require(sample.has_value(), "latest sample was not available for the pixel oracle");
+        if (!artifacts.isEmpty())
+            require(widget->grab().save(QDir(artifacts).filePath(fileName + "-" + id + ".png")), "cannot save viewer capture");
+        if (spectral) {
+            require(sample->value.spectrum && sample->value.spectrum->sample_rate == s7::Rate{1600, 1},
+                    "saved PSD graph lost the independent physical frequency axis");
+            const auto power = sample->value.lease.values<s7::SignalType::F32>();
+            require(std::abs(power[0] - 1.0 / 300.0) < 1e-8 && power[4] == 0,
+                    "saved PSD graph did not reproduce the Hann-window DC and Nyquist oracle");
+        } else {
+            const auto frame = viewers::makeVideoFrame(*sample);
+            auto incompatible = *sample;
+            incompatible.value.image = s7::ArrayImage{id == "gray_view" ? s7::ImagePixelFormat::RGB8 : s7::ImagePixelFormat::Gray8};
+            bool rejected = false;
+            try { static_cast<void>(viewers::makeVideoFrame(incompatible)); }
+            catch (const std::invalid_argument&) { rejected = true; }
+            require(rejected, "Video Player accepted inconsistent pixel-format metadata");
+            require(frame.domainStep == 6 && frame.origin->sequence == 6 && frame.image.size() == QSize(5, 3),
+                    "image adapter lost frame identity or geometry");
+            require(frame.image.bytesPerLine() == (id == "gray_view" ? 8 : 16), "Qt row alignment lost an odd-width source stride");
+            for (int y = 0; y < 3; ++y) {
+                for (int x = 0; x < 5; ++x) {
+                    const int gray = (x / 2 + y / 2) % 2 ? 208 : 32;
+                    const auto expected = x == 0 ? (id == "gray_view" ? qRgb(255, 255, 255) : qRgb(255, 0, 0))
+                                                 : qRgb(gray, gray, gray);
+                    require(frame.image.pixel(x, y) == expected, "saved checkerboard pixels differ from the independent oracle");
+                }
+            }
+            auto* display = widget->findChild<QWidget*>("videoPlayer.frame");
+            require(display, "Video Player has no display canvas");
+            const QImage actual = display->grab().toImage();
+            const auto fitted = viewers::fitVideoFrame(frame.image.size(), actual.rect());
+            require(actual.pixel(fitted.center()) == frame.image.pixel(2, 1) && actual.pixel(0, 0) == qRgb(0, 0, 0),
+                    "Video Player pixels or aspect-fit bars did not render");
+            auto* pause = widget->findChild<QPushButton*>("arrayViewer.pause");
+            require(pause, "Video Player has no presentation pause");
+            pause->click();
+            mailbox->offer(s7::CommittedArraySample{sample->rate, 7, sample->value});
+            manager.refreshViews();
+            require(status->text().contains("Committed domain step 6") && runner.state() == RunState::Completed,
+                    "Video Player pause advanced the presentation or affected the model");
+            pause->click();
+            require(status->text().contains("Committed domain step 7"), "Video Player did not resume at the newest frame");
+        }
+    }
 }
 } // namespace
 
@@ -297,6 +453,12 @@ int main(int argc, char** argv) try {
     check_wiring();
     check_delivery();
     check_spectrum_routing();
+    check_saved_views(QStringLiteral("video_patterns.s7diagram"), false);
+    if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_SPECTRAL_PLUGIN"); !plugin.isEmpty()) {
+        s7::PluginLoader loader;
+        require(loader.load_plugin(plugin.toStdString(), s7::ElementRegistry::instance()), "cannot load spectral test plugin");
+        check_saved_views(QStringLiteral("waterfall_psd.s7diagram"), true);
+    }
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';
