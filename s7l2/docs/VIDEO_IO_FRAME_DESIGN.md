@@ -61,6 +61,119 @@ negotiated passthrough path can avoid decode/re-encode when no operation require
 decoded images. Receiver processing decodes where necessary. Selecting such a
 path must not silently skip processing elements present in the schema.
 
+### Codec elements in `s7video`
+
+`VideoDecoder` and `VideoEncoder` are representation boundaries around
+the decoded-frame graph. The decoder takes encoded packets from an ingress
+source and publishes complete decoded S7 frames. Image processing and Studio
+display consume those frames. The encoder takes the processed frames and
+publishes encoded packets for egress. Sources and sinks own device capture,
+file I/O, container handling and network transport. The codec elements own
+the conversion between encoded packets and decoded frames.
+
+```text
+Encoded source → VideoDecoder → decoded-frame processing → VideoEncoder → file or network sink
+                                           └─────────────→ Studio Video Player
+```
+
+A source such as PipeWire can supply an encoded format such as MJPEG or H.264,
+or publish a decoded frame directly when its raw layout matches the S7 input.
+Typed packet connections are used at the encoded edges of the
+pipeline. The initial codec provider links FFmpeg's `libavcodec`,
+`libavutil` and `libswscale`. The production GStreamer media adapter has
+its own qualification gate.
+
+Each additional codec profile needs to identify its required initialization
+data, bound the packet payload and queue, and preserve access-unit boundaries,
+input timestamps and discontinuities. Profiles with buffered output need
+explicit rules for output cardinality, EOS draining, cancellation and codec
+state after a failed graph evaluation.
+
+#### Initial MJPEG profile
+
+The reference backend in `s7video` links FFmpeg directly and operates on
+caller-owned spans. It supports compact Gray8 and RGB8 images with declared
+width and height. The picture can have up to 4096 pixels per side and up to
+8,388,608 pixels total. Each encoded packet carries one complete 8-bit,
+independently decodable JPEG image, with matching dimensions and a byte
+length bounded by the caller's capacity and the 32 MiB backend limit. The
+length is the exact payload length including the final JPEG marker.
+
+The approved MJPEG graph port carries a local typed packet lease and valid byte
+length. The descriptor matches codec, width, height and capacity at compile
+time. Backing storage is compact U8, and numeric port bindings require a
+different descriptor. An encoder
+or decoder evaluation produces one complete output or reports an error before
+publishing. The backend currently starts fresh codec state on every call.
+One complete packet can be retried after a graph failure, provided the
+publisher still owns the input. The elements preserve source occurrence and
+optional media timing in both directions. Timing carries signed presentation
+ticks with a positive rational ticks-per-second time base and a discontinuity
+flag. Graph domain time remains a separate axis.
+H.264 requires separate review for buffering, reordering and EOS drain.
+
+Set matching `packet_capacity`, `width` and `height` on the codec elements.
+Each codec's `format` selects its decoded Gray8 or RGB8 side. To expose an
+encoded port across a nested schema, declare `"type": "U8"`,
+`"shape": [65536]` and `"packet": {"codec": "mjpeg", "width": 65, "height": 33}`
+with the matching capacity and dimensions. A packet observer reads the exact
+prefix via `ArrayValue::encoded_bytes()`.
+
+Build and test the optional plugin against the current installed SDK. The
+packet representation requires [plugin API v5](PLUGIN_INTERFACE.md).
+
+```bash
+cmake --install build-release --component s7sdk --prefix /tmp/s7-video-sdk
+cmake -S s7video -B /tmp/s7-video-build -DCMAKE_PREFIX_PATH=/tmp/s7-video-sdk
+cmake --build /tmp/s7-video-build
+ctest --test-dir /tmp/s7-video-build --output-on-failure --no-tests=error
+build-release/s7runtime/s7runtime --schema s7video/examples/schema_mjpeg_roundtrip.json --plugin-dir /tmp/s7-video-build --state-dir /tmp/s7-video-runtime-state
+```
+
+The smoke test checks odd-width grayscale and RGB pixel reconstruction to
+a declared lossy tolerance. It checks truncation, concatenated images,
+bad marker framing, wrong geometry and insufficient packet capacity.
+The installed-plugin graph test covers a saved deterministic round trip,
+a nested encoded port, rejected capacity and geometry mismatches, rejection
+of a numeric U8 wire, media timing and rollback after a downstream fault.
+The headless runtime loaded the installed plugin and executed five steps.
+Studio showed the codec type and configured dimensions on the encoded wire.
+
+#### Record and replay a raw MJPEG file
+
+From a writable working directory, run the installed recorder with the absolute
+paths to the plugin and recording schema:
+
+```bash
+s7video_record /path/to/libs7video-elements.so /path/to/schema_mjpeg_roundtrip.json encode 5 recording.mjpeg
+```
+
+The recorder appends the exact bytes of each committed output packet from port 0
+of the named element. Use a graph that commits a packet at every step. The
+destination must be new and its filesystem must support hard links. The
+recorder publishes the destination only after every requested frame was written.
+
+Run Studio from the working directory with the video plugin discoverable through
+`S7_PLUGIN_PATH`. Open the installed `mjpeg_replay.s7diagram` and set the local
+run to 25 Hz for 0.2 s. Open the Video Player to view the decoded output. For
+headless replay use `schema_mjpeg_replay.json`. Both examples read
+`recording.mjpeg` relative to the working directory.
+
+Raw MJPEG stores a sequence of complete JPEG images. Set `frame_rate` to
+reconstruct presentation time. The source starts at zero and increments one
+tick per image at the configured rate. The `eof` output is 1 alongside the
+last complete frame. Stepping past the end, a truncated image or a capacity
+violation fails the step. Reopen the graph before retrying after a file source
+fault.
+On Fedora 45 with FFmpeg 9.0.2, the Release and Clang ASan/UBSan builds
+passed. Both 65×33 reference frames had a maximum absolute error of
+2 levels per channel. The existing no-device FFmpeg experiment also
+passed its raw, JPEG and H.264 cases. The linked S7 backend qualifies MJPEG.
+The Ubuntu installer was checked by dry run on Fedora.
+The Fedora and Ubuntu development installers include the required FFmpeg
+headers. Use `--no-video` for builds that do not include the standalone
+backend. [Build dependencies](BUILD_DEPENDENCIES.md)
+
 ## 2. Frame ownership and integration
 
 Propose a typed, immutable **frame lease** with geometry, pixel/color format,

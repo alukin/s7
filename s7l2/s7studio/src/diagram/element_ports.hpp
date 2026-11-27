@@ -6,11 +6,47 @@
 #include <boost/json.hpp>
 
 #include <QString>
+#include <s7/array_descriptor.hpp>
 
 #include <string_view>
 #include <vector>
 
 namespace s7studio::diagram {
+
+enum class ArrayObserverKind { None, Waterfall, VideoPlayer };
+
+[[nodiscard]] inline std::string_view arrayObserverType(ArrayObserverKind kind)
+{
+    switch (kind) {
+    case ArrayObserverKind::Waterfall: return "Waterfall";
+    case ArrayObserverKind::VideoPlayer: return "VideoPlayer";
+    case ArrayObserverKind::None: return {};
+    }
+    return {};
+}
+
+[[nodiscard]] inline ArrayObserverKind arrayObserverKind(const std::string_view type)
+{
+    if (type == "Waterfall") return ArrayObserverKind::Waterfall;
+    if (type == "VideoPlayer") return ArrayObserverKind::VideoPlayer;
+    return ArrayObserverKind::None;
+}
+
+[[nodiscard]] inline QString arrayObserverPortProblem(ArrayObserverKind kind, const s7::ArrayDescriptor* shape)
+{
+    switch (kind) {
+    case ArrayObserverKind::Waterfall:
+        if (shape && shape->type() == s7::SignalType::F32 && shape->rank() == 1) return {};
+        return QStringLiteral("Waterfall requires an F32 spectrum vector.");
+    case ArrayObserverKind::VideoPlayer:
+        if (shape && shape->type() == s7::SignalType::U8 &&
+            (shape->rank() == 2 || (shape->rank() == 3 && shape->extents()[2] == 3))) return {};
+        return QStringLiteral("Video Player requires a U8 grayscale [H,W] or RGB [H,W,3] frame.");
+    case ArrayObserverKind::None:
+        return {};
+    }
+    return {};
+}
 
 struct ElementPorts {
     std::vector<QString> inputs;  // port names, by index
@@ -24,8 +60,7 @@ struct ElementPorts {
     -> ElementPorts;
 
 // Observer element types (Scope, PhasePortrait, PhaseTrajectory3D): their
-// inputs are observation taps, not signal connections, so they accept any
-// type and are excluded from the exported runtime schema.
+// inputs are observation taps excluded from the exported runtime schema.
 [[nodiscard]] bool isObserverElementType(std::string_view type);
 
 // Observer types whose inputs are fixed axes (x/y[/z]) rather than Scope's

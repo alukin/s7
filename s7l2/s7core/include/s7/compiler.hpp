@@ -17,6 +17,16 @@ public:
     static ExecutableGraph compile(const Schema& schema,
                                    std::string runtime_instance_uuid,
                                    std::string schema_instance_uuid);
+
+    // Internal C++ fixtures for array wiring. Schema loading and
+    // deployment use compile() and cannot opt in.
+    static ExecutableGraph compile_experimental_arrays(const Schema& schema);
+
+private:
+    static ExecutableGraph compile_impl(const Schema& schema,
+                                       std::string runtime_instance_uuid,
+                                       std::string schema_instance_uuid,
+                                       bool experimental_arrays);
 };
 
 } // namespace s7

@@ -1,7 +1,7 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy accepted on 2026-11-26. D2–D7 remain open.**
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) is the live release acceptance record; these notes define the reusable architecture and the narrow first slice. The [source-based migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [five-hour Codex session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe what must change and a bounded delivery order. **Existing scalar elements stay intact; vector behavior uses new elements.** No code, tests or hardware qualifications are claimed by adding these documents.
+**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 defines the initial FFT and PSD.**
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
 
@@ -21,7 +21,15 @@ Invariants:
 
 Treat the logical signal contract as (numeric element type, rank, extents, optional domain interpretation), where **rank zero is the current scalar**. Shapes are part of the declared/compiled port contract. For a first implementation use concrete positive extents; symbolic dimension unification and bounded dynamic extents follow after independent tests.
 
-Examples:
+### D4 — Fixed shape, CPU layout and domain semantics
+
+The maintainer approved a rank-generic numeric descriptor on 2026-11-26. The first API, [`ArrayDescriptor` and `DenseCpuArrayView`](../s7core/include/s7/array_descriptor.hpp), separates the numeric type and positive extents from the physical backing range. The descriptor accepts all S7 numeric types, checks element and byte counts before allocating extent metadata, and represents rank zero as one native value. The borrowed, read-only CPU view covers rank one and above. It validates the actual address alignment, offset and byte range and derives compact row-major strides from the extents. Its descriptor and storage must remain valid for the lifetime of the view. Owning storage and publication are later cards.
+
+DSP, images and spatial fields share this substrate. Port metadata will express typed domain requirements separately, such as RGB channel ordering or a spatial grid and sample placement. Match those requirements when compiling a connection. Equal extents alone are insufficient for comparing fields on distinct grids. A cell-centered field and two face-centered components can use separate ports over the same grid with distinct shapes. Grid or mesh topology and degree-of-freedom mapping belong to a later field contract. Padding, halo interiors and other storage layouts can use additional validated views while retaining the same logical shape.
+
+AV01 exercises spatial F64 rank-two and rank-four arrays alongside DSP and video. After whole-array causal memory works, validate a small two-dimensional heat-equation graph against an independent discrete recurrence. Give the spatial operator an explicit boundary rule and let the field integrator stage the next state using the model's `dt`. Test incompatible grid placement when typed spatial ports are available.
+
+### Example shapes
 
 | Value | Numeric type | Logical shape |
 | --- | --- | --- |
@@ -78,6 +86,12 @@ Avoid per-step heap allocation and unbounded retained observer frames. Make pool
 
 ## 4. Shape, schema and Studio semantics
 
+AV02 uses a `shape` array of positive integer extents alongside the fixed numeric `type` in element port metadata, catalog entries and schema `exposed_inputs`/`exposed_outputs`. For example, an exposed field can use `{"name":"field","type":"F64","element":"source","port":0,"shape":[20,30]}`. Omit `shape` for a native scalar. An empty array, unknown extent, numeric type rule on a shaped port, or overflowing native byte size is an error. Array declarations are available for inspection. Execution and domain-specific formats are covered by later cards.
+
+AV03 validates fixed-count element declarations using their port metadata. Array connections require the same numeric type, rank and extents, and scalar pins on mixed elements use ordinary type inference. Declaration-only elements are direct feedthrough, so they cannot close a feedback cycle. A numerical trial cannot replay a declaration with array ports, even when its derivative signal is scalar. The compiler and deployment preflight reject declaration-only arrays before binding. Later cards cover executable array slots, array causal memory, semantic formats and shaped nested boundaries.
+
+AV05a introduces [stable array port slots](../s7core/include/s7/array_port.hpp) for internal elements. Array ports use the same logical input and output positions as scalar ports, with a descriptor and a null scalar pointer. Use `read_input<T>()` only for scalar positions and the typed array binding for array positions. An input binds to its producer's slot after an exact descriptor check. A synchronous view borrows the slot's current lease until replacement. An asynchronous reader can hold an admitted immutable lease across replacement. Slot exchange transfers ownership without copying payload bytes. AV05b binds direct array ports through the experimental C++ compiler entry point. Normal compilation and scalar observation reject array execution.
+
 - Add optional shape rules alongside existing numeric PortSpec/type inference. A scalar has shape []; a shaped output carries concrete extents in the 0.2.0 slice. Reject overflow, rank/extent mismatch, invalid strides/planes and unsupported element types before running. Do not silently broadcast or flatten.
 - Serialize logical type, rank, extents and required format/capabilities in the canonical schema representation. Keep incidental padding, offsets, pointers and storage identity in runtime views. Update bundled diagrams as the format changes. Local array connections are the 0.2.0 target.
 - Show one wire per **whole array**, with a label such as C32[1024] or U8[240,320,3], and validation details in Studio. It is neither 1024 scalar wires nor an implicit network packet bundle.
@@ -111,27 +125,90 @@ The initial implementation and qualification is a **mandatory new 0.2.0 scope am
 
 ## 7. Independent-review architectural reconciliation (2026-11-23)
 
-The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section is **planning guidance, not an accepted ADR or implemented API**. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
+The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section records the publication and ownership contracts alongside implementation guidance. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
 
 ### Publication, rollback and ownership (F1–F4, F11–F12)
 
 Array slots must distinguish **previous externally committed handles**, **current direct-feedthrough candidates** visible only to downstream graph evaluation, **previous valid causal-memory staging** eligible for the present evaluation, and **next staged causal-memory candidates** for a later evaluation. Compiled array inputs bind to **stable producer slots**, not movable payload addresses; RAII leases must never be `memcpy`-snapshotted in scalar `MemoryOutput`, `CausalOutput`, `TrialRegion` or observation storage. Acquire writable **unpublished** storage without modifying a shared/published/rollback-protected payload. Handle swaps, fan-out, pass-through, staging and rollback should incur no payload-byte copies; FFT, Gain, UI rasterization, transport or layout materialization can compute/copy into separate storage. Maintain a per-boundary copy/allocation ledger.
 
-Before evaluation, retain the previous external snapshot and valid memory staging. Direct elements can consume their current candidates in causal order; causal-memory elements stage a candidate for the *next* publication boundary. On success publish a coherent set of output handles and advance the domain's committed position/staging; on fault restore the previous externally visible handles and valid staging and do **not** advance that domain's step. Retained observers still see the old immutable bytes. The exact no-throw commit/resource-reservation algorithm requires **D2 approval** and tests for late direct, early/late memory, multiple-output, mixed scalar/array, consecutive retry and retained observer faults.
+Before evaluation, retain the previous external snapshot and valid memory staging. Direct elements can consume their current candidates in causal order; causal-memory elements stage a candidate for the *next* publication boundary. On success publish a coherent set of output handles and advance the domain's committed position/staging; on fault restore the previous externally visible handles and valid staging and do **not** advance that domain's step. Retained observers still see the old immutable bytes. The D2 commit and resource reservation contract requires tests for late direct, early/late memory, multiple-output, mixed scalar/array, consecutive retry and retained observer faults.
 
 **The atomic boundary is one rate-domain evaluation, not an entire multi-rate run.** If another domain already completed its step, it may remain advanced when a later domain fails (ADR-022). Neither private element state nor irrevocable I/O or network output is rolled back by ADR-021. When replay is unsafe, latch/report an explicit fault. Array participation in implicit/coupled numerical trials is rejected **before execution**, pending a separate reviewed trial contract.
 
+### D2 — Per-domain publication and retry
+
+**Accepted.** The unit of publication is one successful evaluation of one rate domain. Compiled inputs bind to stable source slots. Each array output has separate graph-visible and committed state so a graph read and an external observation use the appropriate lease. All graph slots stay on the evaluation thread. Optional asynchronous readers acquire an admitted immutable lease from a committed result under D3.
+
+| Phase | Graph-visible values | Committed state |
+| --- | --- | --- |
+| Begin an attempt | Make the prior valid causal-memory staging available to the graph. On the first attempt, use the element's initialized memory value. | Keep the last successful outputs and position. |
+| Evaluate direct elements | In causal order, downstream elements see sealed candidates from this attempt. A producer can forward an existing immutable lease without copying. An explicit hold uses its preceding value if initialized. | Keep the last successful outputs and position. |
+| Evaluate causal memory | Memory elements read the same current memory values and the direct results. Each writes separate staging for the next evaluation. | Keep the prior valid staging and last successful outputs. |
+| Commit | Promote current direct results and the memory values used in this evaluation. Save successful next staging for the following attempt. | Expose the complete domain result and advance its position once. |
+| Fail before commit | Restore graph slots to their last successful values and discard this attempt's candidates and next staging. | Preserve prior valid staging, committed outputs and position. Retained reads still point to their original bytes. |
+
+Preallocate bookkeeping and admit the execution reserve before running. Acquire required candidate capacity and validate results before the commit point. Commit uses handle transfers and preallocated state, with no fallible allocation, output validation or consumer callback. Observer delivery happens after commit. A rejected optional admission counts as a presentation skip. It cannot undo or delay a domain commit. On failure, restore domain state before reporting the error or collecting diagnostic details so reporting cannot mask incomplete rollback.
+
+A retry of an unfinished outer step resumes from each domain's committed position. In both clocked and independent unclocked graphs, a domain that already met this outer step's target is skipped on retry. The outer step advances after every domain meets its target. A snapshot that combines domains must identify each contributing domain position. Private element state and irreversible I/O retain the ADR-029 retry limits. A failure while delivering a scalar sample after an upstream commit latches the original fault because a receiver may already have changed state. Subsequent step calls report that fault, and resuming execution requires a fresh graph. Array wires in this slice stay local and within a single rate domain. Rate conversion and cross-domain array links need their own contract.
+
+AV05b exercises an internal direct source, pass-through and two consumers through the compiler and runtime. AV06a adds candidate and committed leases to direct slots. The runtime prepares the per-domain slot list before stepping. Each producer acquires and validates its candidate before commit. Experimental `ObservationService::try_retain_array_output` samples a committed lease with its rate and domain position. Admission runs on the stepping thread, and the retained lease can be handed to another thread. AV06b qualifies the experimental compiler entry point for internal direct-array fixtures. AV07a/AV07b add and verify array causal-memory staging and delay.
+
 A bounded producer pool needs an **execution-critical reserve independent of optional viewers**. A slow/paused Waterfall or Video Player cannot hold the last available producer candidate. Define maximum retained bytes/frames, eviction/drop and discontinuity counters, admission, cancellation and recovery **before AV04** (D3). Optional observation is newest/bounded presentation with skips, never graph backpressure; authoritative/lossless recording is a separately admitted backpressure/failure profile. Synchronous borrowed views are compile-lifetime bounded; asynchronous clients and printing retain explicit charged immutable leases. Existing `s7transport` lease accounting can inform implementation, but `FrameTransport` copies incoming bytes and is not a writable-array producer API. Add a distinct committed-array Observation source/mailbox: do not feed arrays through scalar `ObservationSample::storage[32]`, scalar `ObservationSource::Sample::double`, Scope or journal.
+
+### D3 — Pool admission and optional retention
+
+**Accepted.** A producer pool preallocates aligned, fixed-capacity CPU slots. Each pool declares an execution reserve and optional retention headroom. The configured slot count must cover both, and allocation charges the full slot capacity to the run's memory budget. The execution reserve covers every slot the graph may hold simultaneously, including writable candidates, published and staged values, rollback handles and downstream aliases. AV04 accepts the declared bound. The compiler derives or verifies bounds when it introduces graph bindings and publication.
+
+A producer acquires exclusive writable storage without waiting for a slot. Sealing consumes that writable lease and returns an immutable read lease for the same bytes. Abandoning a candidate releases it. Synchronous graph readers borrow views from live graph leases. Optional asynchronous readers retain a buffer only after admission against explicit slot and byte caps. Charge the whole backing slot, including for a subview. Copies of a retained handle share its admission until the last copy releases it. The aggregate optional cap for each pool fits within its headroom. Failure to acquire execution storage is a resource fault. Failure to admit optional retention is a presentation outcome.
+
+Live presentation keeps one pending frame per subscription and replaces it when newer data is admitted. Count admission failures and replaced frames separately from source discontinuities. A frame already handed to a reader stays valid until released. Printing uses a separate bounded admission and reports when it cannot retain the requested snapshot. Cancel or close stops new work and releases handles still owned by the queue or job. Outstanding reader handles remain readable; storage is recycled only after its final lease ends. An expired token cannot resolve to a newer occupant of the same slot.
+
+Lossless array recording is a separately admitted opt-in policy. It uses bounded capacity and applies backpressure only at a safe runtime boundary. Exhaustion that cannot be resolved within the recording policy faults the recording or run explicitly. AV04 covers the core pool, leases and admission; integration with recording and runtime publication follows their own contracts.
+
+The AV04 regression uses a tiny pool, deliberately holds an optional read lease, and repeatedly acquires and seals producer candidates. It checks bounded optional skips, immutable retained bytes, lease release and close behavior, explicit execution exhaustion, and zero payload copies between the writable candidate and retained readers.
+
+[The AV04 CPU pool](../s7core/include/s7/array_pool.hpp) admits a shared payload budget plus separate execution and optional slot counts. The producer supplies every payload value before sealing. Execution exhaustion can signal an underestimated graph reserve even while optional capacity remains free. Optional admissions reserve their configured headroom until the admission and all its retained handles are released. Observer and printing integration hands out admitted handles. Graph leases stay inside execution so a presentation reader cannot retain a slot outside its budget.
 
 ### Shapes, nested schemas, Studio and provenance (F5–F10)
 
-Require **exact numeric type, concrete positive rank/extents and required semantic format** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. The proposed first profile is F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
+Require **exact numeric type, concrete positive rank/extents and required domain semantics** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. Initial release elements use F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format on the generic D4 foundation. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
 
-**Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **Standalone array-valued `Schema::step()` is deferred/unsupported pending D7**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
+**Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **D7 defers standalone array-valued `Schema::step()`**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
 
 One C32[N] value is **one causal `step()`**, not N graph steps. Distinguish graph **rational model-time rate-domain cadence** (ADR-022), physical sample rate, valid sample count and block duration, first physical sample index, block/frame/row sequence, optional source clock/timestamp and video PTS. Define optional provenance fields, absence, forwarding, reset, discontinuity and delay behavior **per producer/transform** before AV11/AV12 (D6). Never derive physical samples/PTS from graph `step_count()` or use scalar `Resampler` as a hidden in-block resampler. Missing source sample rate means unknown physical frequency axis; Waterfall gaps and Video Player skipped-frame IDs must be visible.
 
-Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
+<a id="d6-proposal--array-provenance-and-whole-array-delay"></a>
+
+### D6 — Array provenance and whole-array delay
+
+**Accepted after independent review.** An array value carries an immutable payload lease and optional source provenance. Stage, publish, roll back and retain both as one value. Two source occurrences can share a payload buffer and still have distinct provenance. Keep provenance outside the array descriptor and storage layout. Report the receiving graph's rate and committed domain position separately. Numerical arrays and spatial fields may leave provenance absent.
+
+- **Sample blocks.** A producer can report its physical sample rate and the source interval identified by first sample index and valid sample count. The count describes the source interval. A derived output such as an FFT may have a different array extent and describes its frequency axis separately.
+- **Frames and continuity.** Frame sequence belongs to a source and continuity epoch. A producer starts a new epoch after a restart or seek that resets its indexing. A source-reported gap is distinct from frames skipped by a viewer. Optional presentation timestamps use the source's declared clock and time base. Unknown fields stay absent.
+- **Forwarding.** Fan-out and pass-through preserve the lease and provenance. A whole-array `VectorDelay` publishes its initializer with absent source provenance on its first successful evaluation. Each subsequent commit publishes the preceding successful evaluation's input lease and provenance unchanged, with the new domain position. A failed evaluation preserves the committed value and valid staging. A transform preserves the source claims it can substantiate and leaves other fields absent.
+
+A lease keeps its backing pool when forwarded. A Delay output may first point to its initializer pool and then to an upstream pool. Charge retention to the pool backing each value. An already retained initializer remains readable when the output switches pools. Subscription-level admission routing belongs to AV13a.
+
+AV07b needs a fixed-size optional origin carrying a run-scoped source ID, continuity epoch and sequence. A producer must change epoch before reusing sequence numbers for that source. Test forwarding of different source occurrences backed by the same buffer and retention across the initializer-to-upstream pool switch. AV11 and AV12 define the representations and producer rules for sample intervals, sample rates, clocks and presentation timestamps before using them.
+
+### D5 — Vector FFT and PSD
+
+**Accepted.** Use the portable radix-2 transform from `s7spectral/include/s7spectral/analysis.hpp` as the baseline. Extend it to native `C32` and retain its current `C64` analysis callers. Keep the vector FFT in the out-of-tree spectral plugin. Qualify the installed SDK and package with their existing dependencies. Evaluate FFTW as a possible backend if representative benchmarks show a material benefit.
+
+- **FFT.** Accept fixed power-of-two lengths in the bounded range supported by the transform. Publish all N bins in standard DFT order. The forward transform uses the negative exponent with no scale, and the inverse uses the positive exponent with scale `1/N`. Prepare twiddles and admit output storage before stepping. Initialize an unpublished output buffer from the immutable input once and transform it in place. Account for that initialization separately from wire copies.
+- **PSD.** For complex IQ, use the two-sided periodogram with a periodic Hann window. With known physical sample rate `Fs`, use `|X[k]|² / (Fs × sum(w²))` in squared input units per Hz. An explicit power-per-bin mode uses `|X[k]|² / (N × sum(w²))`. A source with unknown rate has no physical Hz axis. Preserve the D6 source interval and identify window, units and bin ordering in the result. Apply the dB floor in presentation using an explicit reference and preserve linear power for numerical consumers.
+- **Verification.** Compare against a direct DFT oracle for impulse, DC, positive and negative tones, two tones and inverse reconstruction. Compare integrated PSD against the independent windowed time-domain mean square. Waterfall may reorder bins for display without changing the graph value. AV10a records the backend audit, supported-length and memory limits, numeric tolerances and reproducible performance cases.
+
+
+<a id="d7-proposal--array-ports-on-nested-schemas"></a>
+
+### D7 — Array ports on nested schemas
+
+**Accepted.** For 0.2.0, support array ports on nested schemas through the parent graph compiler. Treat exposed ports as typed aliases of the producing slot under ADR-024. Validate their descriptors at each boundary. Preserve the lease, source occurrence, rate-domain position and causal-memory timing across any number of nested boundaries. An exposed port contributes dependencies and type constraints during compilation and has no runtime storage or evaluation phase.
+
+Defer standalone array-valued `Schema::bind_inputs()` and `Schema::step()`. Refuse that use before allocating scalar proxy storage or binding the graph. A future standalone API will need a contract for admitting external array leases, retaining outputs and scheduling the graph on behalf of its caller. Flattening covers reusable submodels, including future spatial blocks, with the same scheduling and publication semantics as an inlined graph.
+
+AV08a will check exact shape and type through nested ports, output aliases, and array feedback through a nested delay against an equivalent inlined graph. AV08b will cover persistence and Studio round trips. A boundary that crosses rate domains still requires an explicit rate-conversion element with a compatible contract.
 
 ### Plugin and format compatibility policy (D1)
 
@@ -142,14 +219,14 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | ID | Decision | Gate |
 | --- | --- | --- |
 | D1 | **Accepted.** Earlier versions and third-party plugins carry no compatibility obligations. Qualify repository-owned consumers of the current interfaces and formats. | AV02, AV05, release SDK |
-| D2 | Approve candidate/staging/committed transition table and fallible resource reservation before nonthrowing **per-domain** commit. | AV05b/AV06/AV07 |
-| D3 | Approve producer reserve, optional viewer retention limits, drops/counters, cancellation and separate lossless recording profile. | AV04/AV13 |
-| D4 | **Open.** Review the [AV00 descriptor proposal](ARRAY_VECTOR_AV00_BASELINE.md#d4-proposal-for-av01) for logical shape, minimum CPU layout and validation bounds. | AV01/AV02/AV12 |
-| D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
-| D6 | Approve source rate/sample index, frame identity, gaps/PTS and metadata forwarding/reset/absence semantics. Resolve the whole-array Delay forwarding rule first. | AV07b/AV11/AV12/AV15/AV16 |
-| D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
+| D2 | **Accepted.** [Per-domain publication and retry](#d2--per-domain-publication-and-retry). | AV05b/AV06/AV07 |
+| D3 | **Accepted.** [Pool admission and optional retention](#d3--pool-admission-and-optional-retention). | AV04/AV13 |
+| D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
+| D5 | **Accepted.** [Vector FFT and PSD](#d5--vector-fft-and-psd). | AV10/AV11/AV15 |
+| D6 | **Accepted.** [Array provenance and whole-array delay](#d6--array-provenance-and-whole-array-delay). Producer-specific field contracts belong to AV11/AV12. | AV07b/AV11/AV12/AV15/AV16 |
+| D7 | **Accepted.** [Array ports on nested schemas](#d7--array-ports-on-nested-schemas). Compiled slot aliases and standalone deferral. | AV08 |
 
-**D2–D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D1–D7 are accepted.** The work plan tracks implementation and verification. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 

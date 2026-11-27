@@ -12,6 +12,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace s7 {
@@ -31,6 +32,10 @@ struct SchemaLibraryDefinition {
 
     [[nodiscard]] auto to_json() const -> boost::json::value;
 };
+
+// Shared exposed-port representation for embedded, headless and Studio schemas.
+[[nodiscard]] std::vector<Schema::ExposedPort> parse_exposed_ports(
+    const boost::json::object& schema, std::string_view field);
 
 // Configure a fixed-step graph and its embedded schema elements together: sets
 // the schema-level "dt" seed of the graph and every nested schema, which the

@@ -73,6 +73,18 @@ struct ObservationSnapshot {
     std::vector<ObservationSample> samples;
 };
 
+struct ArrayProbePoint {
+    ProbePoint probe;
+    std::span<const ArrayPool::Retention> admissions;
+};
+
+// Samples follow request order. Each sample records its domain's position,
+// which can differ from the outer step after a partial multi-domain commit.
+struct ArrayObservationSnapshot {
+    std::size_t outer_step{};
+    std::vector<CommittedArraySample> samples;
+};
+
 class CompiledProbes;
 
 // Reads a runtime's outputs without changing it.
@@ -87,6 +99,16 @@ public:
     explicit ObservationService(const NodeRuntime& runtime);
 
     [[nodiscard]] ObservationSample sample_output(const std::string& element_id, std::size_t port = 0) const;
+    // Experimental arrays. Samples carry the position of their rate
+    // domain. The admission bounds how many leases a reader may keep.
+    [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
+        const ProbePoint& probe, const ArrayPool::Retention& retention) const;
+    [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
+        const ArrayProbePoint& probe) const;
+    // Acquire a coherent set of committed leases on the stepping thread.
+    // A failed admission releases every lease acquired for this request.
+    [[nodiscard]] std::expected<ArrayObservationSnapshot, ArrayPoolError> array_snapshot(
+        std::span<const ArrayProbePoint> probes) const;
     [[nodiscard]] ObservationSnapshot snapshot(const std::vector<ProbePoint>& probes) const;
     // Resolves probes once, for reading on every step without lookups or
     // allocation. Unknown outputs throw std::out_of_range here, not later.

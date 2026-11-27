@@ -29,9 +29,14 @@ def check(package, artifacts):
     binaries = {path.name.lower() for path in package.rglob('*.dll')}
     if any(any(token in name for token in ('s7sdr', 'soapy', 'libiio', 'ad936')) for name in binaries):
         raise RuntimeError('The sound-only bundle contains SDR libraries')
-    for name in ('libs7hardware.dll', 'libs7audio.dll', 'libs7audio-elements.dll', 'libportaudio.dll'):
+    for name in ('libs7hardware.dll', 'libs7audio.dll', 'libs7audio-elements.dll', 'libportaudio.dll',
+                 'qt6printsupport.dll'):
         if name not in binaries:
-            raise RuntimeError('Missing sound dependency: ' + name)
+            raise RuntimeError('Missing packaged dependency: ' + name)
+    examples = package / 'share/s7/examples'
+    for name in ('time_frequency/waterfall_psd.s7diagram', 'video/video_patterns.s7diagram'):
+        if not (examples / name).is_file():
+            raise RuntimeError('Missing packaged viewer example: ' + name)
 
     env = os.environ.copy()
     for name in ('WINEPATH', 'LD_LIBRARY_PATH', 'QT_PLUGIN_PATH', 'QML_IMPORT_PATH',
@@ -45,13 +50,15 @@ def check(package, artifacts):
         cwd = Path(temporary)
 
         def run(name, *command, expected=0):
-            result = subprocess.run([str(part) for part in command], cwd=cwd, env=env,
-                                    capture_output=True, text=True, timeout=180)
-            (artifacts / f'{name}.log').write_text(result.stdout + result.stderr)
+            log_path = artifacts / f'{name}.log'
+            with log_path.open('wb') as log:
+                # Keep command output available even when the subprocess times out.
+                result = subprocess.run([str(part) for part in command], cwd=cwd, env=env,
+                                        stdout=log, stderr=subprocess.STDOUT, timeout=180)
             if (expected == 0 and result.returncode) or (expected != 0 and not result.returncode):
-                raise RuntimeError(f'{name}: exit {result.returncode}; see {artifacts / (name + ".log")}')
+                raise RuntimeError(f'{name}: exit {result.returncode}; see {log_path}')
             results.append(name)
-            return result.stdout + result.stderr
+            return log_path.read_text(errors='replace')
 
         prefix.mkdir(exist_ok=True)
         run('wine-initialize', 'wineboot', '-i')

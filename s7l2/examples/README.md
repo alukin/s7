@@ -49,6 +49,11 @@ New diagrams designed specifically for teaching; see the
 | SP14 — AM and coherent detection | [New teaching graph](../education/labs/SP14-coherent-am/sp14_coherent_am.s7diagram) |
 | SP06 — Three-tap FIR | [Three-tap moving average](../education/labs/SP06-three-tap-fir/sp06_three_tap_fir.s7diagram) |
 
+## Array viewers
+
+- [Video Player test patterns](video/video_patterns.s7diagram) and [run guide](video/video_patterns.md)
+- [Waterfall from VectorPSD](time_frequency/waterfall_psd.s7diagram) and [run guide](time_frequency/waterfall_psd.md)
+
 ## Starter and standalone experiments
 
 | Diagram | Guide |

@@ -1,0 +1,27 @@
+{
+  "id": "video_patterns",
+  "dt": 0.04,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "schema": {
+    "name": "video_patterns",
+    "elements": [
+      {"id": "gray", "type": "TestPatternFrame", "params": {"source_id": 11, "width": 5, "height": 3, "format": "gray8"}},
+      {"id": "rgb", "type": "TestPatternFrame", "params": {"source_id": 12, "width": 5, "height": 3, "format": "rgb8"}}
+    ],
+    "connections": []
+  },
+  "diagram": {
+    "grid": {"step": 20, "mm_per_step": 5.291666666666667},
+    "nodes": [
+      {"id": "gray", "position": [8, 10]},
+      {"id": "rgb", "position": [8, 22]},
+      {"id": "gray_view", "position": [32, 10], "observer": true, "type": "VideoPlayer"},
+      {"id": "rgb_view", "position": [32, 22], "observer": true, "type": "VideoPlayer"}
+    ],
+    "wires": [
+      {"id": "gray_to_view", "from": {"port": ["gray", "out", 0]}, "to": {"port": ["gray_view", "in", 0]}, "bends": []},
+      {"id": "rgb_to_view", "from": {"port": ["rgb", "out", 0]}, "to": {"port": ["rgb_view", "in", 0]}, "bends": []}
+    ]
+  }
+}

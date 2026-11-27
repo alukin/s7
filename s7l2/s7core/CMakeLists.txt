@@ -10,6 +10,10 @@ configure_file(resources/schema_elements.hpp.in generated/s7_schema_elements.hpp
 # Shared, so that the host and every plugin use one copy of the registry and
 # element code.
 add_library(s7core SHARED
+    src/array_descriptor.cpp
+    src/array_pool.cpp
+    src/array_port.cpp
+    src/array_elements.cpp
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
@@ -22,6 +26,7 @@ add_library(s7core SHARED
     src/element_catalog.cpp
     src/metadata_json.cpp
     src/builtin_element_registry.cpp
+    src/builtin_array_registry.cpp
     src/type_inference.cpp
     src/rate.cpp
     src/resampler.cpp
@@ -69,6 +74,7 @@ target_link_libraries(s7core PUBLIC
     ZLIB::ZLIB
     ${CMAKE_DL_LIBS}
 )
+target_link_libraries(s7core PRIVATE Threads::Threads)
 if (WIN32)
     # F128 on MinGW (s7/float_types.hpp), used by inline functions too: math
     # from libquadmath, and soft-float routines with Clang's return convention
@@ -131,6 +137,52 @@ s7_add_test_executable(s7core_smoke
 target_link_libraries(s7core_smoke PRIVATE s7core)
 
 add_test(NAME s7core_smoke COMMAND s7core_smoke)
+
+s7_add_test_executable(s7core_array_descriptor_smoke tests/array_descriptor_smoke.cpp)
+target_link_libraries(s7core_array_descriptor_smoke PRIVATE s7core)
+add_test(NAME s7core_array_descriptor_smoke COMMAND s7core_array_descriptor_smoke)
+
+s7_add_test_executable(s7core_array_fixture_smoke tests/array_fixture_smoke.cpp)
+target_link_libraries(s7core_array_fixture_smoke PRIVATE s7core)
+add_test(NAME s7core_array_fixture_smoke COMMAND s7core_array_fixture_smoke)
+
+s7_add_test_executable(s7core_array_memory_smoke tests/array_memory_smoke.cpp)
+target_link_libraries(s7core_array_memory_smoke PRIVATE s7core)
+add_test(NAME s7core_array_memory_smoke COMMAND s7core_array_memory_smoke)
+
+s7_add_test_executable(s7core_array_nested_smoke tests/array_nested_smoke.cpp)
+target_link_libraries(s7core_array_nested_smoke PRIVATE s7core)
+add_test(NAME s7core_array_nested_smoke COMMAND s7core_array_nested_smoke)
+
+s7_add_test_executable(s7core_array_pool_smoke tests/array_pool_smoke.cpp)
+target_link_libraries(s7core_array_pool_smoke PRIVATE s7core Threads::Threads)
+add_test(NAME s7core_array_pool_smoke COMMAND s7core_array_pool_smoke)
+
+s7_add_test_executable(s7core_array_port_smoke tests/array_port_smoke.cpp)
+target_link_libraries(s7core_array_port_smoke PRIVATE s7core)
+add_test(NAME s7core_array_port_smoke COMMAND s7core_array_port_smoke)
+
+s7_add_test_executable(s7core_array_rollback_smoke tests/array_rollback_smoke.cpp)
+target_link_libraries(s7core_array_rollback_smoke PRIVATE s7core)
+add_test(NAME s7core_array_rollback_smoke COMMAND s7core_array_rollback_smoke)
+
+s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smoke.cpp)
+target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)
+add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smoke)
+
+s7_add_test_executable(s7core_test_pattern_frame_smoke tests/test_pattern_frame_smoke.cpp)
+target_link_libraries(s7core_test_pattern_frame_smoke PRIVATE s7core)
+add_test(NAME s7core_test_pattern_frame_smoke COMMAND s7core_test_pattern_frame_smoke
+    ${PROJECT_SOURCE_DIR}/s7runtime/examples/schema_test_pattern_frames.json)
+
+s7_add_test_executable(s7core_vector_adapters_smoke tests/vector_adapters_smoke.cpp)
+target_link_libraries(s7core_vector_adapters_smoke PRIVATE s7core)
+add_test(NAME s7core_vector_adapters_smoke COMMAND s7core_vector_adapters_smoke
+    ${PROJECT_SOURCE_DIR}/s7runtime/examples/schema_vector_adapters.json)
+
+s7_add_test_executable(s7core_vector_delay_smoke tests/vector_delay_smoke.cpp)
+target_link_libraries(s7core_vector_delay_smoke PRIVATE s7core)
+add_test(NAME s7core_vector_delay_smoke COMMAND s7core_vector_delay_smoke)
 
 s7_add_test_executable(s7core_indexed_execution_smoke tests/indexed_execution_smoke.cpp)
 target_link_libraries(s7core_indexed_execution_smoke PRIVATE s7core)

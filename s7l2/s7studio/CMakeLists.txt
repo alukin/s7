@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 # Observation viewers: Qt Graphs (2D) and Qt Quick 3D in QQuickWidget. 6.9 is
 # the first release with GraphsView.plotArea, which cursor-anchored zooming
 # needs (src/viewers/qml/LinePlot.qml).
@@ -145,6 +145,11 @@ add_library(s7studio_viewers STATIC
     src/instrument_controls.cpp src/instrument_controls.hpp
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
+    src/viewers/array_viewer.cpp
+    src/viewers/array_print.cpp
+    src/viewers/video_frame.cpp
+    src/viewers/waterfall_history.cpp
+    src/viewers/waterfall_view.cpp
     src/viewers/viewer_registry.cpp
     src/viewers/viewer_registry.hpp
     src/viewers/viewer_manager.cpp
@@ -179,11 +184,12 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 target_include_directories(s7studio_viewers PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include ${PROJECT_SOURCE_DIR}/s7wavelet/include)
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
-    s7core
+    s7core s7observe
     s7studio_observation s7studio_results s7studio_analysis
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::PrintSupport
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickWidgets
@@ -388,6 +394,14 @@ foreach(layout_case wire_types_ok layout_loops)
 endforeach()
 
 # Diagram editing: connection rules, wire trees, routing, undo, file round trips.
+s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_test.cpp)
+target_sources(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp)
+target_include_directories(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
+target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
+target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers)
+add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
+set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)
 target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(s7studio_diagram_test PROPERTIES AUTOMOC ON)
@@ -829,6 +843,10 @@ target_link_libraries(s7studio_time_frequency_test PRIVATE s7studio_viewers)
 add_test(NAME s7studio_time_frequency COMMAND s7studio_time_frequency_test)
 set_tests_properties(s7studio_time_frequency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
 
+s7_add_test_executable(s7studio_waterfall_history_test tests/waterfall_history_test.cpp)
+target_link_libraries(s7studio_waterfall_history_test PRIVATE s7studio_viewers)
+s7_enable_project_warnings(s7studio_waterfall_history_test)
+add_test(NAME s7studio_waterfall_history COMMAND s7studio_waterfall_history_test)
 
 s7_add_test_executable(s7studio_display_worker_test tests/display_worker_test.cpp)
 target_link_libraries(s7studio_display_worker_test PRIVATE s7studio_analysis Qt6::Test)

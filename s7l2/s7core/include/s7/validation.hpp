@@ -39,12 +39,14 @@ namespace detail {
 // pins it at its ports, as the schema element itself declared it.
 class SchemaPort final : public Element {
 public:
-    SchemaPort(std::string owner, std::string name, bool input, std::size_t index, SignalType type,
+    SchemaPort(std::string owner, const Schema::ExposedPort& port, bool input, std::size_t index,
                std::optional<Rate> rate = std::nullopt)
-        : Element("SchemaPort"), owner_(std::move(owner)), name_(std::move(name)), input_(input), index_(index), rate_(rate)
+        : Element("SchemaPort"), owner_(std::move(owner)), name_(port.name), input_(input), index_(index),
+          rate_(rate), array_(port.array)
     {
-        register_input(0, port_names::in, type, nullptr);
-        register_output(0, port_names::out, type, storage_);
+        const auto* descriptor = array_ ? &*array_ : nullptr;
+        register_input(0, port_names::in, port.type, nullptr, descriptor);
+        register_output(0, port_names::out, port.type, nullptr, descriptor);
     }
 
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_; }
@@ -64,7 +66,7 @@ private:
     bool input_;
     std::size_t index_;
     std::optional<Rate> rate_;
-    alignas(16) std::byte storage_[32]{}; // never read: consumers bind to the source
+    const std::optional<ArrayDescriptor> array_;
 };
 
 // The schema compiled and checked in place of a schema with nested schemas:
@@ -84,7 +86,7 @@ struct FlatSchema {
     // own; other elements are seeded by the top-level schema's rate.
     std::unordered_map<std::string, Rate> seeds;
 };
-[[nodiscard]] FlatSchema flatten_schema(const Schema& schema);
+[[nodiscard]] FlatSchema flatten_schema(const Schema& schema, bool experimental_arrays);
 
 // Validation that keeps what it created: every element is created exactly
 // once (null where creation failed). The compiler builds the graph from these
@@ -123,6 +125,8 @@ struct CheckedSchema {
     std::vector<CoupledRegion> coupled_regions;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
+[[nodiscard]] CheckedSchema check_local_schema(const Schema& schema);
+[[nodiscard]] CheckedSchema check_experimental_array_schema(const Schema& schema);
 // Placement/causality preflight when a diagram has not supplied a model rate.
 // Checks factories, types, wiring and memory cycles; never invents a rate or
 // prepares numerical stages. Compilation still uses strict check_schema().

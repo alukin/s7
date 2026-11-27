@@ -3,9 +3,11 @@
 
 #include "s7/type_inference.hpp"
 
+#include "s7/element_metadata.hpp"
 #include "s7/schema.hpp"
 #include "s7/validation.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
@@ -114,6 +116,25 @@ struct ElementTypes {
     std::unique_ptr<Element> probe; // concrete elements: the instance their ports came from
 };
 
+// Validation can inspect declared ports before an array runtime exists.
+class ArrayDeclaration final : public Element {
+public:
+    explicit ArrayDeclaration(const std::shared_ptr<const ElementMetadata>& metadata)
+        : Element(metadata->type_name, !metadata->stateless), metadata_(metadata) {}
+
+    void add_input(std::size_t index, SignalType type) {
+        register_input(index, metadata_->input_ports[index].name, type, nullptr);
+    }
+    void add_output(std::size_t index, SignalType type) {
+        register_output(index, metadata_->output_ports[index].name, type, nullptr);
+    }
+    void bind_inputs(std::span<const InputBinding>) override { throw std::logic_error("Array execution is not available."); }
+    void step() override { throw std::logic_error("Array execution is not available."); }
+
+private:
+    std::shared_ptr<const ElementMetadata> metadata_;
+};
+
 std::string port_label(const std::string& element, const char* direction, const std::size_t port)
 {
     return "'" + element + "' " + direction + " " + std::to_string(port);
@@ -128,6 +149,11 @@ public:
         collect();
         if (!result_.errors.empty()) {
             return std::move(result_);
+        }
+        if (std::ranges::any_of(elements_, [](const ElementTypes& element) {
+            return element.spec->array_metadata || (element.probe && element.probe->has_array_ports());
+        })) {
+            check_array_connections();
         }
         propagate();
         // Fix open variables one at a time, in declaration order.
@@ -183,6 +209,11 @@ private:
                 } else {
                     collect_concrete(spec, element);
                 }
+                if (const auto& metadata = spec.array_metadata;
+                    metadata && (element.inputs.size() != metadata->input_ports.size() ||
+                                 element.outputs.size() != metadata->output_ports.size())) {
+                    throw std::invalid_argument("array declarations require fixed port counts.");
+                }
             } catch (const std::exception& ex) {
                 const std::string message = ex.what();
                 const auto prefix = "Element '" + spec.id + "'";
@@ -195,6 +226,11 @@ private:
 
     void collect_concrete(const ElementSpec& spec, ElementTypes& element)
     {
+        if (const auto& metadata = spec.array_metadata) {
+            for (const auto& port : metadata->input_ports) element.inputs.push_back(PortTypeRule::of_fixed(port.type));
+            for (const auto& port : metadata->output_ports) element.outputs.push_back(PortTypeRule::of_fixed(port.type));
+            return;
+        }
         if (!spec.factory) {
             throw std::invalid_argument("element has no factory.");
         }
@@ -291,6 +327,48 @@ private:
         return apply_rule(rule, element.domains[rule.variable]);
     }
 
+    void check_array_connections()
+    {
+        const auto descriptor = [](const ElementTypes& element, bool output, std::size_t port) -> const ArrayDescriptor* {
+            if (element.probe) {
+                const auto ports = output ? element.probe->output_ports() : element.probe->input_ports();
+                return ports[port].array_descriptor;
+            }
+            const auto& metadata = element.spec->array_metadata;
+            if (!metadata) return nullptr;
+            const auto& ports = output ? metadata->output_ports : metadata->input_ports;
+            return ports[port].array ? &*ports[port].array : nullptr;
+        };
+        const auto describe = [](const ArrayDescriptor* array) {
+            if (!array) return std::string("scalar");
+            if (const auto& packet = array->mjpeg())
+                return "MJPEG[" + std::to_string(packet->width) + "x" + std::to_string(packet->height) +
+                       ", " + std::to_string(array->byte_size()) + " bytes]";
+            std::string description(signal_type_name(array->type()));
+            description += '[';
+            for (const auto extent : array->extents()) {
+                if (description.back() != '[') description += ',';
+                description += std::to_string(extent);
+            }
+            return description + ']';
+        };
+        for (const auto& edge : schema_.connections()) {
+            const auto source = index_.find(edge.from_element);
+            const auto target = index_.find(edge.to_element);
+            if (source == index_.end() || target == index_.end()) continue;
+            const auto& from = elements_[source->second];
+            const auto& to = elements_[target->second];
+            if (edge.from_port >= from.outputs.size() || edge.to_port >= to.inputs.size()) continue;
+
+            const auto* output = descriptor(from, true, edge.from_port);
+            const auto* input = descriptor(to, false, edge.to_port);
+            if (output == input || (output && input && *output == *input)) continue;
+            result_.errors.push_back("Array port mismatch: " + label(edge.from_element, "output", edge.from_port) +
+                                     " (" + describe(output) + ") -> " + label(edge.to_element, "input", edge.to_port) +
+                                     " (" + describe(input) + "). Array ports require identical type, extents and format.");
+        }
+    }
+
     // Narrows the side's variable so that its port can take only `allowed`.
     bool restrict(ElementTypes& element, const PortTypeRule& rule, const SignalTypeSet allowed)
     {
@@ -343,6 +421,20 @@ private:
     void build_factories()
     {
         for (auto& element : elements_) {
+            if (const auto& metadata = element.spec->array_metadata) {
+                auto declaration = std::make_unique<ArrayDeclaration>(metadata);
+                for (std::size_t index = 0; index < element.inputs.size(); ++index) {
+                    const auto type = image(element, element.inputs[index]).single();
+                    if (type) declaration->add_input(index, *type);
+                    else result_.errors.push_back("Cannot resolve input type for array element '" + element.spec->id + "'.");
+                }
+                for (std::size_t index = 0; index < element.outputs.size(); ++index) {
+                    const auto type = image(element, element.outputs[index]).single();
+                    if (type) declaration->add_output(index, *type);
+                    else result_.errors.push_back("Cannot resolve output type for array element '" + element.spec->id + "'.");
+                }
+                element.probe = std::move(declaration);
+            }
             result_.instances.push_back(std::move(element.probe));
             std::vector<SignalType> types;
             for (const auto& domain : element.domains) {

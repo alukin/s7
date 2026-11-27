@@ -205,11 +205,26 @@ boost::json::object checked_params(const std::string& id, const ElementMetadata&
     return result;
 }
 
+static bool declares_array_ports(const ElementMetadata& metadata)
+{
+    const auto shaped = [](const PortSpec& port) { return port.array.has_value(); };
+    return std::ranges::any_of(metadata.input_ports, shaped) || std::ranges::any_of(metadata.output_ports, shaped);
+}
+
 ElementSpec make_element_spec(std::string id, const ElementDescriptor& descriptor, boost::json::object params) {
     // The spec keeps its own copy: registry storage may move when more
     // elements are registered.
     auto shared = std::make_shared<const ElementDescriptor>(descriptor);
     const auto& metadata = shared->metadata();
+    std::shared_ptr<const ElementMetadata> array_metadata;
+    if (declares_array_ports(metadata) && !metadata.schema_definition && !shared->executable_array_factory()) {
+        if (metadata.variadic_inputs.enabled || metadata.variadic_outputs.enabled) {
+            throw std::invalid_argument("Element '" + id + "': array declarations require fixed port counts.");
+        }
+        // Validate defaults without turning them into explicit numeric pins.
+        static_cast<void>(checked_params(id, metadata, params));
+        array_metadata = std::shared_ptr<const ElementMetadata>(shared, &metadata);
+    }
     if (metadata.type_variables.empty()) {
         return ElementSpec{id,
                            [shared, id, params = std::move(params)] {
@@ -223,7 +238,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                                    throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
                                }
                            },
-                           {}};
+                           {}, std::move(array_metadata), shared->executable_array_factory()};
     }
 
     std::vector<std::string> names;
@@ -319,7 +334,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
             throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
         }
     };
-    return ElementSpec{std::move(id), {}, std::move(generic)};
+    return ElementSpec{std::move(id), {}, std::move(generic), std::move(array_metadata)};
 }
 
 // ============================================================================
@@ -329,19 +344,39 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
 ElementDescriptor::ElementDescriptor(
     std::string type_name,
     std::function<std::unique_ptr<Element>(const ElementCreationContext&)> factory,
-    const ElementMetadata& metadata
+    const ElementMetadata& metadata,
+    bool executable_array_factory
 )
     : type_name_(std::move(type_name)),
       factory_(factory),
-      metadata_(metadata)
+      metadata_(metadata),
+      executable_array_factory_(executable_array_factory)
 {
     if (!factory_) {
         throw std::invalid_argument("Factory function cannot be null");
     }
+    if (executable_array_factory_ && !metadata_.type_variables.empty()) {
+        throw std::invalid_argument("An executable array factory requires concrete types from its parameters.");
+    }
+    for (const auto* ports : {&metadata_.input_ports, &metadata_.output_ports}) {
+        for (const auto& port : *ports) {
+            if (port.array && (port.array->rank() == 0 || port.array->type() != port.type || !port.type_rule.empty())) {
+                throw std::invalid_argument("Element '" + type_name_ + "' has an invalid array descriptor on port '" +
+                                            port.name + "'.");
+            }
+        }
+    }
 }
 
 std::unique_ptr<Element> ElementDescriptor::create(const ElementCreationContext& ctx) const {
-    return factory_(ctx);
+    if (declares_array_ports(metadata_) && !executable_array_factory_) {
+        throw std::logic_error("Element '" + type_name_ + "' declares array ports. Array execution is not available.");
+    }
+    auto element = factory_(ctx);
+    if (executable_array_factory_ && (!element || !element->has_array_ports())) {
+        throw std::logic_error("Element '" + type_name_ + "' did not create its declared array ports.");
+    }
+    return element;
 }
 
 // ============================================================================

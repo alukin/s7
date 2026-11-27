@@ -4,6 +4,7 @@
 #ifndef S7CORE_INCLUDE_S7_RUNTIME_HPP
 #define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
+#include "s7/array_value.hpp"
 #include "s7/graph.hpp"
 #include "s7/resampler.hpp"
 #include "s7/rate.hpp"
@@ -13,6 +14,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <expected>
 #include <optional>
 #include <string>
 #include <thread>
@@ -20,6 +23,14 @@
 #include <vector>
 
 namespace s7 {
+
+class ArrayOutputSlot;
+
+struct CommittedArraySample {
+    Rate rate;
+    std::uint64_t domain_step{};
+    ArrayValue value;
+};
 
 // Not thread-safe: step() and every read of outputs or step_count() must run on
 // one thread at a time (normally the thread that steps the runtime).
@@ -73,6 +84,20 @@ public:
     }
     // Address of an output's storage, valid between steps on the stepping thread.
     [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
+    // Experimental arrays. Acquire on the stepping thread and hand
+    // off the retained lease if needed. InvalidLease includes an empty or
+    // uncommitted output. Admission applies after the domain publishes.
+    [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
+        const std::string& element_id, std::size_t port, const ArrayPool::Retention& retention) const;
+    [[nodiscard]] const ArrayDescriptor* array_output_descriptor(
+        const std::string& element_id, std::size_t port) const;
+    // Refresh an observer's admission against the committed value's backing pool.
+    // Use the same slot and byte caps for the lifetime of the admission.
+    [[nodiscard]] std::expected<void, ArrayPoolError> admit_array_output(
+        const std::string& element_id, std::size_t port, ArrayPool::Retention& admission,
+        std::size_t max_slots, std::size_t max_bytes) const;
+    [[nodiscard]] std::optional<std::uint64_t> committed_array_step(
+        const std::string& element_id, std::size_t port) const;
     // F64 / C64 shorthands for output_of<F64> / output_of<C64>.
     [[nodiscard]] RealValue real_output_of(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] RealValue real_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
@@ -96,7 +121,10 @@ public:
 
 private:
     // The element output behind an output of a flattened nested schema.
-    [[nodiscard]] std::pair<std::string, std::size_t> aliased_output(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] const std::pair<std::string, std::size_t>& aliased_output(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] const Port& output_port(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] std::pair<const ArrayOutputSlot&, Rate> array_observation_source(
+        const std::string& element_id, std::size_t port) const;
 
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next
@@ -183,6 +211,8 @@ private:
         std::vector<void*> causal_outputs8;
         std::vector<std::uint64_t> causal_snapshot8;
         std::vector<CausalOutput> causal_outputs;
+        std::vector<ArrayOutputSlot*> array_outputs;
+        std::vector<ArrayOutputSlot*> array_memory_outputs;
         std::vector<TrapezoidStage> trapezoids;
         TrialRegion trapezoid_trial;
         std::vector<CoupledStage> coupled_stages;
@@ -204,7 +234,7 @@ private:
     void stage_residual(CoupledStage& stage, const std::vector<double>& k, std::vector<double>& result);
     void solve_gauss_legendre(CoupledStage& stage);
     // Restores every published output of the domain to its pre-step value.
-    static void roll_back_step(DomainState& domain);
+    static void roll_back_step(DomainState& domain) noexcept;
 
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
@@ -213,6 +243,9 @@ private:
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};
+    // A receiver can change private state before throwing during capture.
+    // Earlier captures and the upstream evaluation may already be committed.
+    std::exception_ptr delivery_fault_;
     RetryExactness retry_exactness_;
     // Records whether direct elements with private state stepped before a
     // fault: the first `stepped` entries of domain.causal ran (or started).

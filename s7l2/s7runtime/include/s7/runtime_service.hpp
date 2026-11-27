@@ -32,13 +32,6 @@ struct JsonElementDefinition {
     boost::json::value nested_schema;
 };
 
-struct SchemaPortBinding {
-    std::string name;
-    std::string type;
-    std::string element;
-    std::uint64_t port{};
-};
-
 struct JsonConnectionDefinition {
     std::string from_element;
     std::uint64_t from_port{};
@@ -104,8 +97,8 @@ struct RuntimeSchemaDefinition {
     std::optional<double> dt;
     std::vector<JsonElementDefinition> elements;
     std::vector<JsonConnectionDefinition> connections;
-    std::vector<SchemaPortBinding> exposed_inputs;
-    std::vector<SchemaPortBinding> exposed_outputs;
+    std::vector<Schema::ExposedPort> exposed_inputs;
+    std::vector<Schema::ExposedPort> exposed_outputs;
     WebSocketServerConfig server;
     DataServerConfig data_server;
     WebSocketClientConfig client;

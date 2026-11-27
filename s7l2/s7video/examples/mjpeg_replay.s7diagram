@@ -1,0 +1,116 @@
+{
+  "id": "mjpeg_replay",
+  "dt": 0.04,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "schema": {
+    "name": "mjpeg_replay",
+    "dt": 0.04,
+    "simulation": {
+      "periods": 1,
+      "sample_rate_hz": 25,
+      "frequency_hz": 5
+    },
+    "elements": [
+      {
+        "id": "file",
+        "type": "MjpegFileSource",
+        "params": {
+          "file": "recording.mjpeg",
+          "width": 65,
+          "height": 33,
+          "packet_capacity": 65536,
+          "frame_rate": 25,
+          "source_id": 12
+        }
+      },
+      {
+        "id": "decode",
+        "type": "VideoDecoder",
+        "params": {
+          "width": 65,
+          "height": 33,
+          "format": "gray8",
+          "packet_capacity": 65536
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "file",
+        "from_port": 0,
+        "to_element": "decode",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "file",
+        "position": [
+          8,
+          10
+        ]
+      },
+      {
+        "id": "decode",
+        "position": [
+          25,
+          10
+        ]
+      },
+      {
+        "id": "player",
+        "position": [
+          42,
+          10
+        ],
+        "observer": true,
+        "type": "VideoPlayer"
+      }
+    ],
+    "wires": [
+      {
+        "id": "packets",
+        "from": {
+          "port": [
+            "file",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "decode",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "frames",
+        "from": {
+          "port": [
+            "decode",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "player",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ]
+  }
+}

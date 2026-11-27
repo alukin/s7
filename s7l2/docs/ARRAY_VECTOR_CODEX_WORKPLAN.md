@@ -1,6 +1,6 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status:** D1 compatibility policy approved on 2026-11-26. D2–D7 remain open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope approved. D5 FFT and PSD conventions approved. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
 
 Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
@@ -115,7 +115,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | Session | Required predecessor / decision | One bounded deliverable and acceptance |
 | --- | --- | --- |
 | **AV00** | Current main | Freeze base SHA, source/CTest inventory, installed SDK and rebuilt repository plugin smoke, scalar dispatch time/allocations on a specified host/build, ADR-021/022/024/029 fault and rate baselines, and the decision register. Record an evidence ledger. |
-| **AV01** | AV00 + **D4** | Validated concrete rank/extents/byte/stride CPU descriptors; test positive/zero/invalid extent, overflow before allocation, out-of-bounds/padding and scalar rank-zero unchanged. |
+| **AV01** | AV00 + **D4** | Generic fixed numeric shape and compact CPU view descriptors. Test positive, zero and invalid extents, overflow before allocation, alignment and backing ranges. Cover native rank zero, DSP and video, and F64 rank-two and rank-four spatial shapes. |
 | **AV02** | AV01 + **D1 policy** | Metadata JSON parser -> registry -> catalog -> canonical schema representation. Update repository-owned metadata and fixtures as needed. Reject malformed format and rank. |
 | **AV03** | AV02 | Headless exact numeric type/rank/extents/format validation, scalar/vector mismatch, no symbolic/broadcast/reshape, forbidden array coupled-trial and invalid-cycle cases. Exercise compiler rejection and scalar compilation. The first executable array fixture is AV05b. |
 | **AV04** | AV01 + **D3** (parallel to AV02/03) | Headless candidate writable pool, read leases, stale-generation/cancel safety, execution-reserved bytes vs optional retention budget; tiny-pool slow-viewer/stalled-consumer producer-progress and bounded skip tests. |
@@ -124,12 +124,12 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV06a** | AV05b + **D2** | Per-domain direct candidate vs externally committed snapshot machinery, fallible admission before nonthrowing commit; smoke mixed scalar+array outputs and observer invisibility until commit. |
 | **AV06b** | AV06a | Late direct and multi-output exceptions, repeated retries, retained observers, exhausted pool, later-domain fault/committed-prefix checks vs unfaulted oracle; no payload copy on handle rollback. **Unlocks internal array fixtures.** |
 | **AV07a** | AV06b | Causal-memory previous valid and next staged handle phases; first/last memory-fault retries preserve previous staging and scalar semantics. |
-| **AV07b** | AV07a + **D6 forwarding rule** | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, original sample provenance retained, no implicit sample-level delay. |
-| **AV08a** | AV07b + **D7** | Flattened nested exposed-port slot aliases, direct/Delay inline-vs-nested oracle, mismatch and placeholder-byte negative cases. Standalone array Schema unsupported unless D7 adds separately scoped work. |
+| **AV07b** | AV07a + **D6 forwarding rule** | Public whole-array VectorDelay/initialized feedback fixtures; recurrence oracle, valid memory vs illegal direct cycles, source occurrence retained through delay and retry, pool-scoped retention across the initializer-to-upstream switch, one whole value delayed per domain evaluation. |
+| **AV08a** | AV07b + **D7** | Flattened nested exposed-port slot aliases, direct/Delay inline-vs-nested oracle, mismatch and placeholder-byte negative cases. Standalone array Schema is deferred by D7. |
 | **AV08b** | AV08a | Schema+Studio save/open/save in the current format. Cover shape/format/layout capability, exposed aliases, invalid ranks and current scalar diagrams. No remote profile work. |
 | **AV09a** | AV06b | Minimal **internal-only** deterministic array source/forwarding headless fixture; repeated steps, copy/alloc ledger and fault injection, not public library. May precede AV07/AV08. |
-| **AV09b** | AV07b + AV08b + AV09a | Public new VectorConstant/PassThrough/Gain and saved compiled diagrams, independent elementwise oracle, preallocated reference profile, mixed status scalar port, no scalar element rewrite. |
-| **AV10a** | AV09b | Audit the four existing FFT paths and propose the D5 backend, C32/C64 conversions and scratch, SDK linkage, supported lengths and FFT conventions. Prepare an independent DFT fixture. |
+| **AV09b** | AV07b + AV08b + AV09a | Public VectorConstant/PassThrough/Gain, PackVector and UnpackVector with saved compiled diagrams, an independent elementwise oracle, preallocated reference profiles and a mixed status scalar port. |
+| **AV10a** | AV09b | Audit the four FFT paths against accepted D5. Record reuse, supported lengths, scratch/output reservations, SDK linkage and numeric tolerances. Prepare an independent DFT fixture. |
 | **AV10b** | AV10a + **D5 FFT decision** | Whole-vector FFT C32[N] and/or explicitly approved conversion, impulse/DC/+/- tone/two-tone/inverse and normalization/bin-order tests vs independent DFT; tracked copies/allocations, plugin load smoke. |
 | **AV11a** | AV10b + **D5/D6** | Written PSD/window/floor/power/bin-order, sample-rate/first-index/provenance contract, valid unknown-rate and gap policy; reference frequency-axis/PSD oracle. |
 | **AV11b** | AV11a | Headless PSD/magnitude element and saved array path; DC, zero/floor, signed bins, tones, power/tolerance, shape/rate mismatch and discontinuity tests. |
@@ -149,7 +149,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
 | **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1 records the accepted compatibility policy. D2–D7 remain open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1–D7 are accepted in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
@@ -165,9 +165,9 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Depends:** AV00 and D4 approval.
 
-**Scope:** add a small core-only, validated rank/extents and CPU layout/view descriptor API. For 0.2.0 support rank 0 (conceptual scalar), rank 1, and rank 2/3 required for U8 image fixtures. Define byte bounds, stride/overflow/error checks. Do not modify runtime publication or existing scalar Port registration in this session.
+**Scope:** implement [D4](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics) with rank-generic numeric extents and a separate validated compact, aligned CPU view. Rank zero describes native scalar storage. Exercise rank one for DSP, ranks two and three for U8 images, and ranks two and four for F64 fields. Domain validation, runtime publication and port registration belong to later cards.
 
-**Accept:** unit tests for empty rank, valid extents, zero/negative/overflow extents as applicable, stride/offset bounds and rejection of unsupported layouts. Complete the core build and selected regressions. Include a negative test proving an unsafe large shape fails before allocation.
+**Accept:** tests for empty rank, valid extents, zero and negative extents, derived dense strides, offset bounds and alignment. The view API accepts only compact CPU backing. Complete the core build and selected regressions. Include a negative test proving an unsafe large shape fails before payload allocation.
 
 ### AV02 — Port metadata and schema declaration
 
@@ -201,6 +201,19 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** compiled matching vector pipeline, fan-out to two readers yields identical payload identity, wrong shape/type preflight fails, scalar CTest regression and a small before/after scalar dispatch benchmark or a documented baseline comparison. If full rollback is not yet present, mark the feature internal/experimental and prevent release use until AV06.
 
+**AV05b evidence:** The headless Release fixture recorded 12 wire reads across four steps. Each read used the address of the source's freshly sealed payload, with zero bytes materialized at the wires. The selected CTest run passed 14 tests, including array validation, scalar rollback, numerical integration, nested schemas and observation.
+
+The scalar benchmark compared AV05a (`2dbda9f`) with AV05b using GCC 16.2.1 Release builds on the same host. Each median uses five interleaved runs of one million steps pinned to CPU 4. All output checksums matched.
+
+| Scalar graph | Before, ns/step | After, ns/step |
+| --- | ---: | ---: |
+| Chain of 512 Gains | 1786.10 | 1791.34 |
+| 512 Gains sharing one source | 1449.97 | 1451.69 |
+| Scalar feedback | 28.99 | 30.41 |
+| Flattened nested feedback | 208.77 | 210.86 |
+
+The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlapped at 29.26–29.42 ns. Recheck this case during release qualification.
+
 ### AV06 — Direct array candidate publication and faults
 
 **Depends:** AV05b + D2; split into AV06a/AV06b according to the binding table.
@@ -208,6 +221,10 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 **Scope:** extend direct-output publication to stage/commit array **handles** atomically at the logical step boundary. Downstream direct elements see current candidates. External Observation sees last committed output. A fault after a producing element restores prior published slots and leaves retained observers intact. Do not make coupled numerical trial regions array-capable.
 
 **Accept:** late direct-element throw, several outputs, fan-out, observers, retry, memory pool safety, stable prior published payload and no copying of array bytes during rollback; scalar ADR-021 tests remain green.
+
+**AV06a evidence:** The observation smoke test steps a mixed scalar/array source into a downstream reader. During evaluation, the downstream reader sees the current scalar and array values. Array observation sees the previous domain position and payload, or no payload before the first commit. After each step it retains the exact buffer used by the graph at the new domain position. The test also checks that another thread cannot acquire samples directly from the runtime. All 16 selected headless Release tests passed, including the four array smoke tests, observation and scalar rollback. AV06b covers the fault, repeated-retry and exhaustion matrix.
+
+**AV06b evidence:** `s7core_array_rollback_smoke` checks first-step failure, a failure between two output writes, a late failure after forwarding, and execution-pool exhaustion after publishing one candidate. Each rollback preserves the published buffer addresses and array values. A retained view survives repeated faults while optional admission saturates. Clocked and unclocked retries match an unfaulted run and preserve the committed prefix across three consecutive faults. An injected failure in scalar rate-boundary delivery preserves the source commit and latches the fault. All 18 selected headless Release tests passed. Internal direct-array fixtures can use the experimental compiler entry point.
 
 ### AV07 — Causal memory, VectorDelay and feedback
 
@@ -217,6 +234,10 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** deterministic vector recurrences, initialized memory, invalid direct-only cycles, memory-phase throw/rollback/retry, no unintended payload copy, no one-sample vs block ambiguity. Include a checked saved diagram if metadata/wiring are ready.
 
+**AV07a evidence:** `s7core_array_memory_smoke` exercises two mixed scalar/array memory elements in a feedback loop. Both elements and a direct probe read the same current values throughout evaluation. The test injects faults in the first and last memory elements, including consecutive faults, and checks the published addresses, retained values and subsequent recurrence. Runtime construction rejects an array memory output with no initializer. All 19 selected headless Release tests passed. The fixture uses the experimental compiler entry point.
+
+**AV07b evidence:** `VectorDelay` is available in the public C++ API. `s7core_vector_delay_smoke` checks a whole-array feedback recurrence, rejects a direct-only cycle, and verifies that rollback preserves the staged source occurrence. Two occurrences use the same upstream buffer with different sequence numbers, and a new epoch can reuse a sequence. The initializer remains readable across the switch to the upstream pool, and retention charged to the wrong pool is refused. All 20 selected headless Release tests passed. Registry-backed diagrams follow the schema and persistence work in AV08/AV09.
+
 ### AV08 — Nested schema and persistence round-trip
 
 **Depends:** AV07.
@@ -225,7 +246,19 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** direct and nested graph numerical equivalence, array pass-through and delay through exposed ports, save/open/save equivalence and negative mismatch tests, scalar nested/flattening tests.
 
+**AV08a evidence:** Two levels of exposed array ports compile to the same producer slot. The headless fixture compares nested delay feedback to the inlined recurrence and verifies direct forwarding, buffer identity, source occurrence and committed position through output aliases. It rejects invalid type and shape, a nested direct-only cycle, scalar reads of an array alias and standalone array schema execution. All 22 selected headless Release tests passed, including scalar nested schema regressions.
+
+**AV08b evidence:** The Qt offscreen Release test saves a diagram with mixed scalar and shaped exposed ports, reopens it from disk, and compares its second save. The runtime port parser verifies the descriptor and alias endpoints. Studio rejects malformed rank and unsupported format/layout declarations on open. This verifies persistence for the current compact CPU profile. Registry-backed execution is covered by AV09b.
+
 ### AV09 — Minimal new vector element library + deterministic diagrams
+
+`PackVector` assembles N scalar inputs of one numeric type into a rank-one vector of length N. `UnpackVector` writes one scalar output per vector component. N is fixed at compile time and at least two. Each element runs once per domain evaluation and preserves component order by port index. Inputs and outputs require exact numeric types and shape. Packing writes into an execution-reserved buffer and leaves source provenance absent for independent scalar inputs. Unpacking writes native scalar values. Verify both directions with distinct component values and negative tests for mismatched types, lengths and rates.
+
+**AV09a evidence:** The internal source, forwarder and reader used the same sealed buffer on each of 20,002 attempts, including one injected late fault. The source wrote 640,064 bytes and the two wire readers borrowed 1,280,128 bytes with zero bytes materialized on the wires. The independent sum oracle matched every committed step. The ELF allocation counter detected setup allocations and reported zero C++ allocations on the stepping thread over 20,000 successful warmed steps. The selected 23 headless Release tests passed.
+
+**AV09b progress:** The C++ `PackVectorT` and `UnpackVectorT` steps round-trip distinct F32 and C32 components in port order. Tests reject insufficient components or reserve, incompatible types and lengths, and conflicting scalar rates. The selected 24 headless Release tests passed.
+
+The local registry and runtime now load and execute the vector source, forwarder, gain and adapters. The saved `schema_vector_adapters.json` example ran ten steps through `s7runtime`. The elementwise oracle checks all three gained components and the separate U64 count output. Concrete descriptors come from each instance's checked parameters. Distributed placement continues to reject array wires. All 24 selected headless tests passed after registration.
 
 **Depends:** AV08.
 
@@ -241,11 +274,34 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** independently generated impulse, DC, single complex tone and two-tone fixtures; complex bin order and inverse convention documented; known-output array checked against independent DFT/FFT oracle; allocation/copy instrumentation. Keep plugin SDK boundary qualified if output lives in a plugin.
 
+**AV10a backend audit**
+
+| Existing path | Runtime use |
+| --- | --- |
+| `s7spectral::Transform` in `analysis.hpp` | Reuse its in-place radix-2 algorithm and precomputed roots. Generalize the component type and preserve the existing C64 analysis entry point. |
+| `s7spectral::WindowedFFT` | Retain the FFTW real-input streaming peak analysis. Its one-sided peak values and window normalization have a separate contract. |
+| `s7core` overlap-save convolution | Keep the convolution kernel spectrum, overlap history and work arrays with convolution. Its padded stream processing needs a different lifetime from a whole-array transform. |
+| Studio's FFTW wrapper | Keep its C64 scratch, planner and allocating return value in Studio analysis. |
+
+Use fixed lengths from 2 through 1,048,576, powers of two only. A C32 transform keeps N/2 roots and a bounded output pool. At the largest length, two output slots and the root table account for 20 MiB of numeric storage. The baseline writes N C32 values into the output candidate, transforms them in place, and forwards the corresponding source occurrence. No wider scratch buffer or FFTW planner is required. The vector transform builds and loads through the installed SDK as part of the spectral plugin. The plugin already links FFTW for `WindowedFFT`.
+
+The direct long-double DFT oracle lives in `s7spectral/tests/direct_dft.hpp`. For the C32 fixture, compare absolute forward error to `8 × ε × log2(N) × max(1, sum(abs(x)))`, with ε the C32 component epsilon. Compare inverse reconstruction to `16 × ε × log2(N) × max(1, max(abs(x)))`. Use small lengths for the independent oracle and 256, 1,024, 4,096 and 65,536 for full-step performance comparisons. Report the input initialization separately from wire materialization.
+
+**AV10b evidence:** The native C32 forward and inverse elements run in the spectral plugin. The numerical smoke compares every bin for an offset impulse, complex DC, positive and negative tones, and a two-tone signal. It confirms the input remains unchanged, the transform stages use separate leased storage and inverse reconstruction meets the tolerance. The ELF allocation probe detected setup allocation and zero C++ allocations over 320 warmed graph steps, each with a forward and inverse transform. A plugin loaded from an installed SDK also compiled and ran a registered C32 impulse graph.
+
 ### AV11 — Vector power / PSD and spectral contract
 
 **Depends:** AV10.
 
 **Scope:** new vector magnitude/power or PSD element(s) with explicit window/normalization/sample-rate/frequency indexing. Specify whether bins are FFT-shifted or not; avoid introducing hidden sample rate inference. Expose traceable block/sequence information for presentation and data-quality gaps if source provides it.
+
+**AV11a contract:** One `VectorPSD` evaluation consumes a complete rank-one C32 sample block and emits a rank-one F32 vector of the same length. Apply the periodic Hann window before the transform. Use two-sided linear power, with DC at bin 0 and Nyquist at bin N/2 interpreted as the negative endpoint. For even N, the signed bin number is k for k < N/2 and k−N otherwise. Its physical frequency is that signed number times Fs/N. Keep the FFT ordering on the wire. The viewer may display the signed bins from negative to positive frequency.
+
+The element supports explicit power-per-bin and per-Hz modes. The per-Hz mode needs a positive physical source rate supplied by the source metadata or an element parameter. If both are present they must agree. The per-bin mode can run with an unknown physical rate and still exposes signed bin numbers. Preserve any supplied source identity, interval and discontinuity before the block. A block with missing samples inside the interval or an explicit valid sample count other than N is rejected before publication. Origin fields that the source omits stay absent. Domain position, source sample position and PSD axis are independent. The output remains linear, including exact zero; a viewer applies a user-selected dB reference and floor.
+
+Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independent normalization check equates the total power over all bins to the weighted time-domain mean square `sum(w² × |x|²) / sum(w²)`. In per-Hz mode integrate by multiplying the density sum by `Fs/N`. Include zero, complex DC, a positive/negative tone pair and a sample-block discontinuity. Reject length and rate mismatches in the executable fixture.
+
+**AV11b evidence:** Both out-of-tree spectral tests passed. The PSD oracle checks every bin and integrated power in both units. It covers exact zero, complex DC, a signed tone pair, source provenance, discontinuity before a valid block, and rollback on missing samples, length and rate mismatches. An unknown physical rate is accepted in per-bin mode and rejected in per-Hz mode. The headless runtime loaded the installed-SDK plugin and ran `schema_vector_psd.json` for ten steps.
 
 **Accept:** independent PSD and frequency-axis checks using known IQ blocks, zero-input and near-zero floor behavior, shape validation, no magic dB epsilon without documentation, discontinuity policies. Produce Waterfall's reference array input schema.
 
@@ -254,6 +310,8 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 **Depends:** AV09b + D4/D6. Independent of AV10/AV11/AV15; may proceed on its own branch after a stable runtime.
 
 **Scope:** separate new frame fixture source producing known grayscale [H,W] and RGB [H,W,3] arrays through real graph ports with deterministic frame identity. Support compact CPU layout first; specify any padded row-stride fixture and ensure validation matches actual layout. Define presentation-relevant frame identity separately from model clock and media timestamps. No camera, codec or FFmpeg/GStreamer.
+
+**AV12 evidence:** The headless runtime executed the saved grayscale/RGB fixture for five steps. The C++ smoke checks exact pixel bytes and row strides for two successive frames in each format, the source and sequence identity, and progress while the first frame remains retained. It rejects invalid configuration and RGB metadata inconsistent with the array shape. The fixture supplies compact row-major frames with absent media timestamps.
 
 **Accept:** pixel oracle (checkerboard/moving bar), width/height/type metadata, nontrivial row stride tested if supported by chosen first layout, sequential frame IDs, bounded allocation, unsupported format and invalid extent tests. Saved diagram must execute headlessly.
 
@@ -265,6 +323,10 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** selected output snapshot coherence, retention after producer advances, slow subscriber/pool exhaustion, attach/detach, explicit gaps and counters, thread safety, error cancellation; measured payload copies for local observation, scalar \`s7observe\` regressions.
 
+**AV13a evidence:** `ObservationService::array_snapshot` captures committed leases in request order. It selects a pre-admitted token from the actual backing pool and releases partial acquisitions on refusal. The smoke records different domain positions after a partial commit. It then advances the producers while their old samples remain retained, checks bounded admission, and verifies cancellation.
+
+**AV13b mailbox evidence:** The stepping thread can offer a committed sample to a one-entry `ArrayMailbox`. Pausing keeps delivery bounded. Replacement and admission skips have separate counters, and each sample retains its source metadata and domain position. The threaded smoke holds an old frame while new frames arrive, closes the subscription, and verifies retained lifetime. ASan and UBSan passed for the mailbox, pool and descriptor paths. Studio subscription and viewer routing follow in AV14b.
+
 ### AV14 — Studio metadata, wiring and observer registration
 
 **Depends:** AV14a on AV03/AV08b; AV14b on AV14a + AV13b. Observer pin checking must not wait for rendering.
@@ -272,6 +334,33 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 **Scope:** show correct array shape on pins/wire labels, validate incompatible drag-connections, register Waterfall/Video Player viewer types and editor metadata, keep saved observer bindings/settings. Provide a minimal no-op or test presentation adapter only; full renderers belong to AV15/AV16. Avoid modifying \`external/\` libraries.
 
 **Accept:** saved diagram round-trip with array wire label, type/shape error UI, registry discovery, attach/rebind lifecycle, invalid selection errors and scalar Studio regressions. Screenshots explicitly reviewed if GUI toolchain is available.
+
+**AV14a evidence:** The Qt Release persistence and wiring test passed. Studio shows the configured numeric type and shape on wires and port tooltips. It rejects incompatible array lengths and component types, including when an unrelated element is unresolved. Existing scalar observers reject array connections. The broader diagram test still reports the soft-fill assertion recorded in AV00. Viewer-specific format checks and delivery routing remain open.
+
+**Reboot checkpoint (2026-11-27):** The implementation checkpoint is `d13f680` on `feature/array-av01`. D1–D7 are accepted. Resume with the remaining AV14a viewer-format checks and AV14b Studio subscription and routing. Reuse `ObservationService::array_snapshot` and `ArrayMailbox`. Resolve retention against the actual backing pool when a source changes. Keep the Waterfall and Video Player renderers with AV15 and AV16, followed by printing and release qualification. The maintainer asked to continue through items that need no further design decision.
+
+The latest headless Release run passed all 106 tests, including the installed-SDK spectral smoke. The focused Studio Release test passed at the implementation checkpoint. The broader Studio diagram test reproduced the AV00 assertion “element families and nested schemas use distinct soft fills.” The temporary headless build can be recreated after reboot. From `s7l2/`, configure with `cmake -S . -B build-headless -G Ninja -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF`, run `cmake --build build-headless --target build-tests --parallel 6`, then run `CMAKE_BUILD_PARALLEL_LEVEL=4 ctest --test-dir build-headless --output-on-failure -j 6`. The Studio build is in `build-release/`. Run its focused test with `QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release -R '^s7studio_array_persistence$' --output-on-failure`.
+
+**AV14 continuation checkpoint (2026-11-27, base `6623af8`).** Studio registers Waterfall and Video Player, validates their input descriptors on connection and load, and persists their bindings as observation taps. The runner reads committed samples via `ObservationService` and retains at most one pool slot for each distinct observed output. It shares that lease across subscribers, follows the actual backing pool when it changes and closes retired mailboxes on reset or rerun. The status windows check format metadata and report the domain step, source sequence, unread replacements and admission skips. AV15 and AV16 own the rendering and image oracles.
+
+Native Release on Fedora 45 with GCC 16.2.1 built the full `build-tests` target. All 106 headless tests passed, including `s7spectral_sdk_smoke`. The 44 Studio tests outside the GUI-labeled suite produced 39 passes. The diagram test reproduced the AV00 soft-fill assertion. The older November 22 Studio binary reproduced the other four failures with the same diagnostics. Scope Run reported a missing plotted channel, both phase checks rejected the existing EulerIntegrator `dt` parameter, and Live Spectrum reported a failed live-only capture or an unexpected journal. The focused array test, viewer registry, run and Scope lifecycle tests passed.
+
+The array test round-trips observer bindings, rejects incompatible selections, runs the built-in grayscale and RGB frame sources, confirms scalar sequence capture alongside array delivery, and exercises fan-out, close/reopen and source rebinding. The delay smoke retains its initializer while admission follows the feedback pool. The Xvfb workflow produced `/tmp/s7-av14-gui-verified/video-player-delivery.png` and `/tmp/s7-av14-gui-verified/waterfall-delivery.png`. Both status screenshots were visually inspected. Three existing Observers dock workflows also passed under Xvfb.
+
+Clang 22.1.8 ASan and UBSan passed the vector delay, observation and array mailbox smokes with leak detection enabled.
+
+```bash
+cmake --build build-release --target build-tests --parallel 6
+CMAKE_BUILD_PARALLEL_LEVEL=3 ctest --test-dir build-release --output-on-failure -j 4 -E '^s7studio_|^qschematic'
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -LE gui -R '^s7studio_'
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av14-gui-verified --capture build-release/s7studio/s7studio_gui_capture --timeout 30 -- build-release/s7studio/s7studio_array_persistence_test
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av14-observer-regressions --capture build-release/s7studio/s7studio_gui_capture --timeout 90 -- build-release/s7studio/s7studio_gui_workflows_test observersDefaultToFirstThreeAndRememberManualChoice observersDockSelectionLifecycleAndPersistence observersDockAllPresentationTypes
+cmake -S . -B /tmp/s7-av14-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DS7_BUILD_STUDIO=OFF -DCMAKE_CXX_COMPILER=/usr/bin/clang++-22 '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
+cmake --build /tmp/s7-av14-asan --target s7core_vector_delay_smoke s7observe_array_mailbox_smoke s7observe_smoke --parallel 2
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir /tmp/s7-av14-asan --output-on-failure -R '^(s7core_vector_delay_smoke|s7observe(_array_mailbox)?_smoke)$'
+```
+
+Resume with AV15a for the Waterfall row and frequency-axis mapping. AV16a can proceed independently from the same AV14 interfaces.
 
 ### AV15 — Waterfall viewer rendering (G4/W)
 
@@ -281,6 +370,24 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** canonical saved IQ -> FFT -> PSD -> Waterfall diagram; numeric oracle and deterministic image/axis screenshots checked against reference, 1-step vs block-rate metadata consistency, skipped-row/pause/close/reopen/fast producer behavior, unchanged graph output on viewer attach/detach.
 
+**AV15a checkpoint (2026-11-27, base `84b6735`).** `WaterfallHistory` produces a coherent raster, row metadata and axes for the renderer. Columns ascend by signed DFT bin. Even-length spectra start with negative Nyquist. The physical axis uses the supplied sampling rate when known and uses signed bin numbers otherwise. Row time is the committed domain step divided by the model-domain cadence. The source occurrence and sample interval travel with each row.
+
+The history stores linear F32 power for up to 256 rows by default, with a configurable cap of 1024 rows and a 16 MiB power payload limit. The raster presents oldest rows first and inserts one blue stripe before each row with a known gap. The row metadata distinguishes skipped domain steps from source discontinuities. A large skip has the same raster height as a small skip, while its exact count remains in metadata. An axis change starts a new segment and reports the change to the caller. A snapshot can recolor all retained rows using either palette, a positive reference in the input power units and a dB range. Exact zero maps to the lower bound through the existing spectrum dB conversion.
+
+The exact-pixel oracle covers the shift, both palettes, zero, sub-floor values and a change of reference. The history test also checks malformed inputs, signed bins with unknown rate, distinct gap causes, source epochs, duplicate delivery, eviction, immutable snapshots and the raster bound with gap stripes. Native Release passed the seven focused Studio and observation tests and the installed-SDK spectral smoke. The saved `schema_vector_psd.json` fixture executed ten steps with the rebuilt plugin. The new adapter and its test passed with Clang 22.1.8 ASan and UBSan against the Release dependencies.
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7studio_waterfall_history_test s7studio_array_persistence_test s7studio_viewers_test s7studio_scope_lifecycle_test s7studio_time_frequency_test --parallel 6
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -R '^(s7studio_(waterfall_history|array_persistence|viewers|scope_lifecycle|time_frequency)|s7observe(_array_mailbox)?_smoke)$'
+CMAKE_BUILD_PARALLEL_LEVEL=4 ctest --test-dir build-release --output-on-failure -R '^s7spectral_sdk_smoke$'
+build-release/s7runtime/s7runtime --schema s7runtime/examples/schema_vector_psd.json --plugin-dir build-release/s7runtime/plugin_sdk_test/build --state-dir /tmp/s7-av15a-psd-state
+```
+
+AV15b connects the history to the Waterfall window and qualifies the rendered axes, controls and saved observer diagram. AV16a can proceed independently from AV14.
+
+**AV15b checkpoint (2026-11-27, base `979a6d9`).** The live Waterfall renders its frequency axis, committed model-time ticks, dB legend and gap stripes. The user can edit the dB range, power reference and palette for the open window. Display pause leaves model execution and mailbox admission active. The rendered raster combines adjacent bins by peak power beyond 1024 columns. The [saved PSD fixture](../examples/time_frequency/waterfall_psd.s7diagram) executes the installed plugin's Hann-window FFT periodogram and routes the whole result to Waterfall. The test checks its DC and Nyquist power, a physical rate independent of graph cadence, rendered colors, pause/resume and range/palette changes. Xvfb captures of the real PSD path and the deterministic gap fixture were inspected.
+
 ### AV16 — Basic Video Player viewer rendering (G4/V)
 
 **Depends:** AV12, AV13, AV14.
@@ -289,6 +396,19 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 
 **Accept:** checkerboard/moving-bar saved diagram; pixel exactness (including tested stride), aspect/fit, pause/resume and late frames, same graph outputs with/without viewer, close/reopen/rebind, unsupported format/error, memory bound. Check actual rendered image screenshots, not only widget creation.
 
+**AV16a/b checkpoint (2026-11-27).** The Video Player owns one displayed image with a 32 MiB limit and fits it to the window at the original aspect ratio. The [saved frame fixture](../examples/video/video_patterns.s7diagram) supplies compact odd-width Gray8 and RGB8 frames. The test compares every pixel, verifies Qt row padding, checks the rendered letterbox and rejects inconsistent pixel metadata. It also verifies close/reopen, rebind and frame progression in a continuous run during display pause. Both rendered frames were inspected under Xvfb.
+
+Seven focused Release tests passed on Fedora 45 with GCC 16.2.1. The optional Xvfb spectral case loaded the installed-SDK plugin and ran the saved diagram. The checked-in diagrams passed structural validation.
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7studio s7studio_array_persistence_test s7studio_waterfall_history_test s7studio_viewers_test s7studio_scope_lifecycle_test s7studio_time_frequency_test --parallel 6
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -R '^(s7studio_(waterfall_history|array_persistence|viewers|scope_lifecycle|time_frequency)|s7observe(_array_mailbox)?_smoke)$'
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av15b-av16-verified --capture build-release/s7studio/s7studio_gui_capture --timeout 45 -- env S7_ARRAY_TEST_SPECTRAL_PLUGIN=build-release/s7runtime/plugin_sdk_test/build/libs7spectral.so build-release/s7studio/s7studio_array_persistence_test
+```
+
+AV17 covers printing and installation. The separate codec-element work needs a reviewed encoded port contract. [Video codec elements](VIDEO_IO_FRAME_DESIGN.md#codec-elements-in-s7video)
+
 ### AV17 — PDF/print, installation and documentation of new viewers
 
 **Depends:** AV15/AV16.
@@ -296,6 +416,10 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 **Scope:** G4/P P08 and P09 coherent immutable snapshot printing to PDF/printer, including correct Waterfall axes/legend and Video Player pixel/frame identity. Add viewer help, examples and shipping resources to supported installed packages; preserve existing printing cases. A platform without a printer still supports PDF.
 
 **Accept:** P08/P09 tests plus existing P01–P07, source SHA, screenshot or PDF visual inspection, canceled/error print, no step advancement from printing, proper installed/relocated viewer registry discovery. Do not claim real printer evidence from CI or Wine.
+
+**AV17 checkpoint (2026-11-27).** Waterfall and Video Player offer PDF export and printer output from one retained display snapshot. The PDF test checks cancellation, a failed destination, a newer spectrum arriving during the save dialog and unchanged model progress. The Qt printer path was exercised using its PDF backend. On Fedora with Qt 6.11.2, Poppler rendered the pages and verified the Waterfall gap stripe and scale, the grayscale/RGB pattern pixels and the replay frame's source stride and presentation time. The installed SDK built both optional plugins. The relocated Studio discovered them, and the Studio array test loaded the installed examples and ran the five-frame replay through Video Player.
+
+Run `ctest --test-dir build-release -R 's7studio_(array_persistence|waterfall_history|viewers)|s7spectral_sdk_smoke' --output-on-failure` and the three standalone `s7video` CTest cases. The array test accepts `S7_ARRAY_TEST_EXAMPLES_DIR`, `S7_ARRAY_TEST_SPECTRAL_PLUGIN`, `S7_ARRAY_TEST_VIDEO_PLUGIN` and `S7_ARRAY_TEST_REPLAY_DIAGRAM` for installed-prefix verification. Launch it from the directory containing the five-frame recording. Set `S7_GUI_ARTIFACT_DIR` to keep the PDFs and screenshots. Physical printers and non-Fedora package profiles still need qualification. P01–P07 remain open in the [printing matrix](STUDIO_PRINTING_0.2.0.md).
 
 ### AV18 — Final dedicated array qualification / release evidence
 

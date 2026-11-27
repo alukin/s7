@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// A minimal plugin for plugin_loader_smoke. Built twice: as is, and with
-// S7_TEST_PLUGIN_FAIL, where registration fails after one element was
-// registered (a duplicate type name).
+// A minimal plugin for the successful, failing registration, and wrong ABI
+// cases in plugin_loader_smoke.
 #include <memory>
 
 #include <s7/element_plugin.hpp>
@@ -16,7 +15,11 @@ extern "C" __declspec(dllimport) double s7_test_dependency_value();
 namespace {
 
 const S7PluginInfo plugin_info{
+#ifdef S7_TEST_PLUGIN_WRONG_ABI
+    .api_version = S7_PLUGIN_API_VERSION + 1,
+#else
     .api_version = S7_PLUGIN_API_VERSION,
+#endif
     .element_count = 1,
     .plugin_name = "s7testplugin",
     .plugin_version = "1.0.0",
@@ -29,7 +32,14 @@ extern "C" {
 
 const S7PluginInfo* s7_plugin_query() { return &plugin_info; }
 
-const char* s7_plugin_manifest_json() { return nullptr; }
+const char* s7_plugin_manifest_json()
+{
+#ifdef S7_TEST_PLUGIN_WRONG_ABI
+    return R"({"plugin_name":"Wrong ABI fixture"})";
+#else
+    return nullptr;
+#endif
+}
 
 void s7_register_elements(void* registry_ptr)
 {

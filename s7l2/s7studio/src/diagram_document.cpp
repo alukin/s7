@@ -11,6 +11,21 @@
 
 namespace s7studio::diagram {
 
+namespace {
+void validateExposedPorts(const boost::json::object& schema)
+{
+    static_cast<void>(s7::parse_exposed_ports(schema, "exposed_inputs"));
+    static_cast<void>(s7::parse_exposed_ports(schema, "exposed_outputs"));
+    const auto* elements = schema.if_contains("elements");
+    if (!elements || !elements->is_array()) return;
+    for (const auto& element : elements->as_array()) {
+        if (!element.is_object()) continue;
+        const auto* nested = element.as_object().if_contains("schema");
+        if (nested && nested->is_object()) validateExposedPorts(nested->as_object());
+    }
+}
+} // namespace
+
 auto DiagramPageLayout::fromJson(const boost::json::object& obj) -> DiagramPageLayout {
     DiagramPageLayout layout;
     
@@ -147,6 +162,7 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         // If no explicit schema field, treat the document itself as containing runtime data
         doc.runtimeSchema = json;
     }
+    if (doc.runtimeSchema.is_object()) validateExposedPorts(doc.runtimeSchema.as_object());
     // Filters in an older document were designed for its saved dt (ADR-022);
     // record that rate so a run at another dt is refused, not misread. A
     // document without a saved dt has no known design rate.

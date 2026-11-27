@@ -7,6 +7,12 @@
 #include <string_view>
 
 namespace s7 {
+// A missing "shape" is the native scalar default. An explicit shape must be
+// a nonempty list of positive fixed extents.
+[[nodiscard]] std::optional<ArrayDescriptor> parse_port_array(const boost::json::object& port,
+                                                             SignalType type, std::string_view context);
+[[nodiscard]] boost::json::array array_shape_json(const ArrayDescriptor& descriptor);
+
 // Complete metadata, independent of executable factories. Resources are embedded
 // by their owning module; loading never reads files or resolves external links.
 class ElementMetadataLibrary {

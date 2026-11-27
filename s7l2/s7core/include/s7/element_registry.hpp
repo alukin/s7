@@ -30,17 +30,20 @@ public:
     ElementDescriptor(
         std::string type_name,
         std::function<std::unique_ptr<Element>(const ElementCreationContext&)> factory,
-        const ElementMetadata& metadata
+        const ElementMetadata& metadata,
+        bool executable_array_factory = false
     );
 
     [[nodiscard]] const ElementMetadata& metadata() const { return metadata_; }
     [[nodiscard]] std::unique_ptr<Element> create(const ElementCreationContext& ctx) const;
     [[nodiscard]] std::string type_name() const { return type_name_; }
+    [[nodiscard]] bool executable_array_factory() const { return executable_array_factory_; }
 
 private:
     std::string type_name_;
     std::function<std::unique_ptr<Element>(const ElementCreationContext&)> factory_;
     ElementMetadata metadata_;
+    bool executable_array_factory_;
 };
 
 // Context for element creation with parameter extraction

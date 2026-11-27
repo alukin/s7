@@ -5,6 +5,7 @@
 #define S7CORE_INCLUDE_S7_ELEMENT_METADATA_HPP
 
 #include "s7/element.hpp"
+#include "s7/array_descriptor.hpp"
 
 #include <string>
 #include <vector>
@@ -35,6 +36,7 @@ struct PortSpec {
     // Empty: the port has the fixed `type`. Otherwise a rule over the element's
     // type variables: "T", "component(T)" or "complex(T)".
     std::string type_rule{};
+    std::optional<ArrayDescriptor> array{}; // Omitted for native scalar ports
 };
 
 // A type variable of a generic element; port types refer to it by name and

@@ -5,6 +5,7 @@
 
 #include "observation/observation_source.hpp"
 #include "observation/live_acquisition.hpp"
+#include "observation/array_sources.hpp"
 #include <s7/element_metadata.hpp>
 
 #include <QString>
@@ -96,6 +97,12 @@ public:
     virtual void setComparisonSources(const QVector<ComparisonBinding>& comparisons) = 0;
 };
 
+class ArrayObservationViewer {
+public:
+    virtual ~ArrayObservationViewer() = default;
+    virtual void attachArraySource(std::shared_ptr<s7::ArrayMailbox> mailbox) = 0;
+};
+
 // What the host asks a viewer type to create: a stable instance id (the
 // diagram observer's element id, or a key for ad-hoc viewers) and the probes
 // feeding its fixed inputs, in input order.
@@ -119,6 +126,7 @@ struct ViewerType {
     std::function<ObservationViewer*(const ViewerInstanceSpec&)> create;
     std::optional<s7::ElementMetadata> documentation{};
     std::function<ObserverPresentation*(QWidget*)> createPresentation{};
+    diagram::ArrayObserverKind arrayKind = diagram::ArrayObserverKind::None;
 };
 
 } // namespace s7studio::viewers

@@ -23,6 +23,8 @@
 
 namespace s7 {
 
+class ArrayDescriptor;
+
 using RealValue = signal_storage_t<SignalType::F64>;
 using ComplexValue = signal_storage_t<SignalType::C64>;
 
@@ -43,13 +45,20 @@ struct Port {
     std::string name;
     SignalType type;
     void* value_ptr;  // Points to element's member variable
+    const ArrayDescriptor* array_descriptor{}; // Array ports have no scalar value pointer.
 
     // Helper to get typed value
     template <typename T>
-    T& as() { return *static_cast<T*>(value_ptr); }
+    T& as() {
+        if (array_descriptor) throw std::logic_error("Array port requires an array binding.");
+        return *static_cast<T*>(value_ptr);
+    }
 
     template <typename T>
-    const T& as() const { return *static_cast<const T*>(value_ptr); }
+    const T& as() const {
+        if (array_descriptor) throw std::logic_error("Array port requires an array binding.");
+        return *static_cast<const T*>(value_ptr);
+    }
 };
 
 using InputBinding = const void*;
@@ -123,6 +132,10 @@ public:
 
     [[nodiscard]] std::span<const Port> input_ports() const { return input_ports_; }
     [[nodiscard]] std::span<const Port> output_ports() const { return output_ports_; }
+    [[nodiscard]] bool has_array_ports() const {
+        const auto shaped = [](const Port& port) { return port.array_descriptor != nullptr; };
+        return std::ranges::any_of(input_ports_, shaped) || std::ranges::any_of(output_ports_, shaped);
+    }
 
     // Binding for runtime connections - validates once during compilation
     virtual void bind_inputs(std::span<const InputBinding> bindings) {
@@ -130,7 +143,9 @@ public:
             throw std::runtime_error("Input binding count mismatch");
         }
         for (std::size_t i = 0; i < bindings.size(); ++i) {
-            if (!bindings[i]) {
+            if (input_ports_[i].array_descriptor) {
+                if (bindings[i]) throw std::runtime_error("Scalar binding supplied for array input at index " + std::to_string(i));
+            } else if (!bindings[i]) {
                 throw std::runtime_error("Null input binding at index " + std::to_string(i));
             }
         }
@@ -184,12 +199,14 @@ protected:
     }
 
     // Register ports - called by subclass constructor after members are initialized
-    void register_input(std::size_t idx, std::string_view name, SignalType type, void* ptr) {
-        input_ports_.push_back({idx, std::string(name), type, ptr});
+    void register_input(std::size_t idx, std::string_view name, SignalType type, void* ptr,
+                        const ArrayDescriptor* array = nullptr) {
+        input_ports_.push_back({idx, std::string(name), type, ptr, array});
     }
 
-    void register_output(std::size_t idx, std::string_view name, SignalType type, void* ptr) {
-        output_ports_.push_back({idx, std::string(name), type, ptr});
+    void register_output(std::size_t idx, std::string_view name, SignalType type, void* ptr,
+                         const ArrayDescriptor* array = nullptr) {
+        output_ports_.push_back({idx, std::string(name), type, ptr, array});
     }
 
 private:

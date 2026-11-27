@@ -33,6 +33,7 @@ public:
     // gives the element's own (output) rate. May throw std::invalid_argument.
     virtual void adopt_input_rate(const Rate& input) = 0;
     // Takes the input's newest sample, published by the input domain's step.
+    // A throw faults the run because capture can already have changed state.
     virtual void capture_input() = 0;
     [[nodiscard]] virtual bool changes_rate() const = 0;
 };

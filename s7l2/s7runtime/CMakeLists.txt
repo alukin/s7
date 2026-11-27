@@ -89,6 +89,7 @@ target_compile_definitions(s7runtime_deployment_smoke PRIVATE
 )
 
 add_test(NAME s7runtime_deployment_smoke COMMAND s7runtime_deployment_smoke)
+add_test(NAME s7runtime_array_schema_smoke COMMAND s7runtime_deployment_smoke --array-schema)
 
 # The control protocol conformance script, run against the control plane.
 s7_add_test_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane.cpp)
@@ -135,6 +136,9 @@ endif()
 add_library(s7_test_plugin_failing MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
 target_link_libraries(s7_test_plugin_failing PRIVATE s7core)
 target_compile_definitions(s7_test_plugin_failing PRIVATE S7_TEST_PLUGIN_FAIL)
+add_library(s7_test_plugin_wrong_abi MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
+target_link_libraries(s7_test_plugin_wrong_abi PRIVATE s7core)
+target_compile_definitions(s7_test_plugin_wrong_abi PRIVATE S7_TEST_PLUGIN_WRONG_ABI)
 s7_add_test_executable(s7runtime_plugin_loader_smoke
     tests/plugin_loader_smoke.cpp
     src/plugin_loader.cpp
@@ -143,8 +147,9 @@ target_include_directories(s7runtime_plugin_loader_smoke PRIVATE ${CMAKE_CURRENT
 target_link_libraries(s7runtime_plugin_loader_smoke PRIVATE s7core Boost::json ${CMAKE_DL_LIBS})
 target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE
     S7_TEST_PLUGIN="$<TARGET_FILE:s7_test_plugin>"
-    S7_FAILING_PLUGIN="$<TARGET_FILE:s7_test_plugin_failing>")
-add_dependencies(s7runtime_plugin_loader_smoke s7_test_plugin s7_test_plugin_failing)
+    S7_FAILING_PLUGIN="$<TARGET_FILE:s7_test_plugin_failing>"
+    S7_WRONG_ABI_PLUGIN="$<TARGET_FILE:s7_test_plugin_wrong_abi>")
+add_dependencies(s7runtime_plugin_loader_smoke s7_test_plugin s7_test_plugin_failing s7_test_plugin_wrong_abi)
 if(WIN32)
     add_dependencies(s7runtime_plugin_loader_smoke s7_test_nested_plugin)
     target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE

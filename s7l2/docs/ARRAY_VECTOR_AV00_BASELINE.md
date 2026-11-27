@@ -1,6 +1,6 @@
 # AV00 scalar baseline and array decisions
 
-Source `65d4d366bddba4c941719c8f7821e19d0e3f999c`, matching `origin/main` at the start of the session. The deliverable is baseline evidence and the proposed first descriptor profile. D1 records the maintainer's compatibility policy. D2–D7 are open.
+Source `65d4d366bddba4c941719c8f7821e19d0e3f999c`, matching `origin/main` at the start of the session. This records baseline evidence and the first descriptor proposal. The [design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) records the accepted D1 and revised D4.
 
 ## Baseline measurements
 
@@ -82,7 +82,7 @@ c++ -std=c++26 "$A/manifest_kind.cpp" -lboost_json -o "$A/manifest_kind"
 
 ## D4 proposal for AV01
 
-**Approval pending.** Use separate logical shape and validated CPU view descriptors. Keep numeric type independent of rank. Rank zero describes existing native scalar values. Compile and bind array shape once per port.
+**Historical proposal.** The maintainer subsequently approved [revised D4](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics), which generalizes the shape descriptor to spatial arrays and keeps domain semantics separate. The proposal below records the initial release profiles considered in AV00.
 
 | Profile | Logical type and shape | Initial CPU layout |
 | --- | --- | --- |
@@ -103,10 +103,10 @@ AV01 should cover valid scalar, F32, C32, grayscale and RGB profiles, and reject
 | --- | --- |
 | D1 · Compatibility | **Accepted.** Design the current interfaces and formats freely. Verify repository-owned plugins and diagrams against the chosen interfaces. |
 | D2 · Publication | Open. Define a nonthrowing per-domain commit, the retained prior state on a failure, and the independent-domain retry case above. Preserve ADR-029's distinction between output rollback and private or external effects. |
-| D3 · Ownership | Open. Size the execution reserve for all live graph handles, including delayed or forwarded payloads. Cap optional observer and print retention separately and test producer progress under exhaustion. |
-| D4 · Descriptors | Open. The compact CPU profile above is the immediate approval needed before AV01. |
+| D3 · Ownership | Subsequently accepted in the [design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d3--pool-admission-and-optional-retention). |
+| D4 · Descriptors | Proposed in AV00 and later accepted in [revised form](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#d4--fixed-shape-cpu-layout-and-domain-semantics). |
 | D5 · FFT and PSD | Open. Audit the existing backends in AV10a, then decide the backend, bin convention, windowing and normalization before the corresponding implementation. |
 | D6 · Provenance | Open. Define source identity forwarding before whole-array Delay. Define physical rate, sample/frame indices, optional timestamps, and source gaps separately from graph cadence and viewer skips. |
 | D7 · Nested schemas | Open. Propose supporting array slots through compiled flattened aliases, with a clear error for array-valued exposed ports on standalone `Schema::step()`. |
 
-The next implementation session is **AV01 after D4 approval**. [Binding work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md#mandatory-per-family-task-split-and-evidence-review-driven-superseding-execution-cards)
+AV01 follows the revised D4 contract. [Binding work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md#mandatory-per-family-task-split-and-evidence-review-driven-superseding-execution-cards)

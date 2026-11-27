@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/schema_library.hpp"
+#include "s7/metadata_json.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,13 +22,6 @@
 
 namespace s7 {
 namespace {
-
-struct SchemaPortBinding {
-    std::string name;
-    std::string type;
-    std::string element;
-    std::size_t port{};
-};
 
 auto expect_object(const boost::json::value& value, std::string_view field) -> const boost::json::object&
 {
@@ -129,36 +123,48 @@ auto non_negative_index(const boost::json::object& object, std::string_view fiel
     throw std::invalid_argument("Expected non-negative integer field '" + std::string(field) + "'.");
 }
 
-auto signal_type_from_string(const std::string& type) -> SignalType
-{
-    return parse_signal_type(type);
-}
+} // namespace
 
-auto parse_port_bindings(const boost::json::object& root, const std::string& field) -> std::vector<SchemaPortBinding>
+std::vector<Schema::ExposedPort> parse_exposed_ports(const boost::json::object& root, const std::string_view field)
 {
-    std::vector<SchemaPortBinding> bindings;
+    std::vector<Schema::ExposedPort> bindings;
     const auto it = root.find(field);
     if (it == root.end()) {
         return bindings;
     }
     if (!it->value().is_array()) {
-        throw std::invalid_argument("Expected array field '" + field + "'.");
+        throw std::invalid_argument("Expected array field '" + std::string(field) + "'.");
     }
 
     for (const auto& item : it->value().as_array()) {
         const auto& binding_object = expect_object(item, field);
-        SchemaPortBinding binding;
+        Schema::ExposedPort binding;
         binding.name = string_value(binding_object, "name");
-        binding.type = string_value(binding_object, "type", "F64");
+        for (const auto& member : binding_object) {
+            const std::string_view key = member.key();
+            if (key != "name" && key != "type" && key != "element" && key != "port" && key != "shape" && key != "packet") {
+                throw std::invalid_argument("Unknown exposed port field '" + std::string(key) + "'.");
+            }
+        }
+        if (binding_object.contains("shape") && !binding_object.contains("type")) {
+            throw std::invalid_argument("Exposed array port '" + binding.name + "' requires a fixed numeric type.");
+        }
+        binding.type = parse_signal_type(string_value(binding_object, "type", "F64"));
         binding.element = string_value(binding_object, "element");
+        if (binding.name.empty() || binding.element.empty()) {
+            throw std::invalid_argument("Exposed port in '" + std::string(field) + "' requires a name and an element.");
+        }
         binding.port = non_negative_index(binding_object, "port");
+        binding.array = parse_port_array(binding_object, binding.type, std::string(field) + "." + binding.name);
         bindings.push_back(std::move(binding));
     }
 
     return bindings;
 }
 
-auto build_port_specs(const std::vector<SchemaPortBinding>& bindings, const bool output) -> std::vector<PortSpec>
+namespace {
+
+auto build_port_specs(const std::vector<Schema::ExposedPort>& bindings, const bool output) -> std::vector<PortSpec>
 {
     std::vector<PortSpec> ports;
     ports.reserve(bindings.size());
@@ -169,7 +175,8 @@ auto build_port_specs(const std::vector<SchemaPortBinding>& bindings, const bool
         port.description = output
             ? "Exposed output"
             : "Exposed input";
-        port.type = signal_type_from_string(binding.type);
+        port.type = binding.type;
+        port.array = binding.array;
         port.optional = false;
         ports.push_back(std::move(port));
     }
@@ -240,27 +247,22 @@ auto build_schema_from_object(const boost::json::object& root, const ElementRegi
                        non_negative_index(connection, "to_port"));
     }
 
-    for (const auto& binding : parse_port_bindings(root, "exposed_inputs")) {
-        schema.expose_input(binding.name, signal_type_from_string(binding.type), binding.element, binding.port);
+    for (auto& port : parse_exposed_ports(root, "exposed_inputs")) {
+        schema.expose_input(std::move(port));
     }
-    for (const auto& binding : parse_port_bindings(root, "exposed_outputs")) {
-        schema.expose_output(binding.name, signal_type_from_string(binding.type), binding.element, binding.port);
+    for (auto& port : parse_exposed_ports(root, "exposed_outputs")) {
+        schema.expose_output(std::move(port));
     }
 
     return schema;
-}
-
-auto count_ports(const boost::json::object& root, const std::string& field) -> std::vector<SchemaPortBinding>
-{
-    return parse_port_bindings(root, field);
 }
 
 auto library_element_metadata(const SchemaLibraryDefinition& library,
                               const SchemaLibraryElementDefinition& element) -> ElementMetadata
 {
     const auto& schema_root = expect_object(element.schema, "schema");
-    const auto inputs = count_ports(schema_root, "exposed_inputs");
-    const auto outputs = count_ports(schema_root, "exposed_outputs");
+    const auto inputs = parse_exposed_ports(schema_root, "exposed_inputs");
+    const auto outputs = parse_exposed_ports(schema_root, "exposed_outputs");
 
     ElementMetadata metadata;
     metadata.type_name = element.type_name;
@@ -496,17 +498,20 @@ void SchemaLibraryLoader::register_library(const SchemaLibraryDefinition& defini
     }
     reject_recursive_library_types(definition, registry);
 
+    std::vector<ElementDescriptor> descriptors;
+    descriptors.reserve(definition.elements.size());
     for (const auto& element : definition.elements) {
         const auto metadata = library_element_metadata(definition, element);
         const auto schema_definition = element.schema;
-        registry.register_element(ElementDescriptor(
+        descriptors.emplace_back(
             element.type_name,
             [schema_definition, &registry](const ElementCreationContext&) {
                 auto schema = SchemaLibraryLoader::build_schema(schema_definition, registry);
                 return std::make_unique<Schema>(std::move(schema));
             },
-            metadata));
+            metadata);
     }
+    for (const auto& descriptor : descriptors) registry.register_element(descriptor);
 }
 
 void SchemaLibraryLoader::register_library_file(const std::filesystem::path& file_path, ElementRegistry& registry)

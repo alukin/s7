@@ -6,6 +6,7 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -89,6 +90,7 @@ void Schema::set_causal_order(std::vector<std::string> order)
 
 void Schema::bind_inputs(std::span<const InputBinding> bindings)
 {
+    require_standalone_scalar_ports();
     Element::bind_inputs(bindings);
     bound_input_count_ = bindings.size();
     ensure_compiled_runtime();
@@ -147,19 +149,27 @@ void Schema::expose_input(std::string name,
                           std::string to_element,
                           const std::size_t to_port)
 {
-    if (name.empty()) {
+    expose_input({std::move(name), type, std::move(to_element), to_port});
+}
+
+void Schema::expose_input(ExposedPort port)
+{
+    if (port.name.empty()) {
         throw std::invalid_argument("Schema exposed input name must not be empty.");
     }
 
     for (const auto& existing : exposed_inputs_) {
-        if (existing.name == name) {
-            throw std::invalid_argument("Schema exposed input name is duplicated: '" + name + "'.");
+        if (existing.name == port.name) {
+            throw std::invalid_argument("Schema exposed input name is duplicated: '" + port.name + "'.");
         }
+    }
+    if (port.array && (port.array->rank() == 0 || port.array->type() != port.type)) {
+        throw std::invalid_argument("Invalid array descriptor on exposed input '" + port.name + "'.");
     }
 
     const std::size_t portIndex = exposed_inputs_.size();
-    exposed_inputs_.push_back(ExposedPort{std::move(name), type, std::move(to_element), to_port});
-    register_input(portIndex, exposed_inputs_.back().name, type, nullptr);
+    exposed_inputs_.push_back(std::move(port));
+    register_input(portIndex, exposed_inputs_.back().name, exposed_inputs_.back().type, nullptr);
     invalidate_compiled_runtime();
 }
 
@@ -168,27 +178,41 @@ void Schema::expose_output(std::string name,
                            std::string from_element,
                            const std::size_t from_port)
 {
-    if (name.empty()) {
+    expose_output({std::move(name), type, std::move(from_element), from_port});
+}
+
+void Schema::expose_output(ExposedPort port)
+{
+    if (port.name.empty()) {
         throw std::invalid_argument("Schema exposed output name must not be empty.");
     }
 
     for (const auto& existing : exposed_outputs_) {
-        if (existing.name == name) {
-            throw std::invalid_argument("Schema exposed output name is duplicated: '" + name + "'.");
+        if (existing.name == port.name) {
+            throw std::invalid_argument("Schema exposed output name is duplicated: '" + port.name + "'.");
         }
     }
+    const auto type = port.type;
+    const bool array = port.array.has_value();
+    if (array && (port.array->rank() == 0 || port.array->type() != type)) {
+        throw std::invalid_argument("Invalid array descriptor on exposed output '" + port.name + "'.");
+    }
 
-    exposed_outputs_.push_back(ExposedPort{std::move(name), type, std::move(from_element), from_port});
-    exposed_output_values_.push_back(ExposedOutputValue{type, RealValue{}, ComplexValue{}});
-    const std::size_t portIndex = exposed_outputs_.size() - 1;
-    auto& storage = exposed_output_values_.back();
-    register_output(portIndex,
-                    exposed_outputs_.back().name,
-                    type,
-                    type == SignalType::C64
-                        ? static_cast<void*>(&storage.complex)
-                        : static_cast<void*>(&storage.scalar));
+    exposed_outputs_.push_back(std::move(port));
+    void* value = nullptr;
+    if (!array) {
+        exposed_output_values_.push_back(ExposedOutputValue{type, RealValue{}, ComplexValue{}});
+        auto& storage = exposed_output_values_.back();
+        value = type == SignalType::C64 ? static_cast<void*>(&storage.complex) : static_cast<void*>(&storage.scalar);
+    }
+    register_output(exposed_outputs_.size() - 1, exposed_outputs_.back().name, type, value);
     invalidate_compiled_runtime();
+}
+
+bool Schema::has_array_ports() const
+{
+    const auto shaped = [](const ExposedPort& port) { return port.array.has_value(); };
+    return std::ranges::any_of(exposed_inputs_, shaped) || std::ranges::any_of(exposed_outputs_, shaped);
 }
 
 const std::string& Schema::name() const {
@@ -226,11 +250,19 @@ void Schema::invalidate_compiled_runtime()
     exposed_input_states_.clear();
 }
 
+void Schema::require_standalone_scalar_ports() const
+{
+    if (has_array_ports()) {
+        throw std::logic_error("Schema '" + name_ + "' requires a parent graph to bind its array ports.");
+    }
+}
+
 void Schema::ensure_compiled_runtime()
 {
     if (compiled_runtime_) {
         return;
     }
+    require_standalone_scalar_ports();
     // Runs before a nested schema's first step: from bind_inputs() when a
     // parent graph is compiled, or from step() when used standalone.
     for (const auto& input : exposed_inputs_) require_exposable_type("input", input.name, input.type);

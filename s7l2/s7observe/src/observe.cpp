@@ -49,6 +49,37 @@ ObservationSample ObservationService::sample_output(const std::string& element_i
     return read(element_id, port);
 }
 
+std::expected<CommittedArraySample, ArrayPoolError> ObservationService::try_retain_array_output(
+    const ProbePoint& probe, const ArrayPool::Retention& retention) const
+{
+    return runtime_->try_retain_array_output(probe.element_id, probe.port, retention);
+}
+
+std::expected<CommittedArraySample, ArrayPoolError> ObservationService::try_retain_array_output(
+    const ArrayProbePoint& probe) const
+{
+    require_stepping_thread();
+    for (const auto& admission : probe.admissions) {
+        auto sample = try_retain_array_output(probe.probe, admission);
+        if (sample || sample.error() != ArrayPoolError::InvalidLease) return sample;
+    }
+    return std::unexpected(ArrayPoolError::InvalidLease);
+}
+
+std::expected<ArrayObservationSnapshot, ArrayPoolError> ObservationService::array_snapshot(
+    const std::span<const ArrayProbePoint> probes) const
+{
+    require_stepping_thread();
+    ArrayObservationSnapshot snapshot{runtime_->step_count(), {}};
+    snapshot.samples.reserve(probes.size());
+    for (const auto& probe : probes) {
+        auto sample = try_retain_array_output(probe);
+        if (!sample) return std::unexpected(sample.error());
+        snapshot.samples.push_back(std::move(*sample));
+    }
+    return snapshot;
+}
+
 CompiledProbes ObservationService::compile(const std::vector<ProbePoint>& probes) const {
     require_stepping_thread();
     std::vector<CompiledProbes::Point> points;

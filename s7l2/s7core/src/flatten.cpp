@@ -39,7 +39,8 @@ ElementFactory reuse_once(std::unique_ptr<Element> created, ElementFactory facto
 
 class Flattener {
 public:
-    explicit Flattener(FlatSchema& flat, std::optional<Rate> top_seed) : flat_(flat), top_seed_(top_seed) {}
+    Flattener(FlatSchema& flat, std::optional<Rate> top_seed, bool experimental_arrays)
+        : flat_(flat), top_seed_(top_seed), experimental_arrays_(experimental_arrays) {}
 
     // Adds the elements and connections of `schema` with ids under `path`
     // ("" for the top level, else the nested schema's path id). `seed` is the
@@ -49,6 +50,11 @@ public:
     void add(const Schema& schema, const std::string& path, const std::optional<Rate>& seed,
              const std::optional<Rate>& pin = std::nullopt)
     {
+        if (schema.has_array_ports() && (path.empty() || !experimental_arrays_)) {
+            flat_.errors.push_back("Schema '" + (path.empty() ? schema.name() : path) +
+                                   "' declares array ports. Array execution is not available.");
+            return;
+        }
         Level level{path, {}};
         std::unordered_set<std::string> ids;
         for (const auto& spec : schema.elements()) {
@@ -59,6 +65,10 @@ public:
                 continue;
             }
             const auto id = level.id_of(spec.id);
+            if (spec.array_metadata) {
+                add_spec(ElementSpec{id, spec.factory, spec.generic, spec.array_metadata}, seed);
+                continue;
+            }
             if (!spec.factory) { // generic: never a schema
                 add_spec(ElementSpec{id, {}, spec.generic}, seed);
                 continue;
@@ -77,7 +87,7 @@ public:
                 level.nested.emplace(spec.id, Ports{nested->exposed_inputs(), nested->exposed_outputs()});
                 continue;
             }
-            add_spec(ElementSpec{id, reuse_once(std::move(created), spec.factory), {}}, seed);
+            add_spec(ElementSpec{id, reuse_once(std::move(created), spec.factory), {}, {}, spec.executable_array_factory}, seed);
         }
         for (const auto& connection : schema.connections()) {
             const auto from = level.source(connection.from_element, connection.from_port, flat_.errors);
@@ -91,7 +101,7 @@ public:
             const auto& port = schema.exposed_inputs()[index];
             const auto id = path + ":in:" + port.name;
             flat_.schema->add_element(id, [path, port, index, pin] {
-                return std::make_unique<SchemaPort>(path, port.name, true, index, port.type, pin);
+                return std::make_unique<SchemaPort>(path, port, true, index, pin);
             });
             if (const auto to = level.target(port.element, port.port, flat_.errors)) {
                 flat_.schema->connect(id, 0, to->first, to->second);
@@ -101,7 +111,7 @@ public:
             const auto& port = schema.exposed_outputs()[index];
             const auto id = path + ":out:" + port.name;
             flat_.schema->add_element(id, [path, port, index, pin] {
-                return std::make_unique<SchemaPort>(path, port.name, false, index, port.type, pin);
+                return std::make_unique<SchemaPort>(path, port, false, index, pin);
             });
             if (const auto from = level.source(port.element, port.port, flat_.errors)) {
                 flat_.schema->connect(from->first, from->second, id, 0);
@@ -158,16 +168,17 @@ private:
 
     FlatSchema& flat_;
     std::optional<Rate> top_seed_;
+    bool experimental_arrays_;
 };
 
 } // namespace
 
-FlatSchema flatten_schema(const Schema& schema)
+FlatSchema flatten_schema(const Schema& schema, bool experimental_arrays)
 {
     FlatSchema flat;
     flat.schema = std::make_unique<Schema>(schema.name());
     if (const auto rate = schema.rate()) flat.schema->set_rate(*rate);
-    Flattener(flat, schema.rate()).add(schema, "", schema.rate());
+    Flattener(flat, schema.rate(), experimental_arrays).add(schema, "", schema.rate());
     return flat;
 }
 

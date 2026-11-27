@@ -342,6 +342,7 @@ void MainWindow::resetLocalRun()
     disconnect(runner_, nullptr, this, nullptr);
     runner_->reset();
     viewers_->presentLive({});
+    viewers_->presentArrays({});
     runObserverTypes_.clear();
     observersFrozen_ = false;
     connectRunnerSignals();
@@ -371,6 +372,7 @@ void MainWindow::connectRunnerSignals()
         if (!shuttingDown_ && generation == runGeneration_ && state == RunState::Prepared) {
             for (const auto& descriptor : preparedObservers_) if (descriptor.type == "LiveOscilloscope") applyTriggerPreset(descriptor.id, true);
             viewers_->presentLive(runner_->liveSources());
+            viewers_->presentArrays(runner_->arraySources());
             viewers_->present(runner_->recordedSource(), [this](const QString& id) { return observerViewerType(id); });
             if (const auto configuration = runner_->activeConfiguration()) observersPanel_->bindRun(configuration->id, preparedObservers_);
         }
@@ -1540,6 +1542,16 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
         const diagram::NetModel model(*scene);
         for (const auto& connection : model.observationConnections()) {
             auto channelName = std::string("signal") + std::to_string(connection.to.port);
+            const auto observer = scene->elementNode(connection.to.element);
+            const auto arrayKind = observer ? diagram::arrayObserverKind(observer->element().type)
+                                            : diagram::ArrayObserverKind::None;
+            if (arrayKind != diagram::ArrayObserverKind::None) {
+                const auto* viewer = viewers::ViewerRegistry::instance().find(QString::fromStdString(observer->element().type));
+                const auto role = viewer->inputSuffixes.value(connection.to.port).toStdString();
+                probes.push_back(RunProbe{connection.to.element + "/" + role, connection.from.element,
+                    connection.from.port, {}, false, {}, arrayKind});
+                continue;
+            }
             if (const auto scope = scene->elementNode(connection.to.element)) {
                 if (diagram::isAxisObserverElementType(scope->element().type)) {
                     const auto& axes = viewers::ViewerRegistry::instance().find(QString::fromStdString(scope->element().type))->inputSuffixes;
@@ -1558,7 +1570,6 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
             for (const auto& probe : scene->probes()) if (probe.point == connection.from) {
                 unit = probe.unit.toStdString(); break;
             }
-            const auto observer = scene->elementNode(connection.to.element);
             const bool live = observer && observer->element().type == "LiveOscilloscope";
             if (observer) {
                 const auto* units = json_utils::findObjectValue(observer->element().params, "channel_units");

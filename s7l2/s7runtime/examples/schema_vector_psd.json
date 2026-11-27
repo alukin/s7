@@ -1,0 +1,14 @@
+{
+  "name": "vector_psd",
+  "dt": 0.01,
+  "simulation": {"periods": 1, "sample_rate_hz": 100, "frequency_hz": 10},
+  "elements": [
+    {"id": "iq", "type": "VectorConstant", "params": {"type": "C32", "values": [1, 1, 1, 1, 1, 1, 1, 1]}},
+    {"id": "psd", "type": "VectorPSD", "params": {"components": 8, "units": "per_hz", "sample_rate_hz": 1600}},
+    {"id": "bins", "type": "UnpackVector", "params": {"components": 8}}
+  ],
+  "connections": [
+    {"from_element": "iq", "from_port": 0, "to_element": "psd", "to_port": 0},
+    {"from_element": "psd", "from_port": 0, "to_element": "bins", "to_port": 0}
+  ]
+}

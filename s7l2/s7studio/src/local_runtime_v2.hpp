@@ -91,55 +91,6 @@ inline std::size_t getSizeT(const boost::json::object& object, std::string_view 
     throw std::invalid_argument("Expected integer field '" + std::string(key) + "'.");
 }
 
-inline s7::SignalType signalTypeFromString(std::string_view value)
-{
-    return s7::parse_signal_type(value);
-}
-
-struct SchemaPortBinding {
-    std::string name;
-    std::string type;
-    std::string element;
-    std::size_t port{};
-};
-
-inline std::vector<SchemaPortBinding> parseSchemaPortBindings(const boost::json::object& root,
-                                                              std::string_view field_name)
-{
-    std::vector<SchemaPortBinding> bindings;
-    const auto it = root.find(field_name);
-    if (it == root.end()) {
-        return bindings;
-    }
-    if (!it->value().is_array()) {
-        throw std::invalid_argument("Expected array field '" + std::string(field_name) + "'.");
-    }
-
-    for (const auto& binding_value : it->value().as_array()) {
-        if (!binding_value.is_object()) {
-            throw std::invalid_argument("Expected object in field '" + std::string(field_name) + "'.");
-        }
-
-        const auto& binding_object = binding_value.as_object();
-        SchemaPortBinding binding;
-        binding.name = expectString(binding_object, "name");
-        binding.type = expectString(binding_object, "type");
-        binding.element = expectString(binding_object, "element");
-        if (const auto port_it = binding_object.find("port"); port_it != binding_object.end()) {
-            if (port_it->value().is_uint64()) {
-                binding.port = port_it->value().as_uint64();
-            } else if (port_it->value().is_int64() && port_it->value().as_int64() >= 0) {
-                binding.port = static_cast<std::size_t>(port_it->value().as_int64());
-            } else {
-                throw std::invalid_argument("Expected non-negative integer 'port' in schema port binding.");
-            }
-        }
-        bindings.push_back(std::move(binding));
-    }
-
-    return bindings;
-}
-
 // Create element from registry
 inline void addElementFromRegistry(s7::Schema& schema,
                                    const std::string& id,
@@ -240,19 +191,8 @@ inline s7::Schema buildSchema(const boost::json::value& schemaJson)
         }
     }
 
-    for (const auto& binding : detail::parseSchemaPortBindings(root, "exposed_inputs")) {
-        schema.expose_input(binding.name,
-                            detail::signalTypeFromString(binding.type),
-                            binding.element,
-                            binding.port);
-    }
-
-    for (const auto& binding : detail::parseSchemaPortBindings(root, "exposed_outputs")) {
-        schema.expose_output(binding.name,
-                              detail::signalTypeFromString(binding.type),
-                              binding.element,
-                              binding.port);
-    }
+    for (auto& port : s7::parse_exposed_ports(root, "exposed_inputs")) schema.expose_input(std::move(port));
+    for (auto& port : s7::parse_exposed_ports(root, "exposed_outputs")) schema.expose_output(std::move(port));
 
     return schema;
 }
@@ -264,6 +204,7 @@ inline std::vector<std::string> collectSamples(const s7::Schema& schema, const s
     lines.reserve(schema.elements().size());
 
     for (const auto& element : schema.elements()) {
+        if (runtime.array_output_descriptor(element.id, 0)) continue;
         const auto sample = observation.sample_output(element.id, 0);
         std::ostringstream out;
         out << element.id << '[' << sample.port << "]=";

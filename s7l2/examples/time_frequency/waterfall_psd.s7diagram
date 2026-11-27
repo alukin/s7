@@ -1,0 +1,26 @@
+{
+  "id": "waterfall_psd",
+  "dt": 0.01,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "schema": {
+    "name": "waterfall_psd",
+    "elements": [
+      {"id": "iq", "type": "VectorConstant", "params": {"type": "C32", "values": [1, 1, 1, 1, 1, 1, 1, 1]}},
+      {"id": "psd", "type": "VectorPSD", "params": {"components": 8, "units": "per_hz", "sample_rate_hz": 1600}}
+    ],
+    "connections": [{"from_element": "iq", "from_port": 0, "to_element": "psd", "to_port": 0}]
+  },
+  "diagram": {
+    "grid": {"step": 20, "mm_per_step": 5.291666666666667},
+    "nodes": [
+      {"id": "iq", "position": [8, 12]},
+      {"id": "psd", "position": [26, 12]},
+      {"id": "waterfall", "position": [44, 12], "observer": true, "type": "Waterfall"}
+    ],
+    "wires": [
+      {"id": "iq_to_psd", "from": {"port": ["iq", "out", 0]}, "to": {"port": ["psd", "in", 0]}, "bends": []},
+      {"id": "psd_to_view", "from": {"port": ["psd", "out", 0]}, "to": {"port": ["waterfall", "in", 0]}, "bends": []}
+    ]
+  }
+}

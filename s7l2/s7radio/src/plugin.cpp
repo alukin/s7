@@ -9,7 +9,7 @@ extern "C" const S7PluginInfo* s7_plugin_query() {
     return &info;
 }
 extern "C" const char* s7_plugin_manifest_json() {
-    return R"({"api_version":1,"plugin_name":"s7radio","plugin_version":"1.0.0","element_count":6,"elements":["FmDiscriminator","FmModulator","FmDemodulator","AmModulator","AmDemodulator","FmStereoDecoder"]})";
+    return R"({"plugin_name":"s7radio","plugin_version":"1.0.0","element_count":6,"elements":["FmDiscriminator","FmModulator","FmDemodulator","AmModulator","AmDemodulator","FmStereoDecoder"]})";
 }
 extern "C" void s7_register_elements(void* registry) {
     s7::radio::register_elements(*static_cast<s7::ElementRegistry*>(registry));

@@ -83,6 +83,45 @@ views receive const handles plus explicit role/channel bindings. Closing or
 clearing a view does not erase recorded data. Preview loss is distinct from
 capture failure. A storage error fails the run and retains an incomplete prefix.
 
+Waterfall and Video Player subscribe to committed array outputs. Waterfall
+accepts rank-one F32 spectrum vectors with spectrum metadata. Video Player
+accepts compact U8 grayscale `[H,W]` and RGB `[H,W,3]` frames with pixel
+format metadata. Studio checks the descriptor when wiring the diagram and
+checks the metadata on delivery. The run uses the bindings from its starting
+diagram. Rewiring takes effect on the next run.
+
+Each subscription keeps one pending value. Viewers of the same output share
+its retained buffer. If the backing pool changes, the stepping thread obtains
+admission from the new pool. The status line shows the domain step, source
+sequence when present, unread replacements and admission skips. **Pause display**
+freezes the window while the model runs and the mailbox keeps the newest
+admitted value. Closing a window leaves the mailbox available for reopening
+at the latest value. Reset and rerun close the old mailboxes.
+
+Waterfall displays Hz when the spectrum supplies a physical sample rate and
+signed DFT bins otherwise. The vertical positions correspond to retained rows
+with ticks for their committed model times. Blue stripes separate rows across
+known gaps. Adjust the dB limits, power reference and palette to recolor the
+retained data. The plot combines adjacent bins by peak power when the raster
+would exceed 1024 columns.
+
+Video Player fits each frame to the window and preserves its aspect ratio.
+The image owns a copy with Qt-aligned rows, so a paused frame can remain visible
+while the producer advances. Its status shows the frame dimensions and Gray8
+or RGB8 format. The saved test diagrams exercise the renderer and frame
+adapter. [Array work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md)
+
+Choose **Print…** in Waterfall or Video Player to save a PDF or select a
+printer. The viewer captures its displayed snapshot before opening the
+dialog. You can use **Pause display** to select a particular frame before
+printing. Printing leaves the model running and retains a single owned
+viewer snapshot across both viewer types.
+
+The Waterfall PDF includes its axes, power scale and a row-by-row record
+of steps, source identities and gaps. The Video Player PDF preserves the
+frame's aspect ratio and includes pixel format, geometry, source row stride
+and presentation time when the source supplies one.
+
 ## Components (`s7studio/src/viewers/`)
 
 | Component | Role |

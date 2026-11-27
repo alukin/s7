@@ -41,6 +41,12 @@ try {
 
     {
         s7::PluginLoader loader;
+        expect(!loader.load_plugin(S7_WRONG_ABI_PLUGIN, registry), "a manifest cannot bypass the ABI check");
+        expect(registry.element_count() == builtin_count, "an ABI mismatch is rejected before registration");
+    }
+
+    {
+        s7::PluginLoader loader;
         expect(!loader.load_plugin(S7_FAILING_PLUGIN, registry), "a plugin whose registration fails is not loaded");
         expect(registry.find("TestPluginConstant") == nullptr, "its partial registration is removed");
         expect(registry.element_count() == builtin_count, "nothing else changed");

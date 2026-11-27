@@ -60,14 +60,6 @@ auto read_manifest_info(const std::string& manifest_json, const fs::path& plugin
         return std::string(it->value().as_string());
     };
 
-    const auto api_version_it = root.find("api_version");
-    if (api_version_it != root.end() && api_version_it->value().is_uint64()) {
-        const auto api_version = static_cast<std::uint32_t>(api_version_it->value().as_uint64());
-        if (api_version != S7_PLUGIN_API_VERSION) {
-            throw std::runtime_error("Plugin manifest API version mismatch for '" + plugin_path.string() + "'.");
-        }
-    }
-
     info.name = read_string("plugin_name", plugin_path.filename().string());
     info.version = read_string("plugin_version", "unknown");
     info.author = read_string("author");
@@ -266,6 +258,25 @@ bool PluginLoader::load_plugin(
         return false;
     }
 
+    const auto query_symbol = resolve_symbol(handle, "s7_plugin_query");
+    if (!query_symbol) {
+        std::cerr << "Plugin " << plugin_path << " missing s7_plugin_query\n";
+        platform::close_library(handle);
+        return false;
+    }
+    auto query_func = reinterpret_cast<S7PluginQueryFunc>(query_symbol);
+    const auto* query_info = query_func();
+    if (!query_info) {
+        std::cerr << "Plugin " << plugin_path << " returned null info\n";
+        platform::close_library(handle);
+        return false;
+    }
+    if (query_info->api_version != S7_PLUGIN_API_VERSION) {
+        std::cerr << "Plugin " << plugin_path << " API version mismatch: expected "
+                  << S7_PLUGIN_API_VERSION << ", got " << query_info->api_version << "\n";
+        platform::close_library(handle);
+        return false;
+    }
     LoadedPluginInfo info;
 
     if (const auto manifest_symbol = resolve_symbol(handle, "s7_plugin_manifest_json")) {
@@ -282,28 +293,7 @@ bool PluginLoader::load_plugin(
         }
     }
 
-    if (info.name.empty()) {
-        const auto query_symbol = resolve_symbol(handle, "s7_plugin_query");
-        if (!query_symbol) {
-            std::cerr << "Plugin " << plugin_path << " missing s7_plugin_query\n";
-            platform::close_library(handle);
-            return false;
-        }
-        auto query_func = reinterpret_cast<S7PluginQueryFunc>(query_symbol);
-        const auto* query_info = query_func();
-        if (!query_info) {
-            std::cerr << "Plugin " << plugin_path << " returned null info\n";
-            platform::close_library(handle);
-            return false;
-        }
-        if (query_info->api_version != S7_PLUGIN_API_VERSION) {
-            std::cerr << "Plugin " << plugin_path << " API version mismatch: expected "
-                      << S7_PLUGIN_API_VERSION << ", got " << query_info->api_version << "\n";
-            platform::close_library(handle);
-            return false;
-        }
-        info = read_query_info(query_info, plugin_path);
-    }
+    if (info.name.empty()) info = read_query_info(query_info, plugin_path);
 
     log_ << "  Plugin: " << info.name
               << " v" << info.version

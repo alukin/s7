@@ -11,7 +11,7 @@ const S7PluginInfo *s7_plugin_query() {
     return &info;
 }
 const char *s7_plugin_manifest_json() {
-    return R"({"api_version":1,"plugin_name":"s7wavelet","plugin_version":"1.0.0","element_count":1,"elements":["WaveletCoefficient"]})";
+    return R"({"plugin_name":"s7wavelet","plugin_version":"1.0.0","element_count":1,"elements":["WaveletCoefficient"]})";
 }
 void s7_register_elements(void *ptr) {
     auto &registry = *static_cast<s7::ElementRegistry *>(ptr);

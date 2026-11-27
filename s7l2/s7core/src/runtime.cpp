@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/core.hpp"
+#include "s7/array_port.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -63,6 +64,11 @@ void NodeRuntime::CoupledStage::prepare_storage() {
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
+    for (const auto& [id, element] : graph_.elements) {
+        if (element->has_array_ports() && !graph_.array_ports_validated_) {
+            throw std::invalid_argument("Element '" + id + "' registers array ports. Array execution is not available.");
+        }
+    }
     if (graph_.domains.empty()) {
         // A graph built without rate domains (not by Compiler) is one domain.
         DomainState state;
@@ -95,12 +101,28 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
 
 void NodeRuntime::build_domain(DomainState& domain)
 {
+    const auto add_array_output = [&domain](Element& element, const Port& port, bool memory) {
+        auto* slot = dynamic_cast<ArrayElement&>(element).array_outputs_.at(port.index).get();
+        if (!slot) throw std::logic_error("Compiled array output has no slot.");
+        if (memory) {
+            if (!slot->published_) throw std::invalid_argument("Causal array memory output requires an initial value.");
+            slot->mode_ = ArrayOutputSlot::Mode::MemoryIdle;
+            domain.array_memory_outputs.push_back(slot);
+        } else {
+            slot->mode_ = ArrayOutputSlot::Mode::Direct;
+        }
+        domain.array_outputs.push_back(slot);
+    };
     domain.memory_output_ranges.reserve(domain.memory.size());
     for (auto* element : domain.memory) {
         const auto ports = element->output_ports();
         const auto begin = domain.memory_outputs.size();
         domain.memory_outputs.reserve(begin + ports.size());
         for (const auto& port : ports) {
+            if (port.array_descriptor) {
+                add_array_output(*element, port, true);
+                continue;
+            }
             domain.memory_outputs.push_back(MemoryOutput{
                 .value_ptr = port.value_ptr,
                 .bytes = signal_type_info(port.type).storage_bytes,
@@ -120,6 +142,10 @@ void NodeRuntime::build_domain(DomainState& domain)
 
     for (auto* element : domain.causal) {
         for (const auto& port : element->output_ports()) {
+            if (port.array_descriptor) {
+                add_array_output(*element, port, false);
+                continue;
+            }
             const auto bytes = signal_type_info(port.type).storage_bytes;
             if (bytes == 8) {
                 domain.causal_outputs8.push_back(port.value_ptr);
@@ -391,7 +417,7 @@ void NodeRuntime::stage_coupled(DomainState& domain) {
     }
 }
 
-void NodeRuntime::roll_back_step(DomainState& domain) {
+void NodeRuntime::roll_back_step(DomainState& domain) noexcept {
     for (auto* element : domain.causal) element->on_step_failure();
     for (auto* element : domain.memory) element->on_step_failure();
     // A direct evaluation, numerical trial or causal-memory step faulted:
@@ -417,6 +443,7 @@ void NodeRuntime::roll_back_step(DomainState& domain) {
     for (auto& output : domain.memory_outputs) {
         copy_value(output.value_ptr, output.staged[previous].data(), output.bytes);
     }
+    for (auto* slot : domain.array_outputs) slot->abort_evaluation();
 }
 
 void NodeRuntime::set_model_time_step_ns(const std::optional<std::int64_t> step_ns) {
@@ -497,22 +524,36 @@ void NodeRuntime::step() {
         throw std::overflow_error("Runtime step count exhausted.");
     if (model_time_rate_) static_cast<void>(timestamp_ns(step_count_ + 1, *model_time_rate_));
     stepping_thread_.store(std::this_thread::get_id());
-    if (domains_.size() == 1 || (!model_time_rate_ && graph_.domain_links.empty())) {
-        // One rate, or unrelated parts with no time base: one step each.
-        for (auto& domain : domains_) step_domain(domain);
+    if (domains_.size() == 1) {
+        step_domain(domains_.front());
+    } else if (!model_time_rate_ && graph_.domain_links.empty()) {
+        // Independent domains take one sample per outer step. A retry
+        // skips the domains that already committed that sample.
+        for (auto& domain : domains_) {
+            if (domain.steps <= step_count_) step_domain(domain);
+        }
     } else {
+        if (delivery_fault_) std::rethrow_exception(delivery_fault_);
         if (!model_time_rate_) {
             throw std::logic_error("This graph has several rate domains joined by Resamplers; set the model-time "
                                    "rate (the run's dt) to schedule them.");
         }
         // Each domain takes every sample at or before this step's model time,
-        // input domains first. A fault leaves domains already stepped here
-        // advanced; retrying continues exactly, since each counts its own samples.
+        // input domains first. On a retry, each domain resumes from its
+        // own committed sample count.
         for (auto& domain : domains_) {
             const auto target = domain.sample_counter->samples_through(step_count_);
             while (domain.steps < target) {
                 step_domain(domain);
-                for (auto* resampler : domain.captures) resampler->capture_input();
+                try {
+                    for (auto* resampler : domain.captures) resampler->capture_input();
+                } catch (...) {
+                    // The sample is already committed and capture may have
+                    // partially delivered it. Replaying or skipping it
+                    // cannot guarantee a consistent receiver state.
+                    delivery_fault_ = std::current_exception();
+                    throw;
+                }
             }
         }
     }
@@ -533,6 +574,7 @@ void NodeRuntime::step_domain(DomainState& domain) {
     for (auto& output : domain.memory_outputs) {
         copy_value(output.value_ptr, output.staged[current].data(), output.bytes);
     }
+    for (auto* slot : domain.array_memory_outputs) slot->mode_ = ArrayOutputSlot::Mode::MemoryEvaluating;
 
     // 8-byte outputs: one unaligned-safe 8-byte load and store each. Locals,
     // so stores through output pointers do not force reloading the vectors.
@@ -554,8 +596,8 @@ void NodeRuntime::step_domain(DomainState& domain) {
         stage_coupled(domain);
         stage_trapezoids(domain);
     } catch (...) {
-        record_fault(domain, stepped);
         roll_back_step(domain);
+        record_fault(domain, stepped);
         throw;
     }
 
@@ -569,8 +611,8 @@ void NodeRuntime::step_domain(DomainState& domain) {
         try {
             domain.memory[element_index]->step();
         } catch (...) {
-            record_fault(domain, domain.causal.size());
             roll_back_step(domain);
+            record_fault(domain, domain.causal.size());
             throw;
         }
         const auto range = domain.memory_output_ranges[element_index];
@@ -580,6 +622,9 @@ void NodeRuntime::step_domain(DomainState& domain) {
             copy_value(output.value_ptr, output.staged[current].data(), output.bytes);
         }
     }
+    // All resource acquisition and evaluation succeeded. Publish the array
+    // handles and the next scalar memory staging at this domain boundary.
+    for (auto* slot : domain.array_outputs) slot->commit(domain.steps + 1);
     domain.staged_index = next;
     ++domain.steps;
 }
@@ -623,7 +668,7 @@ const std::string& NodeRuntime::element_id_of_instance_uuid(const std::string& e
     return it->second;
 }
 
-std::pair<std::string, std::size_t> NodeRuntime::aliased_output(const std::string& element_id, const std::size_t port) const {
+const std::pair<std::string, std::size_t>& NodeRuntime::aliased_output(const std::string& element_id, const std::size_t port) const {
     const auto alias = graph_.output_aliases.find(element_id);
     if (alias == graph_.output_aliases.end()) {
         throw std::out_of_range("Unknown element output requested: '" + element_id + "'.");
@@ -634,11 +679,11 @@ std::pair<std::string, std::size_t> NodeRuntime::aliased_output(const std::strin
     return alias->second[port];
 }
 
-OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
+const Port& NodeRuntime::output_port(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
-        const auto [source, source_port] = aliased_output(element_id, port);
-        return output_binding_of(source, source_port);
+        const auto& [source, source_port] = aliased_output(element_id, port);
+        return output_port(source, source_port);
     }
 
     // The port's storage address directly: Element::outputs() would build a
@@ -648,22 +693,70 @@ OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std:
         throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
     }
 
-    return ports[port].value_ptr;
+    return ports[port];
+}
+
+OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
+    const auto& output = output_port(element_id, port);
+    if (output.array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
+    return output.value_ptr;
+}
+
+std::pair<const ArrayOutputSlot&, Rate> NodeRuntime::array_observation_source(
+    const std::string& element_id, const std::size_t port) const
+{
+    const auto thread = stepping_thread();
+    if (thread != std::thread::id{} && thread != std::this_thread::get_id()) {
+        throw std::logic_error("Array observation requires the runtime stepping thread.");
+    }
+    const auto found = graph_.elements.find(element_id);
+    if (found == graph_.elements.end()) {
+        const auto& [source, source_port] = aliased_output(element_id, port);
+        return array_observation_source(source, source_port);
+    }
+    const auto* element = found->second.get();
+    if (port >= element->output_count()) throw std::out_of_range("Array output port out of range.");
+    const auto* array = dynamic_cast<const ArrayElement*>(element);
+    if (!array || !element->output_ports()[port].array_descriptor) {
+        throw std::invalid_argument("Output is not an array port.");
+    }
+    return {array->array_output(port), graph_.rates.at(element_id)};
+}
+
+const ArrayDescriptor* NodeRuntime::array_output_descriptor(const std::string& element_id, std::size_t port) const
+{
+    return output_port(element_id, port).array_descriptor;
+}
+
+std::expected<void, ArrayPoolError> NodeRuntime::admit_array_output(
+    const std::string& element_id, std::size_t port, ArrayPool::Retention& admission,
+    std::size_t max_slots, std::size_t max_bytes) const
+{
+    const auto& slot = array_observation_source(element_id, port).first;
+    if (slot.committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
+    return slot.published_.lease.admit(admission, max_slots, max_bytes);
+}
+
+std::optional<std::uint64_t> NodeRuntime::committed_array_step(const std::string& element_id, std::size_t port) const
+{
+    const auto& slot = array_observation_source(element_id, port).first;
+    if (!slot.published_ || slot.committed_step_ == 0) return std::nullopt;
+    return slot.committed_step_;
+}
+
+std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_array_output(
+    const std::string& element_id, const std::size_t port, const ArrayPool::Retention& retention) const
+{
+    const auto [slot, rate] = array_observation_source(element_id, port);
+    auto value = slot.try_retain(retention);
+    if (!value) return std::unexpected(value.error());
+    return CommittedArraySample{rate, slot.committed_step_, std::move(*value)};
 }
 
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {
-    const auto element_it = graph_.elements.find(element_id);
-    if (element_it == graph_.elements.end()) {
-        const auto [source, source_port] = aliased_output(element_id, port);
-        return output_type_of(source, source_port);
-    }
-
-    const auto ports = element_it->second->output_ports();
-    if (port >= ports.size()) {
-        throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
-    }
-
-    return ports[port].type;
+    const auto& output = output_port(element_id, port);
+    if (output.array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
+    return output.type;
 }
 
 SignalType NodeRuntime::output_type_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port) const {

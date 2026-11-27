@@ -71,6 +71,20 @@ try {
     expect(info[0].name == "s7spectral", "spectral plugin name");
     expect(registry.find("FourierCoefficient") != nullptr, "Fourier element registered");
 
+    s7::Schema vector("vector_fft_plugin");
+    vector.set_rate(s7::Rate::from_hz(100));
+    add(vector, "impulse", "VectorConstant", {{"type", "C32"}, {"values", boost::json::array{1, 0, 0, 0}}});
+    add(vector, "fft", "VectorFFT", {{"components", 4}});
+    add(vector, "bins", "UnpackVector", {{"type", "C32"}, {"components", 4}});
+    vector.connect("impulse", 0, "fft", 0);
+    vector.connect("fft", 0, "bins", 0);
+    s7::NodeRuntime vector_runtime(s7::Compiler::compile(vector));
+    vector_runtime.step();
+    for (std::size_t bin = 0; bin < 4; ++bin) {
+        expect(vector_runtime.output_of<s7::SignalType::C32>("bins", bin) == std::complex<float>{1, 0},
+               "plugin vector FFT exposes all impulse bins through the installed SDK");
+    }
+
     constexpr double sample_rate = 48000.0;
     constexpr double frequency = 1234.5;
     s7::Schema schema{"third_party_plugin"};

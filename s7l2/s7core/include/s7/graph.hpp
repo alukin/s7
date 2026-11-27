@@ -68,6 +68,11 @@ struct ExecutableGraph {
     // behind each of its exposed outputs, so its outputs stay addressable
     // although the schema itself is not an element of this graph.
     std::unordered_map<std::string, std::vector<std::pair<std::string, std::size_t>>> output_aliases;
+
+private:
+    friend class Compiler;
+    friend class NodeRuntime;
+    bool array_ports_validated_{};
 };
 
 } // namespace s7
