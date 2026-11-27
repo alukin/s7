@@ -88,7 +88,7 @@ int main(int argc, char** argv) try {
         throw std::invalid_argument("OUTPUT_ELEMENT port 0 must expose an MJPEG packet.");
     }
 
-    const StagedRecording recording(fs::path(argv[5]));
+    const StagedRecording recording{fs::path(argv[5])};
     std::ofstream output(recording.path(), std::ios::binary);
     output.exceptions(std::ios::badbit | std::ios::failbit);
     for (std::uint64_t frame = 0; frame < count; ++frame) {
