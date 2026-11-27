@@ -169,6 +169,10 @@ s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smok
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)
 add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smoke)
 
+s7_add_test_executable(s7core_vector_adapters_smoke tests/vector_adapters_smoke.cpp)
+target_link_libraries(s7core_vector_adapters_smoke PRIVATE s7core)
+add_test(NAME s7core_vector_adapters_smoke COMMAND s7core_vector_adapters_smoke)
+
 s7_add_test_executable(s7core_vector_delay_smoke tests/vector_delay_smoke.cpp)
 target_link_libraries(s7core_vector_delay_smoke PRIVATE s7core)
 add_test(NAME s7core_vector_delay_smoke COMMAND s7core_vector_delay_smoke)

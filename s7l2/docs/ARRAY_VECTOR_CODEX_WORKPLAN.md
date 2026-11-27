@@ -256,6 +256,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **AV09a evidence:** The internal source, forwarder and reader used the same sealed buffer on each of 20,002 attempts, including one injected late fault. The source wrote 640,064 bytes and the two wire readers borrowed 1,280,128 bytes with zero bytes materialized on the wires. The independent sum oracle matched every committed step. The ELF allocation counter detected setup allocations and reported zero C++ allocations on the stepping thread over 20,000 successful warmed steps. The selected 23 headless Release tests passed.
 
+**AV09b progress:** The C++ `PackVectorT` and `UnpackVectorT` steps round-trip distinct F32 and C32 components in port order. Tests reject insufficient components or reserve, incompatible types and lengths, and conflicting scalar rates. The selected 24 headless Release tests passed. Registration and execution from saved diagrams remain open.
+
 **Depends:** AV08.
 
 **Scope:** register **new** VectorConstant/fixture source, VectorPassThrough and VectorGain with concrete shapes and CPU lease-backed outputs; a deterministic U8 array source may be started here but video metadata/layout and full frames are AV12. Provide a small canonical saved diagram running via the actual headless production runtime. No replacement of scalar Constant/Gain.

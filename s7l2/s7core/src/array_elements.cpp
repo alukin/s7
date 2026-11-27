@@ -3,9 +3,16 @@
 
 #include "s7/array_elements.hpp"
 
+#include <array>
 #include <utility>
 
 namespace s7 {
+
+ArrayDescriptor detail::vector_adapter_shape(SignalType type, std::int64_t components)
+{
+    if (components < 2) throw std::invalid_argument("A vector adapter requires at least two components.");
+    return ArrayDescriptor(type, std::array{components});
+}
 
 VectorDelay::VectorDelay(ArrayDescriptor descriptor, ArrayPool::ReadLease initial)
     : ArrayElement("VectorDelay", true, Feedthrough::None),
