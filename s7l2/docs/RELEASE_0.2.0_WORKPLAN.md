@@ -111,6 +111,32 @@ Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), 
 
 **Required release evidence additions:** shape/rank/stride/overflow and array-trial negatives, zero-copy identity and copy ledger, direct and memory faults and multi-rate retry, tiny-pool producer progress and cancellation, retained lease lifetime and sanitizers, independent FFT/PSD/frequency-axis oracles, U8 grayscale/RGB pixel oracles including padded rows if supported, actual UI image and PDF-page review, baseline and candidate scalar timing and allocations, and repository plugins rebuilt against the installed SDK.
 
+### AV18 feature-branch qualification checkpoint
+
+Tested source `839c06be0f917dead74f5085fccd51b931af93ef` on Fedora 45 with GCC 16.2.1 and Qt 6.11.2. This records evidence for the feature branch. Repeat the release gates on the merged candidate.
+
+| Check | Result |
+| --- | --- |
+| Linux Release CTest outside the `gui` label | 153/153 passed after rebuilding `build-tests`. This includes all five previously failing Studio checks, the saved array graphs and the installed spectral SDK smoke. GUI processes used `QT_QPA_PLATFORM=offscreen`. |
+| Linux Studio GUI on private Xvfb | All 17 GUI suites outside the four bundled-example shards passed across the initial run and retries. The LTI test initially overlapped relinking of its executable. The aggregate workflows passed a standalone rerun in 231 seconds. |
+| Array forwarding and storage | The Linux array fixture passed 20,000 warm steps without counted C++ allocations on the stepping thread or payload materialization by forwarding. Pool, observer retention, direct and memory rollback and nested schema tests passed in the same suite. |
+| P08/P09 on Linux | The saved array viewers and MJPEG replay generated PDFs on a private Xvfb display. Poppler verified the Waterfall gap stripe, RGB marker and replay presentation timestamp. The cancellation and failed-destination checks passed. |
+| Optional FFmpeg plugin on Linux | 3/3 standalone tests passed in Release and 3/3 under ASan/UBSan, including record/replay and truncated-file handling. |
+| Relocated Windows Studio under Wine | Cross-build and packaging passed. The bundle included Qt PrintSupport and both array viewer examples. All 21 package smoke checks passed on retry with Wine 11.21 and Windows Qt 6.12.0. The bundled startup, Scope Run, Phase Portrait, Phase Trajectory 3D, and Live Spectrum also passed individually. The Waterfall and grayscale/RGB fixtures exported PDFs, with the rendered gap stripe and RGB pixels verified by Poppler. Native Windows and the optional FFmpeg plugin remain outside this run. |
+
+The Release scalar benchmark alternated this build and a fresh AV00 baseline (`65d4d366bddba4c941719c8f7821e19d0e3f999c`) on logical CPU 4. Each result is the median of five one-million-step measurements. Checksums matched in all four cases.
+
+| Scalar benchmark | AV00 median (ns/step) | Feature branch median (ns/step) | Change |
+| --- | ---: | ---: | ---: |
+| `gain512` | 1785.25 | 1790.42 | +0.29% |
+| `wide512` | 1444.25 | 1458.83 | +1.01% |
+| `feedback` | 28.61 | 29.80 | +4.16% |
+| `nested_feedback` | 208.18 | 208.48 | +0.15% |
+
+Run these measurements with `taskset -c 4 <build>/s7core/s7core_indexed_benchmark <case> 1000000` for both builds. The performance acceptance threshold remains open.
+
+P01–P07 still require implementation and qualification. The diagram, recorded Scope, phase views, live oscilloscope, Surface, Response and Time-Frequency need PDF and printer actions. Physical-paper inspection remains an opt-in manual check. [Printing contract](STUDIO_PRINTING_0.2.0.md)
+
 ### Education phase — prepare and qualify the curriculum
 
 The [education implementation plan](../education/IMPLEMENTATION_PLAN.md)
