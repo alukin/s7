@@ -48,9 +48,9 @@ Although the entry points are C functions, the registry pointer and `ElementDesc
 
 ## Array-port ABI decision for 0.2.0 (not yet approved)
 
-The [2026-11-23 independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) identified plugin API v1's crucial limitation: the `extern "C"` entry points still exchange C++ `ElementRegistry`/`ElementDescriptor`/Element-facing structures, so **a matching `S7_PLUGIN_API_VERSION` is not sufficient evidence of old binary compatibility** if `Element`, `Port` or metadata layouts change. The [array design register D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) is **OPEN**. The maintainer must choose either (1) preserve ABI and demonstrate an existing compiled plugin loading and behaving with the new host, or (2) deliberately bump the plugin API, reject old binaries early with a clear error, and rebuild/qualify the out-of-tree `s7spectral` against the installed/relocated SDK. Recompiling against new headers tests **source**, not binary, compatibility.
+Plugin API v1 uses `extern "C"` entry points and exchanges C++ `ElementRegistry` and element-facing layouts. The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral` and `s7wavelet`.
 
-Until D1 is accepted, do not assert ABI preservation or implement intrusive public header changes on the assumption that v1 is safe. Keep the scalar element source behavior and measured performance path intact. Tests must exercise supported SDK installation and plugin discovery, rejection/compatibility, and the independent FFT/backend policy (D5). This is planning text only; it does **not** change the currently implemented plugin API version.
+If the shared C++ plugin boundary remains, check the ABI version before passing a registry to plugin code. The [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) records the current manifest parser gap. Qualify the current SDK installation, plugin discovery and the FFT/backend policy (D5).
 
 ## Minimal plugin
 
