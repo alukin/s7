@@ -404,7 +404,7 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
     CheckedSchema checked;
     // Nested schemas are inlined first (ADR-024): every check below sees the
     // flattened graph, so a nested schema behaves exactly like its contents.
-    auto flat = flatten_schema(nested_schema);
+    auto flat = flatten_schema(nested_schema, experimental_arrays);
     checked.flat = std::move(flat.schema);
     checked.nested_outputs = std::move(flat.nested_outputs);
     const auto seeds = std::move(flat.seeds);
@@ -446,7 +446,9 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                 if (!experimental_arrays) {
                     throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
                 }
-                if (!spec.factory || !dynamic_cast<const ArrayElement*>(element.get()) ||
+                const bool supported = dynamic_cast<const ArrayElement*>(element.get()) ||
+                                       dynamic_cast<const SchemaPort*>(element.get());
+                if (!spec.factory || !supported ||
                     dynamic_cast<const RateChangingElement*>(element.get()) ||
                     dynamic_cast<const TrapezoidIntegration*>(element.get()) ||
                     dynamic_cast<const CoupledIntegration*>(element.get())) {

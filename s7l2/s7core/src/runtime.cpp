@@ -668,7 +668,7 @@ const std::string& NodeRuntime::element_id_of_instance_uuid(const std::string& e
     return it->second;
 }
 
-std::pair<std::string, std::size_t> NodeRuntime::aliased_output(const std::string& element_id, const std::size_t port) const {
+const std::pair<std::string, std::size_t>& NodeRuntime::aliased_output(const std::string& element_id, const std::size_t port) const {
     const auto alias = graph_.output_aliases.find(element_id);
     if (alias == graph_.output_aliases.end()) {
         throw std::out_of_range("Unknown element output requested: '" + element_id + "'.");
@@ -682,7 +682,7 @@ std::pair<std::string, std::size_t> NodeRuntime::aliased_output(const std::strin
 OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
-        const auto [source, source_port] = aliased_output(element_id, port);
+        const auto& [source, source_port] = aliased_output(element_id, port);
         return output_binding_of(source, source_port);
     }
 
@@ -704,7 +704,12 @@ std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_arra
     if (thread != std::thread::id{} && thread != std::this_thread::get_id()) {
         throw std::logic_error("Array observation requires the runtime stepping thread.");
     }
-    const auto* element = graph_.elements.at(element_id).get();
+    const auto found = graph_.elements.find(element_id);
+    if (found == graph_.elements.end()) {
+        const auto& [source, source_port] = aliased_output(element_id, port);
+        return try_retain_array_output(source, source_port, retention);
+    }
+    const auto* element = found->second.get();
     if (port >= element->output_count()) throw std::out_of_range("Array output port out of range.");
     const auto* array = dynamic_cast<const ArrayElement*>(element);
     if (!array || !element->output_ports()[port].array_descriptor) {
@@ -719,7 +724,7 @@ std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_arra
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
-        const auto [source, source_port] = aliased_output(element_id, port);
+        const auto& [source, source_port] = aliased_output(element_id, port);
         return output_type_of(source, source_port);
     }
 

@@ -98,7 +98,7 @@ void check_array_schema(s7::ElementRegistry& registry)
             schema.exposed_outputs().front().array == descriptor->metadata().output_ports.front().array &&
             schema.has_array_ports(), "registered schema metadata and loaded ports describe the same arrays");
     require(schema.output_ports().front().value_ptr == nullptr, "array metadata cannot expose scalar placeholder bytes");
-    rejects([&] { schema.step(); }, "Array execution");
+    rejects([&] { schema.step(); }, "requires a parent graph");
     rejects([&] { static_cast<void>(s7::Compiler::compile(schema)); }, "Array execution");
     s7::Schema parent("parent");
     parent.add_element("nested", [&] {

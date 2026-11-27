@@ -111,6 +111,7 @@ private:
     };
 
     void invalidate_compiled_runtime();
+    void require_standalone_scalar_ports() const;
     void ensure_compiled_runtime();
 
     std::string name_;

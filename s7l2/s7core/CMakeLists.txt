@@ -145,6 +145,10 @@ s7_add_test_executable(s7core_array_memory_smoke tests/array_memory_smoke.cpp)
 target_link_libraries(s7core_array_memory_smoke PRIVATE s7core)
 add_test(NAME s7core_array_memory_smoke COMMAND s7core_array_memory_smoke)
 
+s7_add_test_executable(s7core_array_nested_smoke tests/array_nested_smoke.cpp)
+target_link_libraries(s7core_array_nested_smoke PRIVATE s7core)
+add_test(NAME s7core_array_nested_smoke COMMAND s7core_array_nested_smoke)
+
 s7_add_test_executable(s7core_array_pool_smoke tests/array_pool_smoke.cpp)
 target_link_libraries(s7core_array_pool_smoke PRIVATE s7core Threads::Threads)
 add_test(NAME s7core_array_pool_smoke COMMAND s7core_array_pool_smoke)

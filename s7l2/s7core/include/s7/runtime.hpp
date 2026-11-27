@@ -112,7 +112,7 @@ public:
 
 private:
     // The element output behind an output of a flattened nested schema.
-    [[nodiscard]] std::pair<std::string, std::size_t> aliased_output(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] const std::pair<std::string, std::size_t>& aliased_output(const std::string& element_id, std::size_t port) const;
 
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next

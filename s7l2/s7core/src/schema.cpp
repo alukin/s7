@@ -90,6 +90,7 @@ void Schema::set_causal_order(std::vector<std::string> order)
 
 void Schema::bind_inputs(std::span<const InputBinding> bindings)
 {
+    require_standalone_scalar_ports();
     Element::bind_inputs(bindings);
     bound_input_count_ = bindings.size();
     ensure_compiled_runtime();
@@ -249,14 +250,19 @@ void Schema::invalidate_compiled_runtime()
     exposed_input_states_.clear();
 }
 
+void Schema::require_standalone_scalar_ports() const
+{
+    if (has_array_ports()) {
+        throw std::logic_error("Schema '" + name_ + "' requires a parent graph to bind its array ports.");
+    }
+}
+
 void Schema::ensure_compiled_runtime()
 {
     if (compiled_runtime_) {
         return;
     }
-    if (has_array_ports()) {
-        throw std::logic_error("Schema '" + name_ + "' declares array ports. Array execution is not available.");
-    }
+    require_standalone_scalar_ports();
     // Runs before a nested schema's first step: from bind_inputs() when a
     // parent graph is compiled, or from step() when used standalone.
     for (const auto& input : exposed_inputs_) require_exposable_type("input", input.name, input.type);

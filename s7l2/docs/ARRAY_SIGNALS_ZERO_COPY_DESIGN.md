@@ -1,6 +1,6 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation and D6 provenance semantics accepted. D5 and D7 remain open.**
+**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 remains open.**
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
@@ -173,7 +173,7 @@ The AV04 regression uses a tiny pool, deliberately holds an optional read lease,
 
 Require **exact numeric type, concrete positive rank/extents and required domain semantics** at compilation. Reject symbolic/dynamic ambiguity, scalar-vector coercion, broadcast, implicit reshape/conversion, overflowed byte calculations, invalid offset/strides/bounds and unsupported layouts. Initial release elements use F32[N]/C32[N], U8[H,W] grayscale and U8[H,W,3] interleaved RGB with explicit image format on the generic D4 foundation. Resolve and validate metadata through `metadata_json.cpp`, registry, `element_catalog.cpp`, schema serialization, type inference, compiler and Studio. Use one canonical format for current scalar and array ports. Persist logical descriptors and required storage capabilities. DSP is contiguous. U8 row padding requires a declared capability and independent tests. Layout conversion uses explicit adapters with measured copies.
 
-**Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **Standalone array-valued `Schema::step()` is deferred/unsupported pending D7**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
+**Flattened compiled nested schemas** must forward shape-preserving slots under ADR-024, not treat `SchemaPort` scalar placeholders as array payloads. **D7 defers standalone array-valued `Schema::step()`**; its F64/C64 proxy limitations must not be silently claimed fixed. Test inline/nested equivalence, feedback through array memory, exposed-port aliases and saved-diagram round-trip. Studio's `connection_planner.cpp` currently bypasses observer-input type checks: add descriptor-aware editor checking and authoritative runtime rejection. Waterfall accepts only a supported rank-1 spectrum/PSD format with appropriate axis metadata; Video Player accepts only supported U8 grayscale/RGB shape/layout. Include viewer registry, labels, settings, print and installed resources.
 
 One C32[N] value is **one causal `step()`**, not N graph steps. Distinguish graph **rational model-time rate-domain cadence** (ADR-022), physical sample rate, valid sample count and block duration, first physical sample index, block/frame/row sequence, optional source clock/timestamp and video PTS. Define optional provenance fields, absence, forwarding, reset, discontinuity and delay behavior **per producer/transform** before AV11/AV12 (D6). Never derive physical samples/PTS from graph `step_count()` or use scalar `Resampler` as a hidden in-block resampler. Missing source sample rate means unknown physical frequency axis; Waterfall gaps and Video Player skipped-frame IDs must be visible.
 
@@ -193,9 +193,11 @@ AV07b needs a fixed-size optional origin carrying a run-scoped source ID, contin
 
 Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
 
-### D7 proposal — Array ports on nested schemas
+<a id="d7-proposal--array-ports-on-nested-schemas"></a>
 
-**Open.** For 0.2.0, support array ports on nested schemas through the parent graph compiler. Treat exposed ports as typed aliases of the producing slot under ADR-024. Validate their descriptors at each boundary. Preserve the lease, source occurrence, rate-domain position and causal-memory timing across any number of nested boundaries. An exposed port contributes dependencies and type constraints during compilation and has no runtime storage or evaluation phase.
+### D7 — Array ports on nested schemas
+
+**Accepted.** For 0.2.0, support array ports on nested schemas through the parent graph compiler. Treat exposed ports as typed aliases of the producing slot under ADR-024. Validate their descriptors at each boundary. Preserve the lease, source occurrence, rate-domain position and causal-memory timing across any number of nested boundaries. An exposed port contributes dependencies and type constraints during compilation and has no runtime storage or evaluation phase.
 
 Defer standalone array-valued `Schema::bind_inputs()` and `Schema::step()`. Refuse that use before allocating scalar proxy storage or binding the graph. A future standalone API will need a contract for admitting external array leases, retaining outputs and scheduling the graph on behalf of its caller. Flattening covers reusable submodels, including future spatial blocks, with the same scheduling and publication semantics as an inlined graph.
 
@@ -215,9 +217,9 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
 | D6 | **Accepted.** [Array provenance and whole-array delay](#d6--array-provenance-and-whole-array-delay). Producer-specific field contracts belong to AV11/AV12. | AV07b/AV11/AV12/AV15/AV16 |
-| D7 | **Open.** [Array ports on nested schemas](#d7-proposal--array-ports-on-nested-schemas). Approve compiled slot aliases and standalone deferral, or scope a standalone interface separately. | AV08 |
+| D7 | **Accepted.** [Array ports on nested schemas](#d7--array-ports-on-nested-schemas). Compiled slot aliases and standalone deferral. | AV08 |
 
-**D5 and D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D5 is open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 
