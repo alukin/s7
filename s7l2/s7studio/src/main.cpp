@@ -747,10 +747,6 @@ int runPhasePortraitCheck(int argc, char** argv)
         const auto document = s7studio::diagram::DiagramDocument::fromJson(readJson(path.toLocal8Bit().constData()));
         auto schemaJson = document.runtimeSchema;
         const double dt = 1.0 / frequency;
-        for (auto& element : schemaJson.as_object().at("elements").as_array()) {
-            if (element.as_object().at("type").as_string() == "EulerIntegrator")
-                element.as_object().at("params").as_object()["dt"] = dt;
-        }
         std::vector<s7studio::RunProbe> probes;
         int axes = 0;
         for (const auto& connection : net.observationConnections()) {
@@ -917,10 +913,6 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
         const auto document = s7studio::diagram::DiagramDocument::fromJson(readJson(path.toLocal8Bit().constData()));
         auto schemaJson = document.runtimeSchema;
         const double dt = 1.0 / frequency;
-        for (auto& element : schemaJson.as_object().at("elements").as_array()) {
-            if (element.as_object().at("type").as_string() == "EulerIntegrator")
-                element.as_object().at("params").as_object()["dt"] = dt;
-        }
         std::vector<s7studio::RunProbe> probes;
         int axes = 0;
         for (const auto& connection : net.observationConnections()) {
@@ -1082,7 +1074,7 @@ int runLiveSpectrumCheck(int argc, char** argv)
     registerElements();
     const boost::json::object model{{"name", "installed-spectrum-check"}, {"dt", 1./1024},
         {"elements", boost::json::array{boost::json::object{{"id", "tone"}, {"type", "AnalogOscillator"},
-            {"params", {{"amplitude", 2.}, {"frequency_hz", 64.}, {"sample_rate_hz", 1024.}}}}}},
+            {"params", {{"amplitude", 2.}, {"frequency_hz", 64.}}}}}},
         {"connections", boost::json::array{}}};
     s7studio::LocalSchemaRunner runner;
     runner.run(model, 1./1024, 8192, {{"live/tone", "tone", 0, "V", false, "live"}});
@@ -1138,11 +1130,6 @@ int runScopeRunCheck(int argc, char** argv)
         window.openPath(path);
         auto schema = readJson(path.toLocal8Bit().constData()).as_object().at("schema");
         const double dt = 1.0 / frequency;
-        for (auto& element : schema.as_object().at("elements").as_array()) {
-            if (element.as_object().at("type").as_string() == "EulerIntegrator") {
-                element.as_object().at("params").as_object()["dt"] = dt;
-            }
-        }
         auto* runner = window.findChild<s7studio::LocalSchemaRunner*>();
         if (!runner) throw std::runtime_error("Missing runner");
         runner->run(schema, dt, 10 * frequency, {{"scope_1/v", "eulerintegrator_2", 0}});
@@ -1151,7 +1138,7 @@ int runScopeRunCheck(int argc, char** argv)
             app.processEvents();
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        if (runner->isRunning()) throw std::runtime_error("Oscillator run timed out");
+        if (runner->state() != s7studio::RunState::Completed) throw std::runtime_error("Scope oscillator run failed or timed out");
         app.processEvents();
         QMetaObject::invokeMethod(&window, "onRecordingAdvanced", Qt::DirectConnection);
         const auto open = [&] {

@@ -85,8 +85,10 @@ QColor familyColor(const ElementNode::Element& element)
     const auto* descriptor = s7::ElementRegistry::instance().find(element.type);
     if (!descriptor) return QColor(0x83, 0x91, 0x9c); // unavailable type
     const auto& category = descriptor->metadata().category;
-    if (category == "basic") return QColor(0x79, 0x9b, 0x80);
-    if (category == "filters") return QColor(0x75, 0x91, 0xaf);
+    if (category == "basic" || category == "math") return QColor(0x79, 0x9b, 0x80);
+    if (category == "memory_integration") return QColor(0x9b, 0x8b, 0x71);
+    if (category == "types_complex") return QColor(0x72, 0x9c, 0xa0);
+    if (category == "signal_processing" || category == "filters") return QColor(0x75, 0x91, 0xaf);
     if (category == "sources") return QColor(0x79, 0x9f, 0xbc);
     if (category == "control") return QColor(0xa6, 0x89, 0x79);
     if (category == "conversion") return QColor(0x72, 0x9c, 0xa0);
