@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "s7video/mjpeg.hpp"
+#include "jpeg_packet.hpp"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -93,45 +94,12 @@ void convert(const AVFrame& source, AVFrame& destination)
     checked(sws_scale_frame(scaler.get(), &destination, &source), "Converting video pixels");
 }
 
-// Validate packet boundaries before passing the data to the codec. Marker
-// segments may legally contain embedded JPEGs, and scans can contain stuffed
-// marker bytes, so a byte search for the second SOI or the first EOI is insufficient.
 bool completeImage(std::span<const std::byte> packet, FrameFormat format)
 {
-    if (packet.size() < 4 || packet.size() > MjpegCodec::maxPacketBytes ||
-        packet[0] != std::byte{0xff} || packet[1] != std::byte{0xd8}) return false;
-    const auto byte = [&packet](std::size_t offset) { return std::to_integer<int>(packet[offset]); };
-    const auto word = [&byte](std::size_t offset) { return 256 * byte(offset) + byte(offset + 1); };
-    bool header = false;
-    bool sawScan = false;
-    bool inScan = false;
-    for (std::size_t offset = 2; offset < packet.size();) {
-        if (byte(offset++) != 0xff) {
-            if (!inScan) return false;
-            continue;
-        }
-        while (offset < packet.size() && byte(offset) == 0xff) ++offset;
-        if (offset == packet.size()) return false;
-        const auto marker = byte(offset++);
-        if (inScan && (marker == 0 || (marker >= 0xd0 && marker <= 0xd7))) continue;
-        inScan = false;
-        if (marker == 0xd9) return sawScan && offset == packet.size();
-        if (marker < 0xc0 || (marker >= 0xd0 && marker <= 0xd8) || packet.size() - offset < 2) return false;
-        const auto length = static_cast<std::size_t>(word(offset));
-        if (length < 2 || length > packet.size() - offset) return false;
-        const bool frameHeader = marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc;
-        if (frameHeader) {
-            if (header || marker > 0xc2 || length < 8 || byte(offset + 2) != 8 ||
-                word(offset + 3) != format.height || word(offset + 5) != format.width) return false;
-            header = true;
-        }
-        if (marker == 0xda) {
-            if (!header) return false;
-            sawScan = inScan = true;
-        }
-        offset += length;
-    }
-    return false;
+    if (packet.size() > MjpegCodec::maxPacketBytes) return false;
+    std::size_t position{};
+    const auto get = [&] { return position < packet.size() ? std::to_integer<int>(packet[position++]) : -1; };
+    return detail::readJpegImage(get, {format.width, format.height}) && position == packet.size();
 }
 
 } // namespace

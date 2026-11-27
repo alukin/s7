@@ -138,6 +138,33 @@ a nested encoded port, rejected capacity and geometry mismatches, rejection
 of a numeric U8 wire, media timing and rollback after a downstream fault.
 The headless runtime loaded the installed plugin and executed five steps.
 Studio showed the codec type and configured dimensions on the encoded wire.
+
+#### Record and replay a raw MJPEG file
+
+From a writable working directory, run the installed recorder with the absolute
+paths to the plugin and recording schema:
+
+```bash
+s7video_record /path/to/libs7video-elements.so /path/to/schema_mjpeg_roundtrip.json encode 5 recording.mjpeg
+```
+
+The recorder appends the exact bytes of each committed output packet from port 0
+of the named element. Use a graph that commits a packet at every step. The
+destination must be new and its filesystem must support hard links. The
+recorder publishes the destination only after every requested frame was written.
+
+Run Studio from the working directory with the video plugin discoverable through
+`S7_PLUGIN_PATH`. Open the installed `mjpeg_replay.s7diagram` and set the local
+run to 25 Hz for 0.2 s. Open the Video Player to view the decoded output. For
+headless replay use `schema_mjpeg_replay.json`. Both examples read
+`recording.mjpeg` relative to the working directory.
+
+Raw MJPEG stores a sequence of complete JPEG images. Set `frame_rate` to
+reconstruct presentation time. The source starts at zero and increments one
+tick per image at the configured rate. The `eof` output is 1 alongside the
+last complete frame. Stepping past the end, a truncated image or a capacity
+violation fails the step. Reopen the graph before retrying after a file source
+fault.
 On Fedora 45 with FFmpeg 9.0.2, the Release and Clang ASan/UBSan builds
 passed. Both 65×33 reference frames had a maximum absolute error of
 2 levels per channel. The existing no-device FFmpeg experiment also

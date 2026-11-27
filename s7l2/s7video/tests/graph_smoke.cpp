@@ -67,6 +67,57 @@ void checkSavedGraph(const boost::json::object& json)
     }
 }
 
+void checkReplay(const boost::json::object& recording, boost::json::object replay, const char* truncated)
+{
+    auto source = s7::SchemaLibraryLoader::build_schema(recording);
+    auto playback = s7::SchemaLibraryLoader::build_schema(replay);
+    s7::NodeRuntime original(s7::Compiler::compile(source));
+    s7::NodeRuntime player(s7::Compiler::compile(playback));
+    s7::ArrayPool::Retention originalReader, replayReader, frameReader;
+    for (std::uint64_t step = 1; step <= 5; ++step) {
+        original.step();
+        player.step();
+        const auto expected = sample(original, "encode", originalReader);
+        const auto packet = sample(player, "file", replayReader);
+        const auto frame = sample(player, "decode", frameReader);
+        require(std::ranges::equal(expected.value.encoded_bytes(), packet.value.encoded_bytes()),
+                "recorded bytes differ from the committed encoder packet");
+        require(packet.domain_step == step && frame.domain_step == step &&
+                frame.value.media_timing == s7::ArrayMediaTiming{s7::MediaPresentationTime{
+                    static_cast<std::int64_t>(step - 1), {25, 1}}, false} &&
+                frame.value.origin == s7::ArraySourceOccurrence{12, 0, step} &&
+                frame.value.lease.view().descriptor() == s7::ArrayDescriptor(s7::SignalType::U8,
+                    std::array<std::int64_t, 2>{33, 65}),
+                "replay lost presentation time, source identity or dimensions");
+        require(player.output_of<s7::SignalType::U8>("file", 1) == (step == 5), "incorrect EOF flag");
+    }
+
+    const auto rejectNext = [](s7::NodeRuntime& runtime, std::string_view error, std::uint64_t steps) {
+        try { runtime.step(); }
+        catch (const std::exception& failure) {
+            require(std::string_view(failure.what()).contains(error), failure.what());
+            require(runtime.step_count() == steps, "invalid file packet advanced the committed step");
+            return;
+        }
+        throw std::runtime_error("file replay accepted an invalid next step");
+    };
+    rejectNext(player, "End of MJPEG file", 5);
+
+    auto& params = replay.at("elements").as_array().front().as_object().at("params").as_object();
+    params["file"] = truncated;
+    auto broken = s7::SchemaLibraryLoader::build_schema(replay);
+    s7::NodeRuntime partial(s7::Compiler::compile(broken));
+    for (int i = 0; i < 4; ++i) partial.step();
+    rejectNext(partial, "Truncated or invalid", 4);
+
+    params["file"] = "recording.mjpeg";
+    for (auto& node : replay.at("elements").as_array())
+        node.as_object().at("params").as_object()["packet_capacity"] = 64;
+    auto small = s7::SchemaLibraryLoader::build_schema(replay);
+    s7::NodeRuntime overflow(s7::Compiler::compile(small));
+    rejectNext(overflow, "exceeds the configured capacity", 0);
+}
+
 void checkBadWires(boost::json::object json)
 {
     const auto rejects = [](const auto& model) {
@@ -185,12 +236,16 @@ void checkMediaTimingAndRollback(boost::json::object json)
 } // namespace
 
 int main(int argc, char** argv) try {
-    require(argc == 3, "expected codec plugin and saved graph paths");
+    require(argc == 3 || argc == 5, "expected codec plugin and saved graph paths");
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     s7::PluginLoader loader;
     require(loader.load_plugin(argv[1], registry), "cannot load the codec plugin");
     const auto models = readFixture(argv[2]);
+    if (argc == 5) {
+        checkReplay(models, readFixture(argv[3]), argv[4]);
+        return 0;
+    }
     checkSavedGraph(models);
     checkBadWires(models);
     checkNestedPacket(models);

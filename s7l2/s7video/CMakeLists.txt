@@ -5,6 +5,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(s7video VERSION 0.1.0 LANGUAGES CXX)
 
+include(GNUInstallDirs)
+
 find_package(s7core 0.1 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec>=61 libavutil>=59 libswscale>=8)
@@ -20,10 +22,23 @@ set_target_properties(s7video_elements PROPERTIES PREFIX "lib" OUTPUT_NAME "s7vi
 target_link_libraries(s7video_elements PRIVATE s7video)
 target_compile_options(s7video_elements PRIVATE -Wall -Wextra -Wpedantic)
 s7_embed_metadata(s7video_elements resources/element_metadata.json video_metadata)
-install(TARGETS s7video_elements LIBRARY DESTINATION lib/s7/plugins)
+install(TARGETS s7video_elements LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins)
+
+add_executable(s7video_record src/record.cpp ../s7runtime/src/plugin_loader.cpp)
+target_include_directories(s7video_record PRIVATE ../s7runtime/include)
+target_link_libraries(s7video_record PRIVATE s7::s7core ${CMAKE_DL_LIBS})
+target_compile_options(s7video_record PRIVATE -Wall -Wextra -Wpedantic)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set_target_properties(s7video_record PROPERTIES INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+endif()
+install(TARGETS s7video_record RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES examples/schema_mjpeg_roundtrip.json examples/schema_mjpeg_replay.json
+    examples/mjpeg_replay.s7diagram
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/s7/examples/video)
 
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_executable(s7video_mjpeg_smoke tests/mjpeg_smoke.cpp)
     target_link_libraries(s7video_mjpeg_smoke PRIVATE s7video)
     target_compile_options(s7video_mjpeg_smoke PRIVATE -Wall -Wextra -Wpedantic)
@@ -35,4 +50,8 @@ if(BUILD_TESTING)
     add_dependencies(s7video_graph_smoke s7video_elements)
     add_test(NAME s7video_graph_smoke COMMAND s7video_graph_smoke
         $<TARGET_FILE:s7video_elements> ${CMAKE_CURRENT_SOURCE_DIR}/examples/schema_mjpeg_roundtrip.json)
+    add_test(NAME s7video_file_smoke COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/file_smoke.py
+        $<TARGET_FILE:s7video_record> $<TARGET_FILE:s7video_graph_smoke> $<TARGET_FILE:s7video_elements>
+        ${CMAKE_CURRENT_SOURCE_DIR}/examples/schema_mjpeg_roundtrip.json
+        ${CMAKE_CURRENT_SOURCE_DIR}/examples/schema_mjpeg_replay.json)
 endif()

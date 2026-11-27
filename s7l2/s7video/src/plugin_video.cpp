@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "s7video/mjpeg.hpp"
+#include "jpeg_packet.hpp"
 #include "video_metadata.hpp"
 
 #include <s7/array_port.hpp>
@@ -11,6 +12,9 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include <utility>
 
 namespace {
@@ -96,20 +100,88 @@ private:
     s7::ArrayOutputSlot& output_;
 };
 
+class MjpegFileSource final : public s7::ArrayElement {
+public:
+    MjpegFileSource(std::filesystem::path path, s7::MjpegPacketFormat format, std::size_t capacity,
+                    s7::Rate rate, std::uint64_t sourceId)
+        : ArrayElement("MjpegFileSource", true), path_(std::move(path)), format_(format), rate_(rate),
+          sourceId_(sourceId), shape_(s7::ArrayDescriptor::mjpeg_packet(capacity, format)),
+          pool_(shape_, executionSlots, observationSlots, poolBudget(shape_)),
+          output_(register_array_output(s7::port_names::out, shape_))
+    {
+        if (path_.empty()) throw std::invalid_argument("MjpegFileSource requires a file path.");
+        register_output(1, "eof", s7::SignalType::U8, &eof_);
+    }
+
+    std::optional<s7::Rate> declared_rate() const override { return rate_; }
+    void on_step_failure() noexcept override { if (input_.is_open()) faulted_ = true; }
+
+    void step() override
+    {
+        if (faulted_) throw std::runtime_error("MjpegFileSource must be reopened after a failed domain step.");
+        if (!input_.is_open()) {
+            input_.open(path_, std::ios::binary);
+            if (!input_) throw std::runtime_error("Could not open the MJPEG file.");
+        }
+        if (atEnd()) throw std::runtime_error("End of MJPEG file. The last complete frame has already been published.");
+        if (position_ == std::numeric_limits<std::int64_t>::max())
+            throw std::overflow_error("MJPEG frame index overflow.");
+        auto writer = pool_.try_acquire();
+        if (!writer) throw std::runtime_error("MjpegFileSource packet pool exhausted.");
+        const auto storage = writer->bytes();
+        std::size_t used{};
+        const auto get = [&] {
+            if (used == storage.size()) throw std::length_error("MJPEG file packet exceeds the configured capacity.");
+            const auto byte = input_.get();
+            if (byte != std::char_traits<char>::eof()) storage[used++] = static_cast<std::byte>(byte);
+            return byte;
+        };
+        if (!s7video::detail::readJpegImage(get, format_))
+            throw std::runtime_error("Truncated or invalid MJPEG image, or image dimensions differ from the file source.");
+        const bool last = atEnd();
+        std::ranges::fill(storage.subspan(used), std::byte{0});
+        const s7::ArraySourceOccurrence origin{sourceId_, 0, static_cast<std::uint64_t>(position_) + 1};
+        const s7::ArrayMediaTiming timing{s7::MediaPresentationTime{position_, rate_}, false};
+        static_cast<void>(output_.exchange({std::move(*writer).seal(), origin, {}, {}, {}, used, timing}));
+        eof_ = static_cast<std::uint8_t>(last);
+        ++position_;
+    }
+
+private:
+    bool atEnd()
+    {
+        const bool end = input_.peek() == std::char_traits<char>::eof();
+        if (input_.bad() || (end && !input_.eof())) throw std::runtime_error("Could not read the MJPEG file.");
+        return end;
+    }
+
+    const std::filesystem::path path_;
+    const s7::MjpegPacketFormat format_;
+    const s7::Rate rate_;
+    const std::uint64_t sourceId_;
+    const s7::ArrayDescriptor shape_;
+    s7::ArrayPool pool_;
+    s7::ArrayOutputSlot& output_;
+    std::ifstream input_;
+    std::int64_t position_{};
+    std::uint8_t eof_{};
+    bool faulted_{};
+};
+
 FrameFormat formatFrom(const s7::ElementCreationContext& context)
 {
     return {static_cast<int>(context.get_int("width")), static_cast<int>(context.get_int("height")),
             context.get_string("format") == "gray8" ? s7::ImagePixelFormat::Gray8 : s7::ImagePixelFormat::RGB8};
 }
 
-const S7PluginInfo pluginInfo{S7_PLUGIN_API_VERSION, 2, "s7video", "0.1.0", "S7 Project"};
+const S7PluginInfo pluginInfo{S7_PLUGIN_API_VERSION, 3, "s7video", "0.1.0", "S7 Project"};
 constexpr char manifest[] = R"json({
   "plugin_name": "s7video",
   "plugin_version": "0.1.0",
   "author": "S7 Project",
-  "description": "Headless MJPEG encoder and decoder elements.",
-  "element_count": 2,
-  "elements": ["VideoEncoder", "VideoDecoder"]
+  "description": "Headless MJPEG file replay, encoder and decoder elements.",
+  "element_count": 3,
+  "elements": ["VideoEncoder", "VideoDecoder", "MjpegFileSource"]
 })json";
 
 } // namespace
@@ -132,6 +204,16 @@ void s7_register_elements(void* registryPtr)
         registry.register_element(s7::ElementDescriptor("VideoDecoder", [](const s7::ElementCreationContext& context) {
             return std::make_unique<VideoDecoder>(formatFrom(context), static_cast<std::size_t>(context.get_int("packet_capacity")));
         }, metadata.at("VideoDecoder"), true));
+    }
+    if (!registry.find("MjpegFileSource")) {
+        registry.register_element(s7::ElementDescriptor("MjpegFileSource", [](const s7::ElementCreationContext& context) {
+            const auto path = context.get_string("file");
+            const auto file = std::filesystem::path(std::u8string(path.begin(), path.end()));
+            return std::make_unique<MjpegFileSource>(file,
+                s7::MjpegPacketFormat{static_cast<int>(context.get_int("width")), static_cast<int>(context.get_int("height"))},
+                static_cast<std::size_t>(context.get_int("packet_capacity")), s7::Rate::from_hz(context.get_real("frame_rate")),
+                static_cast<std::uint64_t>(context.get_int("source_id")));
+        }, metadata.at("MjpegFileSource"), true));
     }
 }
 
