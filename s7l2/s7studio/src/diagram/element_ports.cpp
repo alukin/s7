@@ -65,7 +65,8 @@ bool isAxisObserverElementType(const std::string_view type)
 
 bool isObserverElementType(const std::string_view type)
 {
-    return type == "Scope" || type == "LiveOscilloscope" || isAxisObserverElementType(type);
+    return type == "Scope" || type == "LiveOscilloscope" || isAxisObserverElementType(type)
+        || arrayObserverKind(type) != ArrayObserverKind::None;
 }
 
 auto elementPorts(const std::string_view type, const boost::json::object& params, const boost::json::value& nestedSchema)
@@ -78,6 +79,8 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         return {std::move(inputs), {}};
     }
     if (type == "TimeFrequency") return {{QStringLiteral("in")}, {}};
+    if (type == "Waterfall") return {{QStringLiteral("spectrum")}, {}};
+    if (type == "VideoPlayer") return {{QStringLiteral("frame")}, {}};
     if (type == "FrequencyResponse") return {{QStringLiteral("input"), QStringLiteral("output")}, {}};
     if (type == "PhasePortrait") {
         return {{QStringLiteral("x"), QStringLiteral("y")}, {}};

@@ -66,6 +66,9 @@ void LocalSchemaRunner::publishState(RunState expected, std::uint64_t id)
 
 void LocalSchemaRunner::releaseRuntime()
 {
+    for (const auto& source : std::as_const(arraySources_)) source.mailbox->close();
+    arraySources_.clear();
+    arrayRoutes_.clear();
     compiledProbes_.reset(); // addresses storage owned by the runtime
     hardwareRun_.reset();
     hardwarePaced_ = false;
@@ -101,7 +104,9 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     configuration_ = std::make_shared<const RunConfiguration>(
         RunConfiguration{id, schemaJson, dt, ticks, std::move(probes), recordingOverflow_});
     totalTicks_ = ticks;
-    probes_ = configuration_->probes;
+    probes_.clear();
+    for (const auto& probe : configuration_->probes)
+        if (probe.arrayObserver == diagram::ArrayObserverKind::None) probes_.push_back(probe);
     publishState(RunState::Preparing, id);
     if (id != generation_.load()) return;
     try {
@@ -171,22 +176,38 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     std::map<std::string, std::size_t> groups;
     std::vector<QVector<observation::LiveChannel>> liveChannels;
     std::map<std::pair<std::string, int>, std::size_t> distinctReads;
+    std::map<const s7::ArrayDescriptor*, std::size_t> distinctArrays;
+    const auto& running = hardwarePaced_ ? hardwareRun_->runtime() : *runtime_;
     std::vector<s7::ProbePoint> distinct;
     std::size_t liveCount = 0;
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {
         if (probe.name.empty() || !names.insert(probe.name).second || probe.port < 0)
             throw std::invalid_argument("Probe names must be nonempty and unique, and output ports nonnegative.");
+        if (probe.arrayObserver != diagram::ArrayObserverKind::None) {
+            if (probe.record || !probe.liveGroup.empty())
+                throw std::invalid_argument("Array viewers require a presentation-only subscription.");
+            const auto port = static_cast<std::size_t>(probe.port);
+            const auto* shape = running.array_output_descriptor(probe.element, port);
+            if (const auto problem = diagram::arrayObserverPortProblem(probe.arrayObserver, shape); !problem.isEmpty())
+                throw std::invalid_argument(probe.name + ": " + problem.toStdString());
+            const auto [route, added] = distinctArrays.emplace(shape, arrayRoutes_.size());
+            if (added) arrayRoutes_.push_back({{probe.element, port}, shape->byte_size()});
+            auto mailbox = std::make_shared<s7::ArrayMailbox>();
+            arrayRoutes_[route->second].mailboxes.push_back(mailbox);
+            arraySources_.insert(QString::fromStdString(probe.name), {probe.arrayObserver, std::move(mailbox)});
+            continue;
+        }
         if (!probe.record && probe.liveGroup.empty()) throw std::invalid_argument("Probe has no capture subscription.");
         const auto [read, added] = distinctReads.emplace(std::pair{probe.element, probe.port}, distinct.size());
         if (added) distinct.push_back({probe.element, static_cast<std::size_t>(probe.port)});
         readIndices_.push_back(read->second);
     }
     // Resolved once: per-step reads copy from output storage directly.
-    compiledProbes_.emplace(s7::ObservationService(hardwarePaced_ ? hardwareRun_->runtime() : *runtime_).compile(distinct));
+    compiledProbes_.emplace(s7::ObservationService(running).compile(distinct));
     distinctValues_.resize(distinct.size());
-    for (std::size_t index = 0; index < configuration.probes.size(); ++index) {
-        const auto& probe = configuration.probes[index];
+    for (std::size_t index = 0; index < probes_.size(); ++index) {
+        const auto& probe = probes_[index];
         const auto signal = compiledProbes_->point(readIndices_[index]).type;
         if (s7::is_complex_signal_type(signal))
             throw std::invalid_argument("Probe '" + probe.name + "' has unsupported complex type " +
@@ -252,6 +273,7 @@ void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> c
                 if (stopRequested_.load()) break;
                 runtime_->step();
                 completedTicks_.store(step + 1);
+                captureArrays(*runtime_);
                 captureFrame();
                 if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
                     const long completed = step + 1;
@@ -312,6 +334,7 @@ void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration
                                                : static_cast<std::uint64_t>(configuration.ticks);
     try {
         run->execute(frames, stop, [&](std::uint64_t completed) {
+            captureArrays(runtime);
             captureFrame();
             if (completed != 1 && completed % 1024 != 0) return;
             trackTicks(completed);
@@ -328,6 +351,28 @@ void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration
     trackTicks(runtime.step_count());
     const auto completed = completedTicks_.load();
     postRunEvent(id, [this, completed] { emit ticksProgress(completed, totalTicks_); });
+}
+
+void LocalSchemaRunner::captureArrays(const s7::NodeRuntime& runtime)
+{
+    const s7::ObservationService observer(runtime);
+    for (auto& route : arrayRoutes_) {
+        const auto& [element, port] = route.probe;
+        const auto step = runtime.committed_array_step(element, port);
+        if (!step || step == route.lastStep) continue;
+        route.lastStep = step;
+
+        // Resolve from the committed lease even for a forwarded or delayed output.
+        const auto admitted = runtime.admit_array_output(element, port, route.admission, 1, route.maxBytes);
+        auto sample = admitted ? observer.try_retain_array_output(route.probe, route.admission)
+                               : std::expected<s7::CommittedArraySample, s7::ArrayPoolError>(std::unexpected(admitted.error()));
+        if (admitted && !sample && sample.error() == s7::ArrayPoolError::Exhausted) {
+            bool released = false;
+            for (const auto& mailbox : route.mailboxes) released |= mailbox->discard_pending();
+            if (released) sample = observer.try_retain_array_output(route.probe, route.admission);
+        }
+        for (const auto& mailbox : route.mailboxes) mailbox->offer(sample);
+    }
 }
 
 void LocalSchemaRunner::captureFrame()

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "diagram/element_ports.hpp"
 #include <boost/json.hpp>
 
 #include <cstdint>
@@ -22,6 +23,7 @@ struct RunProbe {
     std::string unit{};
     bool record = true; // Explicit full-run journal subscription.
     std::string liveGroup{}; // Nonempty: bounded live acquisition workspace.
+    diagram::ArrayObserverKind arrayObserver = diagram::ArrayObserverKind::None;
     bool operator==(const RunProbe&) const = default;
 };
 

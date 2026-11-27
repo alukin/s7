@@ -66,10 +66,13 @@ public:
 
     private:
         friend class ArrayOutputSlot;
+        friend class NodeRuntime;
         friend class WriteLease;
         friend class Retention;
         ReadLease(std::shared_ptr<State> state, std::size_t slot,
                   std::shared_ptr<RetentionState> retention = {}, std::size_t ticket = 0) noexcept;
+        [[nodiscard]] std::expected<void, ArrayPoolError> admit(
+            Retention& admission, std::size_t max_slots, std::size_t max_bytes) const;
 
         std::shared_ptr<State> state_;
         std::shared_ptr<RetentionState> retention_;
@@ -112,6 +115,7 @@ public:
     /// its ticket. Closing an admission leaves outstanding reads valid.
     class Retention {
     public:
+        Retention() = default;
         Retention(Retention&&) noexcept = default;
         Retention& operator=(Retention other) noexcept;
         ~Retention();
@@ -121,6 +125,7 @@ public:
 
     private:
         friend class ArrayPool;
+        friend class ReadLease;
         explicit Retention(std::shared_ptr<RetentionState> state) noexcept;
         std::shared_ptr<RetentionState> state_;
     };

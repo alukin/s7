@@ -9,6 +9,7 @@
 
 #include <s7/type_inference.hpp>
 #include <s7/validation.hpp>
+#include <s7/schema_library.hpp>
 
 #include <algorithm>
 #include <exception>
@@ -111,6 +112,34 @@ auto ConnectionPlanner::typeProblem(const WireEnd& driver, const WireEnd& input)
         return {};
     }
     if (isObserverElementType(to->element().type)) {
+        const auto kind = arrayObserverKind(to->element().type);
+        if (kind != ArrayObserverKind::None) {
+            if (!declaresArrayPort(*from, driver.index, true)) return arrayObserverPortProblem(kind, nullptr);
+            try {
+                const auto& source = from->element();
+                const auto port = static_cast<std::size_t>(driver.index);
+                if (source.schema.is_object()) {
+                    const auto exposed = s7::parse_exposed_ports(source.schema.as_object(), "exposed_outputs");
+                    const auto& shape = exposed.at(port).array;
+                    return arrayObserverPortProblem(kind, shape ? &*shape : nullptr);
+                }
+                s7::Schema schema("observer_source");
+                runtime::detail::addElementFromRegistry(schema, source.id, source.type, source.params);
+                auto resolved = s7::TypeResolver::resolve(schema);
+                if (!resolved.ok()) return QString::fromStdString(resolved.errors.front());
+                const auto& spec = schema.elements().front();
+                if (spec.array_metadata) {
+                    const auto& shape = spec.array_metadata->output_ports.at(port).array;
+                    return arrayObserverPortProblem(kind, shape ? &*shape : nullptr);
+                }
+                const auto element = resolved.instances.front() ? std::move(resolved.instances.front())
+                                                                 : resolved.factories.front()();
+                const auto ports = element->output_ports();
+                return arrayObserverPortProblem(kind, port < ports.size() ? ports[port].array_descriptor : nullptr);
+            } catch (const std::exception& ex) {
+                return QString::fromUtf8(ex.what());
+            }
+        }
         if (declaresArrayPort(*from, driver.index, true)) {
             return QStringLiteral("This observer requires a scalar output.");
         }

@@ -21,11 +21,12 @@ void ArrayMailbox::offer(std::expected<CommittedArraySample, ArrayPoolError> sam
         const std::lock_guard lock(mutex_);
         if (closed_) return;
         if (!sample) {
-            if (sample.error() == ArrayPoolError::Exhausted) increment(counters_.admission_skips);
+            increment(counters_.admission_skips);
             return;
         }
         previous = std::exchange(pending_, std::move(*sample));
-        if (previous) increment(counters_.replaced);
+        if (previous && !presented_) increment(counters_.replaced);
+        presented_ = false;
     }
 }
 
@@ -34,6 +35,25 @@ std::optional<CommittedArraySample> ArrayMailbox::take()
     const std::lock_guard lock(mutex_);
     if (paused_ || closed_) return std::nullopt;
     return std::exchange(pending_, std::nullopt);
+}
+
+std::optional<CommittedArraySample> ArrayMailbox::latest()
+{
+    const std::lock_guard lock(mutex_);
+    if (paused_ || closed_ || !pending_) return std::nullopt;
+    presented_ = true;
+    return pending_;
+}
+
+bool ArrayMailbox::discard_pending()
+{
+    std::optional<CommittedArraySample> previous;
+    {
+        const std::lock_guard lock(mutex_);
+        previous = std::exchange(pending_, std::nullopt);
+        if (previous && !presented_) increment(counters_.replaced);
+    }
+    return previous.has_value();
 }
 
 void ArrayMailbox::set_paused(bool paused)

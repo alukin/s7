@@ -89,6 +89,15 @@ public:
     // uncommitted output. Admission applies after the domain publishes.
     [[nodiscard]] std::expected<CommittedArraySample, ArrayPoolError> try_retain_array_output(
         const std::string& element_id, std::size_t port, const ArrayPool::Retention& retention) const;
+    [[nodiscard]] const ArrayDescriptor* array_output_descriptor(
+        const std::string& element_id, std::size_t port) const;
+    // Refresh an observer's admission against the committed value's backing pool.
+    // Use the same slot and byte caps for the lifetime of the admission.
+    [[nodiscard]] std::expected<void, ArrayPoolError> admit_array_output(
+        const std::string& element_id, std::size_t port, ArrayPool::Retention& admission,
+        std::size_t max_slots, std::size_t max_bytes) const;
+    [[nodiscard]] std::optional<std::uint64_t> committed_array_step(
+        const std::string& element_id, std::size_t port) const;
     // F64 / C64 shorthands for output_of<F64> / output_of<C64>.
     [[nodiscard]] RealValue real_output_of(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] RealValue real_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
@@ -113,6 +122,9 @@ public:
 private:
     // The element output behind an output of a flattened nested schema.
     [[nodiscard]] const std::pair<std::string, std::size_t>& aliased_output(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] const Port& output_port(const std::string& element_id, std::size_t port) const;
+    [[nodiscard]] std::pair<const ArrayOutputSlot&, Rate> array_observation_source(
+        const std::string& element_id, std::size_t port) const;
 
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next

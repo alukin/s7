@@ -2,16 +2,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "diagram/diagram_scene.hpp"
+#include "diagram/net_model.hpp"
 #include "diagram_document.hpp"
+#include "local_schema_runner.hpp"
 #include "scene_serializer.hpp"
+#include "viewers/viewer_manager.hpp"
+#include "viewers/viewer_registry.hpp"
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/schema_library.hpp>
 
 #include <QApplication>
+#include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
+#include <QLabel>
 #include <QTemporaryDir>
+#include <QThread>
 
 #include <algorithm>
 #include <array>
@@ -150,6 +158,135 @@ void check_wiring()
     static_cast<void>(add("unresolved", "UnavailableFixture", {}, 1500));
     require(!scene.connectEnds(out, input(wrong_size)).isEmpty(),
             "an unrelated unresolved element bypassed the vector shape check");
+
+    const auto waterfall = add("waterfall", "Waterfall", {}, 1800);
+    const auto video = add("video", "VideoPlayer", {}, 2100);
+    const auto rgb = add("rgb", "TestPatternFrame", {{"width", 4}, {"height", 2}, {"format", "rgb8"}}, 2400);
+    const auto constant = add("scalar", "Constant", {}, 2700);
+    const auto scalar = WireEnd::onPort(constant, PortDirection::Output, 0);
+    const auto frame = WireEnd::onPort(rgb, PortDirection::Output, 0);
+    require(!scene.connectEnds(scalar, input(waterfall)).isEmpty(), "Waterfall accepted a scalar");
+    require(!scene.connectEnds(out, input(video)).isEmpty(), "Video Player accepted an F32 vector");
+    require(!scene.connectEnds(frame, input(waterfall)).isEmpty(), "Waterfall accepted an RGB frame");
+    require(scene.connectEnds(out, input(waterfall)).isEmpty(), "Waterfall rejected an F32 vector descriptor");
+    require(scene.connectEnds(frame, input(video)).isEmpty(), "Video Player rejected a matching RGB frame");
+
+    SceneSerializer serializer;
+    const auto document = serializer.serialize(scene, {});
+    DiagramScene restored;
+    serializer.deserialize(DiagramDocument::fromJson(document.toJson()), restored);
+    const NetModel graph(restored);
+    require(graph.connections().size() == 1 && graph.observationConnections().size() == 2 &&
+                restored.elementNode("waterfall") && restored.elementNode("video"),
+            "Viewer bindings were lost on reopen or entered the functional graph");
+}
+
+void check_delivery()
+{
+    using namespace s7studio;
+    const auto model = boost::json::parse(R"({"elements":[
+        {"id":"gray","type":"TestPatternFrame","params":{"width":4,"height":2,"format":"gray8"}},
+        {"id":"rgb","type":"TestPatternFrame","params":{"width":4,"height":2,"format":"rgb8","source_id":2}}
+    ]})");
+    QTemporaryDir directory;
+    require(directory.isValid(), "could not create an isolated recording directory");
+    observation::StorageOptions storage;
+    storage.temporaryDirectory = directory.path();
+    LocalSchemaRunner runner(nullptr, storage);
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    auto* viewer = manager.openObserver("VideoPlayer", "video");
+    require(viewer, "could not open Video Player");
+    const QString artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
+    const auto status = [&] {
+        return viewer->widget()->findChild<QLabel*>("arrayViewer.status")->text();
+    };
+    const auto wait = [&] {
+        QElapsedTimer timeout;
+        timeout.start();
+        while (runner.isRunning() && timeout.elapsed() < 5000) {
+            QCoreApplication::processEvents();
+            QThread::msleep(1);
+        }
+    };
+    const auto probe = [](const char* modelId) {
+        return RunProbe{"video/frame", modelId, 0, {}, false, {}, ArrayObserverKind::VideoPlayer};
+    };
+    runner.run(model, 0.01, 6, {probe("gray"),
+        {"mirror/frame", "gray", 0, {}, false, {}, ArrayObserverKind::VideoPlayer},
+        {"sequence", "gray", 1}});
+    wait();
+    require(runner.state() == RunState::Completed && runner.completedTicks() == 6 && runner.recordedSource(),
+            "the observed graph or scalar recording failed");
+    const auto recorded = runner.recordedSource()->read(0);
+    require(recorded.samples.size() == 6 && recorded.samples.last().value == 6,
+            "subscribing to the frame changed scalar sequence capture");
+    const auto sources = runner.arraySources();
+    const auto held = sources.value("mirror/frame").mailbox->take();
+    require(held && held->value.origin && held->value.origin->sequence == 6, "fan-out missed the newest frame");
+    manager.presentArrays(sources);
+    manager.refreshViews();
+    require(status().contains("Committed domain step 6") && status().contains("Replaced 5"),
+            "Video Player did not show the latest frame and replacement count");
+    if (!artifacts.isEmpty())
+        require(viewer->widget()->grab().save(QDir(artifacts).filePath("video-player-delivery.png")),
+                "could not capture the viewer");
+
+    viewer->widget()->close();
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    require(!manager.find("VideoPlayer", "video"), "closed viewer was still registered");
+    viewer = manager.openObserver("VideoPlayer", "video");
+    require(viewer && status().contains("Committed domain step 6"), "reopening lost the last committed frame");
+
+    runner.run(model, 0.01, 2, {probe("rgb")});
+    wait();
+    require(runner.state() == RunState::Completed && !runner.recordedSource() &&
+            !sources.value("video/frame").mailbox->latest() &&
+            held->value.lease.values<s7::SignalType::U8>().size() == 8,
+            "rebinding should close stale mailboxes and preserve already retained reads");
+    manager.presentArrays(runner.arraySources());
+    manager.refreshViews();
+    const auto rgb = runner.arraySources().value("video/frame").mailbox->latest();
+    require(rgb && rgb->value.image && rgb->value.image->pixel_format == s7::ImagePixelFormat::RGB8 &&
+            status().contains("Committed domain step 2"), "the window did not bind to the new source");
+
+    auto invalid = probe("gray");
+    invalid.port = 1;
+    runner.run(model, 0.01, 2, {invalid});
+    require(runner.state() == RunState::Error && runner.arraySources().isEmpty(),
+            "runner accepted a scalar as a frame");
+}
+
+void check_spectrum_routing()
+{
+    using namespace s7studio;
+    const s7::ArrayDescriptor bins(s7::SignalType::F32, std::array<std::int64_t, 1>{4});
+    s7::ArrayPool pool(bins, 1, 2, std::make_shared<s7::ArrayMemoryBudget>(3 * bins.byte_size()));
+    auto admission = pool.make_retention(2, 2 * bins.byte_size());
+    auto write = pool.try_acquire().value();
+    std::ranges::fill(write.values<s7::SignalType::F32>(), 0.0f);
+    const auto buffer = std::move(write).seal();
+    const auto rate = s7::Rate::from_hz(100);
+    const auto feed = std::make_shared<s7::ArrayMailbox>();
+
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    auto* waterfall = manager.openObserver("Waterfall", "waterfall");
+    require(waterfall, "could not open Waterfall");
+    const auto* status = waterfall->widget()->findChild<QLabel*>("arrayViewer.status");
+    require(status, "Waterfall has no status label");
+    manager.presentArrays({{"waterfall/spectrum", {ArrayObserverKind::VideoPlayer, feed}}});
+    require(status->text().contains("No array source"), "Waterfall attached a Video Player subscription");
+    manager.presentArrays({{"waterfall/spectrum", {ArrayObserverKind::Waterfall, feed}}});
+    feed->offer(s7::CommittedArraySample{rate, 1, {admission.try_retain(buffer).value()}});
+    manager.refreshViews();
+    require(status->text().contains("no spectrum metadata"), "Waterfall accepted an unlabelled vector");
+    feed->offer(s7::CommittedArraySample{rate, 2, {admission.try_retain(buffer).value(), {}, {},
+        s7::ArraySpectrum{s7::SpectrumUnits::PowerPerBin, s7::SpectrumWindow::PeriodicHann, std::nullopt}}});
+    manager.refreshViews();
+    require(status->text().contains("Committed domain step 2"), "Waterfall did not receive a valid spectrum");
+    const QString artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
+    if (!artifacts.isEmpty())
+        require(waterfall->widget()->grab().save(QDir(artifacts).filePath("waterfall-delivery.png")),
+                "could not capture the viewer");
 }
 } // namespace
 
@@ -158,6 +295,8 @@ int main(int argc, char** argv) try {
     check_save_open();
     check_rejected_metadata();
     check_wiring();
+    check_delivery();
+    check_spectrum_routing();
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

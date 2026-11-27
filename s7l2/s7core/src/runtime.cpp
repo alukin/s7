@@ -679,11 +679,11 @@ const std::pair<std::string, std::size_t>& NodeRuntime::aliased_output(const std
     return alias->second[port];
 }
 
-OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
+const Port& NodeRuntime::output_port(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
         const auto& [source, source_port] = aliased_output(element_id, port);
-        return output_binding_of(source, source_port);
+        return output_port(source, source_port);
     }
 
     // The port's storage address directly: Element::outputs() would build a
@@ -693,12 +693,17 @@ OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std:
         throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
     }
 
-    if (ports[port].array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
-    return ports[port].value_ptr;
+    return ports[port];
 }
 
-std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_array_output(
-    const std::string& element_id, const std::size_t port, const ArrayPool::Retention& retention) const
+OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
+    const auto& output = output_port(element_id, port);
+    if (output.array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
+    return output.value_ptr;
+}
+
+std::pair<const ArrayOutputSlot&, Rate> NodeRuntime::array_observation_source(
+    const std::string& element_id, const std::size_t port) const
 {
     const auto thread = stepping_thread();
     if (thread != std::thread::id{} && thread != std::this_thread::get_id()) {
@@ -707,7 +712,7 @@ std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_arra
     const auto found = graph_.elements.find(element_id);
     if (found == graph_.elements.end()) {
         const auto& [source, source_port] = aliased_output(element_id, port);
-        return try_retain_array_output(source, source_port, retention);
+        return array_observation_source(source, source_port);
     }
     const auto* element = found->second.get();
     if (port >= element->output_count()) throw std::out_of_range("Array output port out of range.");
@@ -715,26 +720,43 @@ std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_arra
     if (!array || !element->output_ports()[port].array_descriptor) {
         throw std::invalid_argument("Output is not an array port.");
     }
-    const auto& slot = array->array_output(port);
+    return {array->array_output(port), graph_.rates.at(element_id)};
+}
+
+const ArrayDescriptor* NodeRuntime::array_output_descriptor(const std::string& element_id, std::size_t port) const
+{
+    return output_port(element_id, port).array_descriptor;
+}
+
+std::expected<void, ArrayPoolError> NodeRuntime::admit_array_output(
+    const std::string& element_id, std::size_t port, ArrayPool::Retention& admission,
+    std::size_t max_slots, std::size_t max_bytes) const
+{
+    const auto& slot = array_observation_source(element_id, port).first;
+    if (slot.committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
+    return slot.published_.lease.admit(admission, max_slots, max_bytes);
+}
+
+std::optional<std::uint64_t> NodeRuntime::committed_array_step(const std::string& element_id, std::size_t port) const
+{
+    const auto& slot = array_observation_source(element_id, port).first;
+    if (!slot.published_ || slot.committed_step_ == 0) return std::nullopt;
+    return slot.committed_step_;
+}
+
+std::expected<CommittedArraySample, ArrayPoolError> NodeRuntime::try_retain_array_output(
+    const std::string& element_id, const std::size_t port, const ArrayPool::Retention& retention) const
+{
+    const auto [slot, rate] = array_observation_source(element_id, port);
     auto value = slot.try_retain(retention);
     if (!value) return std::unexpected(value.error());
-    return CommittedArraySample{graph_.rates.at(element_id), slot.committed_step_, std::move(*value)};
+    return CommittedArraySample{rate, slot.committed_step_, std::move(*value)};
 }
 
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {
-    const auto element_it = graph_.elements.find(element_id);
-    if (element_it == graph_.elements.end()) {
-        const auto& [source, source_port] = aliased_output(element_id, port);
-        return output_type_of(source, source_port);
-    }
-
-    const auto ports = element_it->second->output_ports();
-    if (port >= ports.size()) {
-        throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
-    }
-
-    if (ports[port].array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
-    return ports[port].type;
+    const auto& output = output_port(element_id, port);
+    if (output.array_descriptor) throw std::invalid_argument("Array output is unavailable through scalar observation.");
+    return output.type;
 }
 
 SignalType NodeRuntime::output_type_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port) const {

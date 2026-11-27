@@ -76,7 +76,12 @@ void testRegistry()
     const auto* scope = registry.find(QStringLiteral("Scope"));
     const auto* phase = registry.find(QStringLiteral("PhasePortrait"));
     const auto* trajectory = registry.find(QStringLiteral("PhaseTrajectory3D"));
-    require(scope && phase && trajectory && registry.find("LiveOscilloscope") && registry.types().size() == 8, "Built-in viewer types missing");
+    const auto* waterfall = registry.find("Waterfall");
+    const auto* video = registry.find("VideoPlayer");
+    require(scope && phase && trajectory && registry.find("LiveOscilloscope") && waterfall && video,
+            "Built-in viewer types missing");
+    require(waterfall->inputSuffixes == QStringList{"spectrum"} && video->inputSuffixes == QStringList{"frame"},
+            "Array viewer input mapping changed");
     require(scope->inputSuffixes.isEmpty() && phase->inputSuffixes == QStringList{"x", "y"}
         && trajectory->inputSuffixes == QStringList{"x", "y", "z"}, "Observer input mapping changed");
     require(!registry.find(QStringLiteral("Nope")), "Unknown viewer type resolved");
@@ -87,10 +92,10 @@ void testRegistry()
                [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
                    return new CountingViewer(spec.probeNames.value(0));
                }});
-    require(local.types().size() == 9, "Registering a new viewer type failed");
+    require(local.types().size() == registry.types().size() + 1, "Registering a new viewer type failed");
     local.add({QStringLiteral("Counter"), QStringLiteral("Counter v2"), {}, {}, {QStringLiteral("in")},
                local.find(QStringLiteral("Counter"))->create});
-    require(local.types().size() == 9 && local.find(QStringLiteral("Counter"))->displayName == "Counter v2",
+    require(local.types().size() == registry.types().size() + 1 && local.find(QStringLiteral("Counter"))->displayName == "Counter v2",
         "Re-registering a type did not replace it");
 
     // A new type is routed by the unchanged manager.

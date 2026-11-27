@@ -496,6 +496,78 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "Waterfall",
+      "display_name": "Waterfall",
+      "description": "Observes committed vectors with spectrum metadata from a source such as VectorPSD. The local presentation keeps the newest admitted vector. Wiring changes apply on the next run.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "spectrum",
+          "description": "F32 rank-one spectrum vector with frequency and power metadata",
+          "type": "F32",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "VideoPlayer",
+      "display_name": "Video Player",
+      "description": "Observes committed U8 grayscale or interleaved RGB frames. The local presentation keeps the newest admitted frame. Wiring changes apply on the next run.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "frame",
+          "description": "U8 grayscale [H,W] or RGB [H,W,3] frame with pixel format metadata",
+          "type": "U8",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

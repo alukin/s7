@@ -341,6 +341,27 @@ Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independ
 
 The latest headless Release run passed all 106 tests, including the installed-SDK spectral smoke. The focused Studio Release test passed at the implementation checkpoint. The broader Studio diagram test reproduced the AV00 assertion “element families and nested schemas use distinct soft fills.” The temporary headless build can be recreated after reboot. From `s7l2/`, configure with `cmake -S . -B build-headless -G Ninja -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF`, run `cmake --build build-headless --target build-tests --parallel 6`, then run `CMAKE_BUILD_PARALLEL_LEVEL=4 ctest --test-dir build-headless --output-on-failure -j 6`. The Studio build is in `build-release/`. Run its focused test with `QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release -R '^s7studio_array_persistence$' --output-on-failure`.
 
+**AV14 continuation checkpoint (2026-11-27, base `6623af8`).** Studio registers Waterfall and Video Player, validates their input descriptors on connection and load, and persists their bindings as observation taps. The runner reads committed samples via `ObservationService` and retains at most one pool slot for each distinct observed output. It shares that lease across subscribers, follows the actual backing pool when it changes and closes retired mailboxes on reset or rerun. The status windows check format metadata and report the domain step, source sequence, unread replacements and admission skips. AV15 and AV16 own the rendering and image oracles.
+
+Native Release on Fedora 45 with GCC 16.2.1 built the full `build-tests` target. All 106 headless tests passed, including `s7spectral_sdk_smoke`. The 44 Studio tests outside the GUI-labeled suite produced 39 passes. The diagram test reproduced the AV00 soft-fill assertion. The older November 22 Studio binary reproduced the other four failures with the same diagnostics. Scope Run reported a missing plotted channel, both phase checks rejected the existing EulerIntegrator `dt` parameter, and Live Spectrum reported a failed live-only capture or an unexpected journal. The focused array test, viewer registry, run and Scope lifecycle tests passed.
+
+The array test round-trips observer bindings, rejects incompatible selections, runs the built-in grayscale and RGB frame sources, confirms scalar sequence capture alongside array delivery, and exercises fan-out, close/reopen and source rebinding. The delay smoke retains its initializer while admission follows the feedback pool. The Xvfb workflow produced `/tmp/s7-av14-gui-verified/video-player-delivery.png` and `/tmp/s7-av14-gui-verified/waterfall-delivery.png`. Both status screenshots were visually inspected. Three existing Observers dock workflows also passed under Xvfb.
+
+Clang 22.1.8 ASan and UBSan passed the vector delay, observation and array mailbox smokes with leak detection enabled.
+
+```bash
+cmake --build build-release --target build-tests --parallel 6
+CMAKE_BUILD_PARALLEL_LEVEL=3 ctest --test-dir build-release --output-on-failure -j 4 -E '^s7studio_|^qschematic'
+QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion ctest --test-dir build-release --output-on-failure -j 4 -LE gui -R '^s7studio_'
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av14-gui-verified --capture build-release/s7studio/s7studio_gui_capture --timeout 30 -- build-release/s7studio/s7studio_array_persistence_test
+python3 tools/run_gui_test.py --artifacts /tmp/s7-av14-observer-regressions --capture build-release/s7studio/s7studio_gui_capture --timeout 90 -- build-release/s7studio/s7studio_gui_workflows_test observersDefaultToFirstThreeAndRememberManualChoice observersDockSelectionLifecycleAndPersistence observersDockAllPresentationTypes
+cmake -S . -B /tmp/s7-av14-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DS7_BUILD_STUDIO=OFF -DCMAKE_CXX_COMPILER=/usr/bin/clang++-22 '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
+cmake --build /tmp/s7-av14-asan --target s7core_vector_delay_smoke s7observe_array_mailbox_smoke s7observe_smoke --parallel 2
+ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir /tmp/s7-av14-asan --output-on-failure -R '^(s7core_vector_delay_smoke|s7observe(_array_mailbox)?_smoke)$'
+```
+
+Resume with AV15a for the Waterfall row and frequency-axis mapping. AV16a can proceed independently from the same AV14 interfaces.
+
 ### AV15 — Waterfall viewer rendering (G4/W)
 
 **Depends:** AV11, AV13, AV14.

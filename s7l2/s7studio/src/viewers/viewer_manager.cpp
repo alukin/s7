@@ -79,6 +79,7 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     }
     emit viewerCreated(typeId, spec.instanceId, viewer);
     if (auto* live = dynamic_cast<LiveObservationViewer*>(viewer)) live->attachLiveSource(liveSources_.value(spec.instanceId));
+    else if (auto* array = dynamic_cast<ArrayObservationViewer*>(viewer)) bindArray(instances_[key], *array);
     else viewer->attachSource(source(), bindingsFor(instances_[key], source()));
     bindComparisons(instances_[key]);
     viewer->refreshSource();
@@ -181,6 +182,7 @@ void ViewerManager::bindViews(bool clear)
     for (const auto& instance : std::as_const(instances_)) {
         if (!instance.window) continue;
         if (dynamic_cast<LiveObservationViewer*>(instance.viewer)) continue;
+        if (dynamic_cast<ArrayObservationViewer*>(instance.viewer)) continue;
         if (instance.viewer->source() != source())
             instance.viewer->attachSource(source(), bindingsFor(instance, source()), clear);
         else instance.viewer->setBindings(bindingsFor(instance, source()));
@@ -201,7 +203,25 @@ void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScope
     externalSource_.reset();
     recordedTypes_.clear();
     presentLive({});
+    presentArrays({});
     bindViews(false);
+}
+
+void ViewerManager::bindArray(const Instance& instance, ArrayObservationViewer& viewer)
+{
+    const auto* type = registry_.find(instance.typeId);
+    const auto source = arraySources_.constFind(instance.spec.probeNames.value(0));
+    viewer.attachArraySource(type && source != arraySources_.cend() && source->kind == type->arrayKind
+        ? source->mailbox : nullptr);
+}
+
+void ViewerManager::presentArrays(observation::ArraySources sources)
+{
+    arraySources_ = std::move(sources);
+    for (const auto& instance : std::as_const(instances_)) {
+        if (instance.window)
+            if (auto* array = dynamic_cast<ArrayObservationViewer*>(instance.viewer)) bindArray(instance, *array);
+    }
 }
 
 void ViewerManager::presentLive(observation::LiveSources sources)
@@ -248,6 +268,7 @@ void ViewerManager::closeAll()
     externalSource_.reset();
     recordedTypes_.clear();
     liveSources_.clear();
+    arraySources_.clear();
     triggers_.clear();
     dropped_ = 0;
     ++generation_;

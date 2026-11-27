@@ -51,6 +51,7 @@ public:
     void present(std::shared_ptr<const observation::ObservationSource> source,
                  const std::function<QString(const QString&)>& observerType);
     void presentLive(observation::LiveSources sources);
+    void presentArrays(observation::ArraySources sources);
     bool setObserverTrigger(const QString& id, const observation::TriggerSettings& settings, QString* error = nullptr, bool updateViewer = true);
     [[nodiscard]] observation::TriggerSettings observerTrigger(const QString& id) const { return triggers_.value(id); }
     [[nodiscard]] std::shared_ptr<const observation::LiveAcquisition> liveSource(const QString& id) const { return liveSources_.value(id); }
@@ -85,11 +86,13 @@ private:
     QVector<InputBinding> bindingsFor(const Instance& instance,
         const std::shared_ptr<const observation::ObservationSource>& data) const;
     void bindComparisons(const Instance& instance);
+    void bindArray(const Instance& instance, ArrayObservationViewer& viewer);
     void bindViews(bool clear);
     observation::ObservationSession session_;
     std::shared_ptr<const observation::ObservationSource> externalSource_;
     QHash<QString, QString> recordedTypes_;
     observation::LiveSources liveSources_;
+    observation::ArraySources arraySources_;
     QHash<QString, observation::TriggerSettings> triggers_;
     const ViewerRegistry& registry_;
     QHash<QString, Instance> instances_;

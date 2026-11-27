@@ -145,6 +145,7 @@ add_library(s7studio_viewers STATIC
     src/instrument_controls.cpp src/instrument_controls.hpp
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
+    src/viewers/array_viewer.cpp
     src/viewers/viewer_registry.cpp
     src/viewers/viewer_registry.hpp
     src/viewers/viewer_manager.cpp
@@ -179,7 +180,7 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 target_include_directories(s7studio_viewers PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include ${PROJECT_SOURCE_DIR}/s7wavelet/include)
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
-    s7core
+    s7core s7observe
     s7studio_observation s7studio_results s7studio_analysis
     Qt6::Core
     Qt6::Gui
@@ -389,7 +390,7 @@ endforeach()
 
 # Diagram editing: connection rules, wire trees, routing, undo, file round trips.
 s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_test.cpp)
-target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram)
+target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers)
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
 
 s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)

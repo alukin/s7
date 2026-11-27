@@ -139,8 +139,6 @@ void check_feedback()
     auto budget = std::make_shared<ArrayMemoryBudget>(6 * shape.byte_size());
     ArrayPool initializer(shape, 1, 1, budget);
     ArrayPool feedback(shape, 3, 1, budget);
-    auto first_admission = initializer.make_retention(1, shape.byte_size());
-    auto later_admission = feedback.make_retention(1, shape.byte_size());
 
     Schema schema("vector_delay_feedback");
     schema.set_rate(Rate::from_hz(100));
@@ -149,14 +147,25 @@ void check_feedback()
     schema.connect("delay", 0, "increment", 0);
     schema.connect("increment", 0, "delay", 0);
     NodeRuntime runtime(Compiler::compile_experimental_arrays(schema));
+    ArrayPool::Retention admission;
+    const auto premature = runtime.admit_array_output("delay", 0, admission, 1, shape.byte_size());
+    require(runtime.array_output_descriptor("delay", 0) && *runtime.array_output_descriptor("delay", 0) == shape &&
+                !runtime.committed_array_step("delay", 0) && !premature && premature.error() == ArrayPoolError::InvalidLease,
+            "the descriptor must be available before publication and admission");
+    CommittedArraySample held_initializer{};
     for (std::uint64_t step = 1; step <= 8; ++step) {
         runtime.step();
-        const auto sample = runtime.try_retain_array_output("delay", 0, step == 1 ? first_admission : later_admission).value();
-        require(sample.domain_step == step &&
+        require(runtime.admit_array_output("delay", 0, admission, 1, shape.byte_size()).has_value(),
+                "admission did not follow the backing pool");
+        auto sample = runtime.try_retain_array_output("delay", 0, admission).value();
+        require(sample.domain_step == step && runtime.committed_array_step("delay", 0) == step &&
                     std::ranges::all_of(sample.value.lease.values<SignalType::F32>(),
                                         [step](float value) { return value == static_cast<float>(step + 2); }),
                 "feedback does not match the full-array recurrence");
+        if (step == 1) held_initializer = std::move(sample);
     }
+    require(held_initializer.value.lease.values<SignalType::F32>().front() == 3.0f,
+            "the retained initializer changed after admission moved to the feedback pool");
 
     Schema direct("invalid_array_cycle");
     direct.set_rate(Rate::from_hz(100));

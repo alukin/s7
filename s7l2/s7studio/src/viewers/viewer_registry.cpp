@@ -11,6 +11,7 @@
 #include "viewers/surface_window.hpp"
 #include "viewers/response_window.hpp"
 #include "viewers/time_frequency_window.hpp"
+#include "viewers/array_viewer.hpp"
 
 #include <utility>
 #include <s7/metadata_json.hpp>
@@ -54,7 +55,8 @@ void registerBuiltinViewers(ViewerRegistry& registry)
         type.documentation = metadata.at(type.typeId.toStdString());
         type.displayName = QString::fromStdString(type.documentation->display_name);
         type.description = QString::fromStdString(type.documentation->description);
-        type.createPresentation = [id = type.typeId](QWidget* parent) { return new ObserverPresentation(id, parent); };
+        if (type.arrayKind == diagram::ArrayObserverKind::None)
+            type.createPresentation = [id = type.typeId](QWidget* parent) { return new ObserverPresentation(id, parent); };
         registry.add(std::move(type));
     };
     add(ui::ScopeViewWindow::viewerType());
@@ -65,6 +67,8 @@ void registerBuiltinViewers(ViewerRegistry& registry)
     add(SurfaceWindow::viewerType(true));
     add(ResponseWindow::viewerType());
     add(TimeFrequencyWindow::viewerType());
+    add(arrayViewerType(diagram::ArrayObserverKind::Waterfall));
+    add(arrayViewerType(diagram::ArrayObserverKind::VideoPlayer));
 }
 
 } // namespace s7studio::viewers

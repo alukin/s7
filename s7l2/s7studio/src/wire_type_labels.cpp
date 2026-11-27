@@ -4,6 +4,7 @@
 #include "wire_type_labels.hpp"
 
 #include "diagram/diagram_scene.hpp"
+#include "diagram/element_ports.hpp"
 #include "diagram/net_model.hpp"
 #include "local_runtime_v2.hpp"
 
@@ -33,6 +34,7 @@ auto updateWireTypeLabels(DiagramScene& scene, QString* error) -> std::vector<Wi
     // element id -> output port types, from the resolved elements
     std::unordered_map<std::string, std::vector<QString>> outputTypes;
     std::unordered_map<std::string, std::vector<QString>> inputTypes;
+    std::unordered_map<std::string, std::vector<std::optional<s7::ArrayDescriptor>>> outputArrays;
     QString firstError;
     try {
         const auto schema = runtime::buildSchema(model.schemaJson("wire_types"));
@@ -58,6 +60,10 @@ auto updateWireTypeLabels(DiagramScene& scene, QString* error) -> std::vector<Wi
                             if (declared) shape = &*declared;
                         }
                         labels.push_back(label(port.type, shape));
+                        if (output) {
+                            auto& arrays = outputArrays[spec.id];
+                            arrays.emplace_back(shape ? std::optional{*shape} : std::nullopt);
+                        }
                     }
                     return labels;
                 };
@@ -74,18 +80,19 @@ auto updateWireTypeLabels(DiagramScene& scene, QString* error) -> std::vector<Wi
             }
             for (const auto& [id, ports] : flattened.nested_outputs) {
                 std::vector<QString> labels;
+                std::vector<std::optional<s7::ArrayDescriptor>> arrays;
                 labels.reserve(ports.size());
-                for (const auto& port : ports) labels.push_back(outputTypes.at(port).front());
+                for (const auto& port : ports) {
+                    labels.push_back(outputTypes.at(port).front());
+                    arrays.push_back(outputArrays.at(port).front());
+                }
                 outputTypes.emplace(id, std::move(labels));
+                outputArrays.emplace(id, std::move(arrays));
             }
         }
     } catch (const std::exception& ex) {
         firstError = QString::fromUtf8(ex.what());
     }
-    if (error) {
-        *error = firstError;
-    }
-
     auto typeOf = [&](const PortRef& port) {
         if (const auto it = outputTypes.find(port.element);
             it != outputTypes.end() && port.port >= 0 && static_cast<std::size_t>(port.port) < it->second.size()) {
@@ -120,6 +127,20 @@ auto updateWireTypeLabels(DiagramScene& scene, QString* error) -> std::vector<Wi
     for (const auto& [wire, problem] : model.problems()) {
         problems.emplace(wire, problem);
     }
+    for (const auto& connection : model.observationConnections()) {
+        const auto node = scene.elementNode(connection.to.element);
+        const auto source = outputArrays.find(connection.from.element);
+        const auto index = static_cast<std::size_t>(connection.from.port);
+        if (!node || source == outputArrays.end() || index >= source->second.size()) continue;
+        const auto kind = arrayObserverKind(node->element().type);
+        const auto& shape = source->second[index];
+        if (kind == ArrayObserverKind::None) continue;
+        if (const auto problem = arrayObserverPortProblem(kind, shape ? &*shape : nullptr); !problem.isEmpty()) {
+            problems.emplace(connection.wire, problem);
+            if (firstError.isEmpty()) firstError = QStringLiteral("%1 · %2").arg(node->title(), problem);
+        }
+    }
+    if (error) *error = firstError;
     for (const auto& wire : scene.signalWires()) {
         const auto problem = problems.find(wire.get());
         wire->setProblem(problem == problems.end() ? QString() : problem->second);

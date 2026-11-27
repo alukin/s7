@@ -83,6 +83,21 @@ views receive const handles plus explicit role/channel bindings. Closing or
 clearing a view does not erase recorded data. Preview loss is distinct from
 capture failure. A storage error fails the run and retains an incomplete prefix.
 
+Waterfall and Video Player subscribe to committed array outputs. Waterfall
+accepts rank-one F32 spectrum vectors with spectrum metadata. Video Player
+accepts compact U8 grayscale `[H,W]` and RGB `[H,W,3]` frames with pixel
+format metadata. Studio checks the descriptor when wiring the diagram and
+checks the metadata on delivery. The run uses the bindings from its starting
+diagram. Rewiring takes effect on the next run.
+
+Each subscription keeps one pending value. Viewers of the same output share
+its retained buffer. If the backing pool changes, the stepping thread obtains
+admission from the new pool. The current presentation adapters show the domain
+step, source sequence when present, unread replacements and admission skips.
+Closing a window leaves the run's mailbox available for reopening. Reset and
+rerun close the old mailboxes. Waterfall and Video Player rendering are tracked
+in AV15 and AV16 of the [array work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md).
+
 ## Components (`s7studio/src/viewers/`)
 
 | Component | Role |

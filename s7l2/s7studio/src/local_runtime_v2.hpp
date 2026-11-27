@@ -204,6 +204,7 @@ inline std::vector<std::string> collectSamples(const s7::Schema& schema, const s
     lines.reserve(schema.elements().size());
 
     for (const auto& element : schema.elements()) {
+        if (runtime.array_output_descriptor(element.id, 0)) continue;
         const auto sample = observation.sample_output(element.id, 0);
         std::ostringstream out;
         out << element.id << '[' << sample.port << "]=";

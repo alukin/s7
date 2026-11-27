@@ -260,6 +260,31 @@ DenseCpuArrayView ArrayPool::ReadLease::view() const &
     return DenseCpuArrayView(state_->descriptor, state_->bytes(slot_));
 }
 
+std::expected<void, ArrayPoolError> ArrayPool::ReadLease::admit(
+    Retention& admission, const std::size_t max_slots, const std::size_t max_bytes) const
+{
+    if (!state_) return std::unexpected(ArrayPoolError::InvalidLease);
+    if (admission.state_ && admission.state_->pool == state_) return {};
+    admission = Retention{};
+    const auto capacity = std::min(max_slots, max_bytes / state_->slot_bytes);
+    {
+        std::lock_guard lock(state_->mutex);
+        if (state_->closed) return std::unexpected(ArrayPoolError::Closed);
+        if (!capacity || capacity > state_->optional_limit - state_->admitted_optional_slots)
+            return std::unexpected(ArrayPoolError::Exhausted);
+    }
+    try {
+        admission = Retention(std::make_shared<RetentionState>(state_, capacity));
+    } catch (const std::length_error&) {
+        return std::unexpected(ArrayPoolError::Exhausted);
+    } catch (const std::logic_error&) {
+        return std::unexpected(ArrayPoolError::Closed);
+    } catch (const std::bad_alloc&) {
+        return std::unexpected(ArrayPoolError::Exhausted);
+    }
+    return {};
+}
+
 ArrayPool::Retention::Retention(std::shared_ptr<RetentionState> state) noexcept
     : state_(std::move(state)) {}
 
