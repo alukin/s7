@@ -4,7 +4,9 @@
 #include "diagram/diagram_scene.hpp"
 #include "diagram_document.hpp"
 #include "scene_serializer.hpp"
+#include "wire_type_labels.hpp"
 
+#include <s7/builtin_element_registry.hpp>
 #include <s7/schema_library.hpp>
 
 #include <QApplication>
@@ -116,12 +118,46 @@ void check_rejected_metadata()
         throw std::runtime_error("unsupported exposed port declaration opened successfully");
     }
 }
+
+void check_wiring()
+{
+    s7::register_builtin_elements(s7::ElementRegistry::instance());
+    DiagramScene scene;
+    const auto add = [&](const char* id, const char* type, object params, int x) {
+        ElementNode::Element element;
+        element.id = id;
+        element.type = type;
+        element.params = std::move(params);
+        return scene.addElement(std::move(element), QPointF(x, 0));
+    };
+    const auto source = add("vector", "VectorConstant", {{"values", array{1, 2, 3}}}, 0);
+    const auto wrong_size = add("wrong_size", "UnpackVector", {{"components", 2}}, 600);
+    const auto wrong_type = add("wrong_type", "UnpackVector", {{"components", 3}, {"type", "F64"}}, 900);
+    const auto target = add("unpack", "UnpackVector", {{"components", 3}}, 300);
+    const auto scope = add("scope", "Scope", {}, 1200);
+    const auto out = WireEnd::onPort(source, PortDirection::Output, 0);
+    const auto input = [](const auto& node) { return WireEnd::onPort(node, PortDirection::Input, 0); };
+    require(!scene.connectEnds(out, input(wrong_size)).isEmpty(), "Studio accepted mismatched vector lengths");
+    require(!scene.connectEnds(out, input(wrong_type)).isEmpty(), "Studio accepted mismatched vector numeric types");
+    require(!scene.connectEnds(out, input(scope)).isEmpty(), "Studio allowed an array into a scalar observer");
+    require(scene.connectEnds(out, input(target)).isEmpty(), "Studio rejected a matching vector");
+    QString error;
+    const auto labels = updateWireTypeLabels(scene, &error);
+    require(error.isEmpty() && labels.size() == 1 && labels.front().type == QStringLiteral("F32[3]"),
+            "Studio wire label did not show the configured vector type and shape");
+    require(target->inputs().front()->toolTip().contains(QStringLiteral("F32[3]")),
+            "Studio input tooltip did not show the configured vector shape");
+    static_cast<void>(add("unresolved", "UnavailableFixture", {}, 1500));
+    require(!scene.connectEnds(out, input(wrong_size)).isEmpty(),
+            "an unrelated unresolved element bypassed the vector shape check");
+}
 } // namespace
 
 int main(int argc, char** argv) try {
     QApplication application(argc, argv);
     check_save_open();
     check_rejected_metadata();
+    check_wiring();
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

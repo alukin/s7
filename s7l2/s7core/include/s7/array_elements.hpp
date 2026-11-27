@@ -145,10 +145,10 @@ public:
     }
 
 private:
-    static std::size_t checked_reserve(std::size_t slots)
+    static std::size_t checked_reserve(std::size_t slot_count)
     {
-        if (slots < 2) throw std::invalid_argument("PackVector requires at least two execution slots.");
-        return slots;
+        if (slot_count < 2) throw std::invalid_argument("PackVector requires at least two execution slots.");
+        return slot_count;
     }
 
     ArrayDescriptor descriptor_;

@@ -335,6 +335,8 @@ Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independ
 
 **Accept:** saved diagram round-trip with array wire label, type/shape error UI, registry discovery, attach/rebind lifecycle, invalid selection errors and scalar Studio regressions. Screenshots explicitly reviewed if GUI toolchain is available.
 
+**AV14a evidence:** The Qt Release persistence and wiring test passed. Studio shows the configured numeric type and shape on wires and port tooltips. It rejects incompatible array lengths and component types, including when an unrelated element is unresolved. Existing scalar observers reject array connections. The broader diagram test still reports the soft-fill assertion recorded in AV00. Viewer-specific format checks and delivery routing remain open.
+
 ### AV15 — Waterfall viewer rendering (G4/W)
 
 **Depends:** AV11, AV13, AV14.

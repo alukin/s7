@@ -34,13 +34,13 @@ public:
     }
 
 private:
-    static std::shared_ptr<s7::ArrayMemoryBudget> reserve(std::size_t length, std::size_t slots)
+    static std::shared_ptr<s7::ArrayMemoryBudget> reserve(std::size_t length, std::size_t slot_count)
     {
         constexpr auto sample_bytes = sizeof(s7::signal_storage_t<s7::SignalType::C32>);
-        if (slots < 2 || slots > std::numeric_limits<std::size_t>::max() / (length * sample_bytes)) {
+        if (slot_count < 2 || slot_count > std::numeric_limits<std::size_t>::max() / (length * sample_bytes)) {
             throw std::invalid_argument("VectorFFT requires a valid reservation for at least two execution slots.");
         }
-        return std::make_shared<s7::ArrayMemoryBudget>(sample_bytes * length * slots);
+        return std::make_shared<s7::ArrayMemoryBudget>(sample_bytes * length * slot_count);
     }
 
     Radix2Transform<float> transform_;

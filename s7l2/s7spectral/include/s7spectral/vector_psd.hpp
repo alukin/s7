@@ -88,12 +88,12 @@ public:
     }
 
 private:
-    static std::shared_ptr<s7::ArrayMemoryBudget> reserve(std::size_t length, std::size_t slots)
+    static std::shared_ptr<s7::ArrayMemoryBudget> reserve(std::size_t length, std::size_t slot_count)
     {
-        if (slots < 2 || slots >= std::numeric_limits<std::size_t>::max() / (length * sizeof(float))) {
+        if (slot_count < 2 || slot_count >= std::numeric_limits<std::size_t>::max() / (length * sizeof(float))) {
             throw std::invalid_argument("VectorPSD requires a valid reservation for at least two execution slots.");
         }
-        return std::make_shared<s7::ArrayMemoryBudget>(length * sizeof(float) * (slots + 1));
+        return std::make_shared<s7::ArrayMemoryBudget>(length * sizeof(float) * (slot_count + 1));
     }
 
     Radix2Transform<float> transform_;

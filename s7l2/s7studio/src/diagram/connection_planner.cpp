@@ -8,6 +8,7 @@
 #include "local_runtime_v2.hpp"
 
 #include <s7/type_inference.hpp>
+#include <s7/validation.hpp>
 
 #include <algorithm>
 #include <exception>
@@ -23,7 +24,9 @@ auto resolveError(const boost::json::object& schema) -> std::optional<QString>
 {
     try {
         const auto built = runtime::buildSchema(schema);
-        const auto resolved = s7::TypeResolver::resolve(built);
+        const auto flattened = s7::detail::flatten_schema(built, true);
+        if (!flattened.errors.empty()) return QString::fromStdString(flattened.errors.front());
+        const auto resolved = s7::TypeResolver::resolve(*flattened.schema);
         if (resolved.ok()) {
             return std::nullopt;
         }
@@ -31,6 +34,23 @@ auto resolveError(const boost::json::object& schema) -> std::optional<QString>
     } catch (const std::exception& ex) {
         return QString::fromUtf8(ex.what());
     }
+}
+
+bool declaresArrayPort(const ElementNode& node, int index, bool output)
+{
+    if (index < 0) return false;
+    const auto port = static_cast<std::size_t>(index);
+    const auto& element = node.element();
+    if (element.schema.is_object()) {
+        const auto* bindings = element.schema.as_object().if_contains(output ? "exposed_outputs" : "exposed_inputs");
+        return bindings && bindings->is_array() && port < bindings->as_array().size() &&
+               bindings->as_array()[port].is_object() && bindings->as_array()[port].as_object().contains("shape");
+    }
+    const auto* descriptor = s7::ElementRegistry::instance().find(element.type);
+    if (!descriptor) return false;
+    const auto& metadata = descriptor->metadata();
+    const auto& ports = output ? metadata.output_ports : metadata.input_ports;
+    return port < ports.size() && ports[port].array.has_value();
 }
 
 } // namespace
@@ -91,17 +111,36 @@ auto ConnectionPlanner::typeProblem(const WireEnd& driver, const WireEnd& input)
         return {};
     }
     if (isObserverElementType(to->element().type)) {
-        return {}; // observation inputs accept any signal type
+        if (declaresArrayPort(*from, driver.index, true)) {
+            return QStringLiteral("This observer requires a scalar output.");
+        }
+        return {};
     }
     auto schema = schema_();
+    boost::json::object connection{
+        {"from_element", from->id()}, {"from_port", driver.index}, {"to_element", to->id()}, {"to_port", input.index}};
+    if (declaresArrayPort(*from, driver.index, true) || declaresArrayPort(*to, input.index, false)) {
+        boost::json::array endpoints;
+        for (const auto& element : schema.at("elements").as_array()) {
+            const std::string_view id = element.as_object().at("id").as_string();
+            if (id == from->id() || id == to->id()) endpoints.push_back(element);
+        }
+        // Fixed array descriptors can be checked even when another element in
+        // the diagram has an unresolved type or an unavailable plugin.
+        const boost::json::object trial{{"elements", std::move(endpoints)},
+                                        {"connections", boost::json::array{connection}}};
+        if (const auto error = resolveError(trial)) {
+            return QStringLiteral("Types do not match: %1").arg(*error);
+        }
+        return {};
+    }
     if (!typesResolve_) {
         typesResolve_ = !resolveError(schema).has_value();
     }
     if (!*typesResolve_) {
         return {};
     }
-    schema["connections"].as_array().push_back(boost::json::object{
-        {"from_element", from->id()}, {"from_port", driver.index}, {"to_element", to->id()}, {"to_port", input.index}});
+    schema["connections"].as_array().push_back(std::move(connection));
     if (const auto error = resolveError(schema)) {
         return QStringLiteral("Types do not match: %1").arg(*error);
     }
