@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 # Observation viewers: Qt Graphs (2D) and Qt Quick 3D in QQuickWidget. 6.9 is
 # the first release with GraphsView.plotArea, which cursor-anchored zooming
 # needs (src/viewers/qml/LinePlot.qml).
@@ -146,6 +146,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
     src/viewers/array_viewer.cpp
+    src/viewers/array_print.cpp
     src/viewers/video_frame.cpp
     src/viewers/waterfall_history.cpp
     src/viewers/waterfall_view.cpp
@@ -188,6 +189,7 @@ target_link_libraries(s7studio_viewers PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::PrintSupport
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickWidgets
@@ -395,9 +397,10 @@ endforeach()
 s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_test.cpp)
 target_sources(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp)
 target_include_directories(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
-target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests")
+target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
 target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers)
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
+set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)
 target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)

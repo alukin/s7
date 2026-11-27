@@ -6,6 +6,7 @@
 #include "diagram_document.hpp"
 #include "local_schema_runner.hpp"
 #include "scene_serializer.hpp"
+#include "viewers/array_print.hpp"
 #include "viewers/video_frame.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
@@ -16,20 +17,28 @@
 #include <s7/plugin_loader.hpp>
 #include <s7/schema_library.hpp>
 
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QPainter>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
+#include <QPrinter>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QTimer>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -43,6 +52,62 @@ using boost::json::value;
 void require(bool condition, std::string_view reason)
 {
     if (!condition) throw std::runtime_error(std::string(reason));
+}
+
+void saveViewerPdf(QWidget* viewer, const QString& artifact, const std::function<void()>& onDialog = {})
+{
+    auto* action = viewer->findChild<QAction*>(QStringLiteral("arrayViewer.savePdf"));
+    require(action, "viewer has no PDF action");
+    QTemporaryDir temporary;
+    require(temporary.isValid(), "could not create a PDF test directory");
+    const auto artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
+    const auto path = QDir(artifacts.isEmpty() ? temporary.path() : artifacts).filePath(artifact);
+    const auto runDialog = [&](bool accepted) {
+        bool handled = false;
+        QTimer timer;
+        timer.setInterval(25);
+        QObject::connect(&timer, &QTimer::timeout, [&] {
+            auto* dialog = qobject_cast<QFileDialog*>(QApplication::activeModalWidget());
+            if (!dialog || !dialog->isVisible()) return;
+            timer.stop();
+            auto* fileName = dialog->findChild<QLineEdit*>(QStringLiteral("fileNameEdit"));
+            handled = !accepted || fileName;
+            if (!accepted || !fileName) {
+                dialog->reject();
+                return;
+            }
+            fileName->setText(path);
+            if (onDialog) onDialog();
+            QTimer::singleShot(0, dialog, [dialog] { QMetaObject::invokeMethod(dialog, "accept"); });
+        });
+        timer.start();
+        action->trigger();
+        require(handled, "viewer PDF dialog did not open");
+    };
+
+    QFile output(path);
+    if (output.exists()) require(output.remove(), "could not remove the old PDF test artifact");
+    runDialog(false);
+    require(!output.exists(), "cancelled PDF dialog published a file");
+    runDialog(true);
+    require(output.open(QIODevice::ReadOnly) && output.read(5) == "%PDF-" && output.size() > 1000,
+            "viewer PDF action did not write a complete PDF");
+}
+
+void checkPdfError()
+{
+    QTemporaryDir temporary;
+    require(temporary.isValid(), "could not create a PDF error test directory");
+    const s7studio::viewers::ArrayPrintSnapshot page{QStringLiteral("test"), {}, {},
+        [](QPainter& painter, const QRect& bounds) { painter.fillRect(bounds, Qt::black); }};
+    require(!s7studio::viewers::saveArrayPdf(page, QDir(temporary.path()).filePath("missing/test.pdf")).isEmpty(),
+            "PDF export reported success for a missing destination directory");
+    QPrinter printer;
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    const auto path = QDir(temporary.path()).filePath("printer.pdf");
+    printer.setOutputFileName(path);
+    require(s7studio::viewers::printArraySnapshot(page, printer).isEmpty() && QFileInfo(path).size() > 1000,
+            "Qt printer backend could not write the test page");
 }
 
 value fixture()
@@ -345,6 +410,12 @@ void check_spectrum_routing()
             "Changing the palette did not recolor retained rows");
     minimum->setValue(-50);
     require(hasColor(plot->grab().toImage(), qRgb(153, 153, 153)), "Changing the range did not recolor retained rows");
+    minimum->setValue(-100);
+    palette->setCurrentIndex(0);
+    saveViewerPdf(waterfall->widget(), QStringLiteral("waterfall.pdf"), [&] {
+        offer(6);
+        manager.refreshViews();
+    });
     const QString artifacts = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
     if (!artifacts.isEmpty()) {
         minimum->setValue(-100);
@@ -357,7 +428,8 @@ void check_spectrum_routing()
 void check_saved_views(const QString& fileName, bool spectral)
 {
     using namespace s7studio;
-    QFile file(QDir(QStringLiteral(S7_ARRAY_VIEW_FIXTURES)).filePath(fileName));
+    const QDir examples(qEnvironmentVariable("S7_ARRAY_TEST_EXAMPLES_DIR", QStringLiteral(S7_ARRAY_VIEW_EXAMPLES)));
+    QFile file(examples.filePath(fileName));
     require(file.open(QIODevice::ReadOnly), "cannot open saved observer fixture");
     const auto bytes = file.readAll();
     const auto document = DiagramDocument::fromJson(boost::json::parse(
@@ -399,8 +471,10 @@ void check_saved_views(const QString& fileName, bool spectral)
         const auto mailbox = runner.arraySources().value(name).mailbox;
         const auto sample = mailbox->latest();
         require(sample.has_value(), "latest sample was not available for the pixel oracle");
-        if (!artifacts.isEmpty())
-            require(widget->grab().save(QDir(artifacts).filePath(fileName + "-" + id + ".png")), "cannot save viewer capture");
+        if (!artifacts.isEmpty()) {
+            const auto name = QFileInfo(fileName).fileName() + "-" + id + ".png";
+            require(widget->grab().save(QDir(artifacts).filePath(name)), "cannot save viewer capture");
+        }
         if (spectral) {
             require(sample->value.spectrum && sample->value.spectrum->sample_rate == s7::Rate{1600, 1},
                     "saved PSD graph lost the independent physical frequency axis");
@@ -432,6 +506,8 @@ void check_saved_views(const QString& fileName, bool spectral)
             const auto fitted = viewers::fitVideoFrame(frame.image.size(), actual.rect());
             require(actual.pixel(fitted.center()) == frame.image.pixel(2, 1) && actual.pixel(0, 0) == qRgb(0, 0, 0),
                     "Video Player pixels or aspect-fit bars did not render");
+            saveViewerPdf(widget, QStringLiteral("video-") + id + QStringLiteral(".pdf"));
+            require(runner.completedTicks() == 6, "printing advanced the model");
             auto* pause = widget->findChild<QPushButton*>("arrayViewer.pause");
             require(pause, "Video Player has no presentation pause");
             pause->click();
@@ -444,6 +520,48 @@ void check_saved_views(const QString& fileName, bool spectral)
         }
     }
 }
+void checkSavedReplay(const QString& diagramPath)
+{
+    using namespace s7studio;
+    QFile file(diagramPath);
+    require(file.open(QIODevice::ReadOnly), "cannot open saved MJPEG replay diagram");
+    const auto bytes = file.readAll();
+    const auto document = DiagramDocument::fromJson(boost::json::parse(
+        std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size()))));
+    DiagramScene scene;
+    SceneSerializer{}.deserialize(document, scene);
+    QString typeError;
+    static_cast<void>(updateWireTypeLabels(scene, &typeError));
+    require(typeError.isEmpty(), typeError.toStdString());
+    const NetModel graph(scene);
+    const auto connections = graph.observationConnections();
+    require(connections.size() == 1 && connections.front().from.element == "decode" &&
+            connections.front().to.element == "player", "saved replay lost the Video Player connection");
+
+    LocalSchemaRunner runner;
+    runner.run(document.runtimeSchema, document.dt, 5,
+        {{"player/frame", "decode", 0, {}, false, {}, ArrayObserverKind::VideoPlayer}});
+    QElapsedTimer timeout;
+    timeout.start();
+    while (runner.isRunning() && timeout.elapsed() < 5000) QThread::msleep(1);
+    require(runner.state() == RunState::Completed && runner.completedTicks() == 5,
+            "saved MJPEG replay did not complete five frames");
+
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    manager.presentArrays(runner.arraySources());
+    auto* viewer = manager.openObserver(QStringLiteral("VideoPlayer"), QStringLiteral("player"));
+    require(viewer, "saved replay did not open Video Player");
+    const auto* status = viewer->widget()->findChild<QLabel*>("arrayViewer.status");
+    require(status && status->text().contains("Committed domain step 5"), "Video Player did not receive the last frame");
+    const auto sample = runner.arraySources().value("player/frame").mailbox->latest();
+    require(sample.has_value(), "saved replay did not publish a frame");
+    const auto frame = viewers::makeVideoFrame(*sample);
+    require(frame.image.size() == QSize(65, 33) && frame.sourceStride == 65 &&
+            frame.timing == s7::ArrayMediaTiming{s7::MediaPresentationTime{4, {25, 1}}, false},
+            "Studio lost decoded geometry, stride or replay timing");
+    saveViewerPdf(viewer->widget(), QStringLiteral("video-replay.pdf"));
+}
+
 } // namespace
 
 int main(int argc, char** argv) try {
@@ -453,11 +571,17 @@ int main(int argc, char** argv) try {
     check_wiring();
     check_delivery();
     check_spectrum_routing();
-    check_saved_views(QStringLiteral("video_patterns.s7diagram"), false);
+    checkPdfError();
+    check_saved_views(QStringLiteral("video/video_patterns.s7diagram"), false);
     if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_SPECTRAL_PLUGIN"); !plugin.isEmpty()) {
         s7::PluginLoader loader;
         require(loader.load_plugin(plugin.toStdString(), s7::ElementRegistry::instance()), "cannot load spectral test plugin");
-        check_saved_views(QStringLiteral("waterfall_psd.s7diagram"), true);
+        check_saved_views(QStringLiteral("time_frequency/waterfall_psd.s7diagram"), true);
+    }
+    if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_VIDEO_PLUGIN"); !plugin.isEmpty()) {
+        s7::PluginLoader loader;
+        require(loader.load_plugin(plugin.toStdString(), s7::ElementRegistry::instance()), "cannot load video test plugin");
+        checkSavedReplay(qEnvironmentVariable("S7_ARRAY_TEST_REPLAY_DIAGRAM"));
     }
     return 0;
 } catch (const std::exception& error) {

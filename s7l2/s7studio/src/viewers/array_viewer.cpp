@@ -5,9 +5,16 @@
 #include "viewers/video_frame.hpp"
 #include "viewers/waterfall_view.hpp"
 
+#include <QFileDialog>
 #include <QLabel>
+#include <QMenu>
+#include <QMessageBox>
 #include <QPainter>
+#include <QPointer>
+#include <QPrintDialog>
+#include <QPrinter>
 #include <QPushButton>
+#include <QScopedValueRollback>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -34,6 +41,37 @@ public:
     {
         frame_.reset();
         update();
+    }
+
+    std::optional<ArrayPrintSnapshot> printSnapshot() const
+    {
+        if (!frame_) return std::nullopt;
+        const auto& frame = *frame_;
+        ArrayPrintSnapshot page;
+        page.details = {
+            QStringLiteral("Committed domain step %1 · Domain rate %2")
+                .arg(frame.domainStep).arg(QString::fromStdString(frame.domainRate.to_string())),
+            QStringLiteral("%1 × %2 pixels · %3 · Source row stride %4 bytes")
+                .arg(frame.image.width()).arg(frame.image.height())
+                .arg(frame.format == s7::ImagePixelFormat::Gray8 ? QStringLiteral("Gray8") : QStringLiteral("RGB8"))
+                .arg(frame.sourceStride)
+        };
+        if (frame.origin) {
+            page.details.append(QStringLiteral("Source %1 / epoch %2 / sequence %3")
+                .arg(frame.origin->source_id).arg(frame.origin->epoch).arg(frame.origin->sequence));
+        }
+        if (frame.timing && frame.timing->presentation_time) {
+            const auto& pts = *frame.timing->presentation_time;
+            page.details.append(QStringLiteral("Presentation time %1 ticks at %2/%3 ticks/s")
+                .arg(pts.ticks).arg(pts.ticks_per_second.numerator).arg(pts.ticks_per_second.denominator));
+        }
+        if (frame.timing && frame.timing->discontinuity_before) {
+            page.details.append(QStringLiteral("Media discontinuity before this frame"));
+        }
+        page.draw = [image = frame.image](QPainter& painter, const QRect& bounds) {
+            painter.drawImage(fitVideoFrame(image.size(), bounds), image);
+        };
+        return page;
     }
 
 protected:
@@ -75,6 +113,14 @@ public:
         pause_->setText(QStringLiteral("Pause display"));
         pause_->setCheckable(true);
         footer->addWidget(pause_);
+        auto* print = new QPushButton(QStringLiteral("Print…"), this);
+        print->setObjectName(QStringLiteral("arrayViewer.print"));
+        auto* printMenu = new QMenu(print);
+        auto* pdf = printMenu->addAction(QStringLiteral("Save as PDF…"), this, [this] { printDisplayed(true); });
+        pdf->setObjectName(QStringLiteral("arrayViewer.savePdf"));
+        printMenu->addAction(QStringLiteral("Print to printer…"), this, [this] { printDisplayed(false); });
+        print->setMenu(printMenu);
+        footer->addWidget(print);
         layout->addLayout(footer);
         connect(pause_, &QPushButton::toggled, this, [this](bool paused) {
             pause_->setText(paused ? QStringLiteral("Resume display") : QStringLiteral("Pause display"));
@@ -131,6 +177,40 @@ public:
 
 private:
     void appendObservedSample(const ObservedSample&) override {}
+
+    void printDisplayed(bool toPdf)
+    {
+        // Viewer images already own their pixels. Pin at most one extra display
+        // snapshot across nested dialogs without retaining a graph buffer.
+        static bool printInProgress = false;
+        if (printInProgress) return;
+        const QScopedValueRollback guard(printInProgress, true);
+        auto snapshot = video_ ? video_->printSnapshot() : waterfall_->printSnapshot();
+        if (!snapshot) {
+            QMessageBox::information(this, QStringLiteral("Print viewer"),
+                QStringLiteral("A committed frame or spectrum must be displayed first."));
+            return;
+        }
+
+        snapshot->title = windowTitle();
+        const QPointer<QWidget> owner(this);
+        QString error;
+        if (toPdf) {
+            auto path = QFileDialog::getSaveFileName(this, QStringLiteral("Save viewer as PDF"), {},
+                QStringLiteral("PDF files (*.pdf)"), nullptr, QFileDialog::DontUseNativeDialog);
+            if (!owner || path.isEmpty()) return;
+            if (!path.endsWith(QStringLiteral(".pdf"), Qt::CaseInsensitive)) path += QStringLiteral(".pdf");
+            error = saveArrayPdf(*snapshot, path);
+        } else {
+            QPrinter printer(QPrinter::HighResolution);
+            QPrintDialog dialog(&printer);
+            dialog.setWindowTitle(QStringLiteral("Print viewer"));
+            dialog.setOptions(QAbstractPrintDialog::PrintCollateCopies);
+            if (dialog.exec() != QDialog::Accepted || !owner) return;
+            error = printArraySnapshot(*snapshot, printer);
+        }
+        if (owner && !error.isEmpty()) QMessageBox::critical(owner, QStringLiteral("Print viewer"), error);
+    }
 
     QLabel* status_;
     QPushButton* pause_;

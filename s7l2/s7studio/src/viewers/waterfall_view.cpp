@@ -31,19 +31,13 @@ public:
         update();
     }
 
-protected:
-    void paintEvent(QPaintEvent*) override
+    const WaterfallSnapshot& snapshot() const { return snapshot_; }
+
+    static void draw(QPainter& painter, const QRect& bounds, const WaterfallSnapshot& snapshot)
     {
-        QPainter painter(this);
-        painter.fillRect(rect(), palette().base());
-        painter.setPen(palette().text().color());
-        if (!snapshot_.axes) {
-            painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("Waiting for spectrum rows"));
-            return;
-        }
-        const auto& axes = *snapshot_.axes;
-        const QRect raster = rect().adjusted(90, 20, -97, -54);
-        painter.drawImage(raster, snapshot_.image);
+        const auto& axes = *snapshot.axes;
+        const QRect raster = bounds.adjusted(90, 20, -97, -54);
+        painter.drawImage(raster, snapshot.image);
         painter.drawRect(raster.adjusted(0, 0, 1, 1));
         const auto number = [](double value) { return QString::number(value, 'g', 5); };
         const auto label = [&](int bin) {
@@ -65,7 +59,7 @@ protected:
         painter.drawText(QRect(raster.x(), raster.bottom() + 30, raster.width(), 20), Qt::AlignCenter,
                          axes.physicalRate ? QStringLiteral("Frequency (Hz)") : QStringLiteral("Signed DFT bin"));
 
-        const auto& lines = snapshot_.lines;
+        const auto& lines = snapshot.lines;
         const auto first = std::ranges::find_if(lines, [](const auto& line) { return line.has_value(); });
         const auto firstIndex = static_cast<int>(first - lines.begin());
         const auto lastIndex = static_cast<int>(lines.size()) - 1;
@@ -86,7 +80,7 @@ protected:
         painter.drawText(QRect(-raster.height() / 2, -10, raster.height(), 20), Qt::AlignCenter, QStringLiteral("Model time (s)"));
         painter.restore();
 
-        const auto& scale = snapshot_.scale;
+        const auto& scale = snapshot.scale;
         const QRect legend(raster.right() + 14, raster.top(), 12, raster.height());
         QLinearGradient gradient(legend.bottomLeft(), legend.topLeft());
         for (const double position : {0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0})
@@ -95,6 +89,19 @@ protected:
         painter.drawText(QRect(legend.right() + 5, legend.top() - 8, 58, 20), Qt::AlignVCenter, number(scale.maximumDb));
         painter.drawText(QRect(legend.right() + 5, legend.bottom() - 10, 58, 20), Qt::AlignVCenter, number(scale.minimumDb));
         painter.drawText(QRect(legend.right() + 5, legend.center().y() - 10, 50, 20), Qt::AlignVCenter, QStringLiteral("dB"));
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.fillRect(rect(), palette().base());
+        painter.setPen(palette().text().color());
+        if (snapshot_.image.isNull()) {
+            painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("Waiting for spectrum rows"));
+            return;
+        }
+        draw(painter, rect(), snapshot_);
     }
 
 private:
@@ -152,6 +159,54 @@ void WaterfallView::clear()
 {
     history_.clear();
     plot_->setSnapshot({});
+}
+
+std::optional<ArrayPrintSnapshot> WaterfallView::printSnapshot() const
+{
+    const auto& snapshot = plot_->snapshot();
+    if (snapshot.image.isNull() || !snapshot.axes) return std::nullopt;
+    const auto& axes = *snapshot.axes;
+    const auto first = std::ranges::find_if(snapshot.lines, [](const auto& row) { return row.has_value(); });
+    const auto& scale = snapshot.scale;
+    ArrayPrintSnapshot page;
+    page.details = {
+        QStringLiteral("Domain steps %1–%2 · %3 bins · Domain rate %4")
+            .arg((*first)->domainStep).arg(snapshot.lines.back()->domainStep).arg(axes.bins)
+            .arg(QString::fromStdString(axes.domainRate.to_string())),
+        axes.physicalRate ? QStringLiteral("Physical sample rate %1")
+            .arg(QString::fromStdString(axes.physicalRate->to_string()))
+            : QStringLiteral("Physical sample rate unknown"),
+        QStringLiteral("%1 to %2 dB re %3 %4 · %5 palette")
+            .arg(scale.minimumDb).arg(scale.maximumDb).arg(scale.reference)
+            .arg(axes.units == s7::SpectrumUnits::PowerPerHz ? QStringLiteral("power/Hz") : QStringLiteral("power/bin"))
+            .arg(scale.palette == WaterfallPalette::Heat ? QStringLiteral("Heat") : QStringLiteral("Grayscale")),
+        QStringLiteral("Blue stripes mark gaps. Row positions and source identity appear on the following pages.")
+    };
+    for (const auto& row : snapshot.lines) {
+        if (!row) continue;
+        auto line = QStringLiteral("Step %1").arg(row->domainStep);
+        if (row->origin) {
+            line += QStringLiteral(" · Source %1 / epoch %2 / sequence %3")
+                .arg(row->origin->source_id).arg(row->origin->epoch).arg(row->origin->sequence);
+        }
+        page.rows.append(line);
+        if (row->skippedDomainSteps || row->sourceDiscontinuity) {
+            page.rows.append(QStringLiteral("     Gap before row · Skipped steps %1 · Source discontinuity %2")
+                .arg(row->skippedDomainSteps).arg(row->sourceDiscontinuity ? QStringLiteral("yes") : QStringLiteral("no")));
+        }
+        if (row->sampleWindow) {
+            const auto number = [](std::optional<std::uint64_t> value) {
+                return value ? QString::number(*value) : QStringLiteral("unknown");
+            };
+            page.rows.append(QStringLiteral("     First sample %1 · Valid samples %2 · Missing samples %3")
+                .arg(number(row->sampleWindow->first_sample), number(row->sampleWindow->valid_sample_count),
+                     row->sampleWindow->missing_samples ? QStringLiteral("yes") : QStringLiteral("no")));
+        }
+    }
+    page.draw = [snapshot](QPainter& painter, const QRect& bounds) {
+        Plot::draw(painter, bounds, snapshot);
+    };
+    return page;
 }
 
 void WaterfallView::updateScale()

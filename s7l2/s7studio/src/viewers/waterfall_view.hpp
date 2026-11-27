@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "viewers/array_print.hpp"
 #include "viewers/waterfall_history.hpp"
 
 #include <QWidget>
@@ -18,6 +19,7 @@ public:
     explicit WaterfallView(QWidget* parent);
     [[nodiscard]] QString present(const s7::CommittedArraySample& sample);
     void clear();
+    [[nodiscard]] std::optional<ArrayPrintSnapshot> printSnapshot() const;
 
 private:
     class Plot;

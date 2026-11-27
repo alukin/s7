@@ -111,6 +111,17 @@ while the producer advances. Its status shows the frame dimensions and Gray8
 or RGB8 format. The saved test diagrams exercise the renderer and frame
 adapter. [Array work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md)
 
+Choose **Print…** in Waterfall or Video Player to save a PDF or select a
+printer. The viewer captures its displayed snapshot before opening the
+dialog. You can use **Pause display** to select a particular frame before
+printing. Printing leaves the model running and retains a single owned
+viewer snapshot across both viewer types.
+
+The Waterfall PDF includes its axes, power scale and a row-by-row record
+of steps, source identities and gaps. The Video Player PDF preserves the
+frame's aspect ratio and includes pixel format, geometry, source row stride
+and presentation time when the source supplies one.
+
 ## Components (`s7studio/src/viewers/`)
 
 | Component | Role |

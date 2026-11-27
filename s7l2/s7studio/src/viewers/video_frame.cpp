@@ -36,7 +36,7 @@ VideoFrame makeVideoFrame(const s7::CommittedArraySample& sample)
         std::memcpy(line, row.data(), row.size());
         std::memset(line + row.size(), 0, static_cast<std::size_t>(image.bytesPerLine()) - row.size());
     }
-    return {std::move(image), pixels, sample.domain_step, sample.value.origin};
+    return {std::move(image), pixels, sample.domain_step, sample.value.origin, sample.value.media_timing, sample.rate, stride};
 }
 
 QRect fitVideoFrame(QSize image, QRect viewport)

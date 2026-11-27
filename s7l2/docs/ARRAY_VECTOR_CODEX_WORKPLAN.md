@@ -386,7 +386,7 @@ build-release/s7runtime/s7runtime --schema s7runtime/examples/schema_vector_psd.
 
 AV15b connects the history to the Waterfall window and qualifies the rendered axes, controls and saved observer diagram. AV16a can proceed independently from AV14.
 
-**AV15b checkpoint (2026-11-27, base `979a6d9`).** The live Waterfall renders its frequency axis, committed model-time ticks, dB legend and gap stripes. The user can edit the dB range, power reference and palette for the open window. Display pause leaves model execution and mailbox admission active. The rendered raster combines adjacent bins by peak power beyond 1024 columns. The [saved PSD fixture](../s7studio/tests/waterfall_psd.s7diagram) executes the installed plugin's Hann-window FFT periodogram and routes the whole result to Waterfall. The test checks its DC and Nyquist power, a physical rate independent of graph cadence, rendered colors, pause/resume and range/palette changes. Xvfb captures of the real PSD path and the deterministic gap fixture were inspected.
+**AV15b checkpoint (2026-11-27, base `979a6d9`).** The live Waterfall renders its frequency axis, committed model-time ticks, dB legend and gap stripes. The user can edit the dB range, power reference and palette for the open window. Display pause leaves model execution and mailbox admission active. The rendered raster combines adjacent bins by peak power beyond 1024 columns. The [saved PSD fixture](../examples/time_frequency/waterfall_psd.s7diagram) executes the installed plugin's Hann-window FFT periodogram and routes the whole result to Waterfall. The test checks its DC and Nyquist power, a physical rate independent of graph cadence, rendered colors, pause/resume and range/palette changes. Xvfb captures of the real PSD path and the deterministic gap fixture were inspected.
 
 ### AV16 — Basic Video Player viewer rendering (G4/V)
 
@@ -396,7 +396,7 @@ AV15b connects the history to the Waterfall window and qualifies the rendered ax
 
 **Accept:** checkerboard/moving-bar saved diagram; pixel exactness (including tested stride), aspect/fit, pause/resume and late frames, same graph outputs with/without viewer, close/reopen/rebind, unsupported format/error, memory bound. Check actual rendered image screenshots, not only widget creation.
 
-**AV16a/b checkpoint (2026-11-27).** The Video Player owns one displayed image with a 32 MiB limit and fits it to the window at the original aspect ratio. The [saved frame fixture](../s7studio/tests/video_patterns.s7diagram) supplies compact odd-width Gray8 and RGB8 frames. The test compares every pixel, verifies Qt row padding, checks the rendered letterbox and rejects inconsistent pixel metadata. It also verifies close/reopen, rebind and frame progression in a continuous run during display pause. Both rendered frames were inspected under Xvfb.
+**AV16a/b checkpoint (2026-11-27).** The Video Player owns one displayed image with a 32 MiB limit and fits it to the window at the original aspect ratio. The [saved frame fixture](../examples/video/video_patterns.s7diagram) supplies compact odd-width Gray8 and RGB8 frames. The test compares every pixel, verifies Qt row padding, checks the rendered letterbox and rejects inconsistent pixel metadata. It also verifies close/reopen, rebind and frame progression in a continuous run during display pause. Both rendered frames were inspected under Xvfb.
 
 Seven focused Release tests passed on Fedora 45 with GCC 16.2.1. The optional Xvfb spectral case loaded the installed-SDK plugin and ran the saved diagram. The checked-in diagrams passed structural validation.
 
@@ -416,6 +416,10 @@ AV17 covers printing and installation. The separate codec-element work needs a r
 **Scope:** G4/P P08 and P09 coherent immutable snapshot printing to PDF/printer, including correct Waterfall axes/legend and Video Player pixel/frame identity. Add viewer help, examples and shipping resources to supported installed packages; preserve existing printing cases. A platform without a printer still supports PDF.
 
 **Accept:** P08/P09 tests plus existing P01–P07, source SHA, screenshot or PDF visual inspection, canceled/error print, no step advancement from printing, proper installed/relocated viewer registry discovery. Do not claim real printer evidence from CI or Wine.
+
+**AV17 checkpoint (2026-11-27).** Waterfall and Video Player offer PDF export and printer output from one retained display snapshot. The PDF test checks cancellation, a failed destination, a newer spectrum arriving during the save dialog and unchanged model progress. The Qt printer path was exercised using its PDF backend. On Fedora with Qt 6.11.2, Poppler rendered the pages and verified the Waterfall gap stripe and scale, the grayscale/RGB pattern pixels and the replay frame's source stride and presentation time. The installed SDK built both optional plugins. The relocated Studio discovered them, and the Studio array test loaded the installed examples and ran the five-frame replay through Video Player.
+
+Run `ctest --test-dir build-release -R 's7studio_(array_persistence|waterfall_history|viewers)|s7spectral_sdk_smoke' --output-on-failure` and the three standalone `s7video` CTest cases. The array test accepts `S7_ARRAY_TEST_EXAMPLES_DIR`, `S7_ARRAY_TEST_SPECTRAL_PLUGIN`, `S7_ARRAY_TEST_VIDEO_PLUGIN` and `S7_ARRAY_TEST_REPLAY_DIAGRAM` for installed-prefix verification. Launch it from the directory containing the five-frame recording. Set `S7_GUI_ARTIFACT_DIR` to keep the PDFs and screenshots. Physical printers and non-Fedora package profiles still need qualification. P01–P07 remain open in the [printing matrix](STUDIO_PRINTING_0.2.0.md).
 
 ### AV18 — Final dedicated array qualification / release evidence
 
