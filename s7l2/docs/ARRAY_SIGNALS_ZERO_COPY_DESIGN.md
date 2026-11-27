@@ -1,6 +1,6 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
-**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 remains open.**
+**Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 defines the initial FFT and PSD.**
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
@@ -191,7 +191,14 @@ A lease keeps its backing pool when forwarded. A Delay output may first point to
 
 AV07b needs a fixed-size optional origin carrying a run-scoped source ID, continuity epoch and sequence. A producer must change epoch before reusing sequence numbers for that source. Test forwarding of different source occurrences backed by the same buffer and retention across the initializer-to-upstream pool switch. AV11 and AV12 define the representations and producer rules for sample intervals, sample rates, clocks and presentation timestamps before using them.
 
-Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
+### D5 — Vector FFT and PSD
+
+**Accepted.** Use the portable radix-2 transform from `s7spectral/include/s7spectral/analysis.hpp` as the baseline. Extend it to native `C32` and retain its current `C64` analysis callers. Keep the vector FFT in the out-of-tree spectral plugin. Qualify the installed SDK and package with their existing dependencies. Evaluate FFTW as a possible backend if representative benchmarks show a material benefit.
+
+- **FFT.** Accept fixed power-of-two lengths in the bounded range supported by the transform. Publish all N bins in standard DFT order. The forward transform uses the negative exponent with no scale, and the inverse uses the positive exponent with scale `1/N`. Prepare twiddles and admit output storage before stepping. Initialize an unpublished output buffer from the immutable input once and transform it in place. Account for that initialization separately from wire copies.
+- **PSD.** For complex IQ, use the two-sided periodogram with a periodic Hann window. With known physical sample rate `Fs`, use `|X[k]|² / (Fs × sum(w²))` in squared input units per Hz. An explicit power-per-bin mode uses `|X[k]|² / (N × sum(w²))`. A source with unknown rate has no physical Hz axis. Preserve the D6 source interval and identify window, units and bin ordering in the result. Apply the dB floor in presentation using an explicit reference and preserve linear power for numerical consumers.
+- **Verification.** Compare against a direct DFT oracle for impulse, DC, positive and negative tones, two tones and inverse reconstruction. Compare integrated PSD against the independent windowed time-domain mean square. Waterfall may reorder bins for display without changing the graph value. AV10a records the backend audit, supported-length and memory limits, numeric tolerances and reproducible performance cases.
+
 
 <a id="d7-proposal--array-ports-on-nested-schemas"></a>
 
@@ -215,11 +222,11 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D2 | **Accepted.** [Per-domain publication and retry](#d2--per-domain-publication-and-retry). | AV05b/AV06/AV07 |
 | D3 | **Accepted.** [Pool admission and optional retention](#d3--pool-admission-and-optional-retention). | AV04/AV13 |
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
-| D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
+| D5 | **Accepted.** [Vector FFT and PSD](#d5--vector-fft-and-psd). | AV10/AV11/AV15 |
 | D6 | **Accepted.** [Array provenance and whole-array delay](#d6--array-provenance-and-whole-array-delay). Producer-specific field contracts belong to AV11/AV12. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | **Accepted.** [Array ports on nested schemas](#d7--array-ports-on-nested-schemas). Compiled slot aliases and standalone deferral. | AV08 |
 
-**D5 is open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D1–D7 are accepted.** The work plan tracks implementation and verification. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 

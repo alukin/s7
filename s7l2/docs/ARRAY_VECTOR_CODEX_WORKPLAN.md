@@ -1,6 +1,6 @@
 # S7 0.2.0 vector signals and observers — bounded Codex session plan
 
-**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope approved. D5 remains open. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
+**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope approved. D5 FFT and PSD conventions approved. See the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md) for measured scalar behavior.
 
 Preserve scalar numerical behavior and fast bindings while introducing vector elements that share a reusable array, lease and port substrate. Earlier S7 versions and third-party plugins carry no compatibility obligations. Update repository-owned components and bundled diagrams to the chosen current interfaces and formats. The 0.2.0 slice includes local vector wires, FFT/PSD array output, a read-only Waterfall and a simple Video Player with synthetic/recorded whole-frame input. Production FFmpeg/GStreamer/camera, network tensor transport, 2D FFT and spatial solvers are out of scope.
 
@@ -129,7 +129,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV08b** | AV08a | Schema+Studio save/open/save in the current format. Cover shape/format/layout capability, exposed aliases, invalid ranks and current scalar diagrams. No remote profile work. |
 | **AV09a** | AV06b | Minimal **internal-only** deterministic array source/forwarding headless fixture; repeated steps, copy/alloc ledger and fault injection, not public library. May precede AV07/AV08. |
 | **AV09b** | AV07b + AV08b + AV09a | Public VectorConstant/PassThrough/Gain, PackVector and UnpackVector with saved compiled diagrams, an independent elementwise oracle, preallocated reference profiles and a mixed status scalar port. |
-| **AV10a** | AV09b | Audit the four existing FFT paths and propose the D5 backend, C32/C64 conversions and scratch, SDK linkage, supported lengths and FFT conventions. Prepare an independent DFT fixture. |
+| **AV10a** | AV09b | Audit the four FFT paths against accepted D5. Record reuse, supported lengths, scratch/output reservations, SDK linkage and numeric tolerances. Prepare an independent DFT fixture. |
 | **AV10b** | AV10a + **D5 FFT decision** | Whole-vector FFT C32[N] and/or explicitly approved conversion, impulse/DC/+/- tone/two-tone/inverse and normalization/bin-order tests vs independent DFT; tracked copies/allocations, plugin load smoke. |
 | **AV11a** | AV10b + **D5/D6** | Written PSD/window/floor/power/bin-order, sample-rate/first-index/provenance contract, valid unknown-rate and gap policy; reference frequency-axis/PSD oracle. |
 | **AV11b** | AV11a | Headless PSD/magnitude element and saved array path; DC, zero/floor, signed bins, tones, power/tolerance, shape/rate mismatch and discontinuity tests. |
@@ -149,7 +149,7 @@ The descriptive AV00–AV18 cards below remain feature-level context. **This tab
 | **AV18c** | AV17b + existing printing P01–P07 | Candidate-SHA Studio GUI image/pixel/axes/lifecycle and full **P01–P09** coherent print/PDF visual matrix, supported printer gaps recorded. |
 | **AV18d** | AV18a/b/c + independent G1–G4 owners | Candidate-SHA installed SDK and rebuilt shipped plugins, platform/package tests and release evidence reconciliation; cannot close G1–G4 merely because AV cards pass. |
 
-**Decision blockers:** D1–D4, D6 and D7 are accepted. D5 remains open in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
+**Decision blockers:** D1–D7 are accepted in [the design register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). Record accepted choices before their gated implementation sessions.
 
 ## Session cards — narrow work units
 
