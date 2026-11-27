@@ -254,6 +254,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 `PackVector` assembles N scalar inputs of one numeric type into a rank-one vector of length N. `UnpackVector` writes one scalar output per vector component. N is fixed at compile time and at least two. Each element runs once per domain evaluation and preserves component order by port index. Inputs and outputs require exact numeric types and shape. Packing writes into an execution-reserved buffer and leaves source provenance absent for independent scalar inputs. Unpacking writes native scalar values. Verify both directions with distinct component values and negative tests for mismatched types, lengths and rates.
 
+**AV09a evidence:** The internal source, forwarder and reader used the same sealed buffer on each of 20,002 attempts, including one injected late fault. The source wrote 640,064 bytes and the two wire readers borrowed 1,280,128 bytes with zero bytes materialized on the wires. The independent sum oracle matched every committed step. The ELF allocation counter detected setup allocations and reported zero C++ allocations on the stepping thread over 20,000 successful warmed steps. The selected 23 headless Release tests passed.
+
 **Depends:** AV08.
 
 **Scope:** register **new** VectorConstant/fixture source, VectorPassThrough and VectorGain with concrete shapes and CPU lease-backed outputs; a deterministic U8 array source may be started here but video metadata/layout and full frames are AV12. Provide a small canonical saved diagram running via the actual headless production runtime. No replacement of scalar Constant/Gain.
