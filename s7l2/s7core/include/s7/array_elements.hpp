@@ -38,6 +38,22 @@ private:
     ArrayOutputSlot& output_;
 };
 
+/// A deterministic compact U8 frame source for exercising the array path.
+class TestPatternFrame final : public ArrayElement {
+public:
+    TestPatternFrame(std::int64_t width, std::int64_t height, ImagePixelFormat format, std::uint64_t source_id);
+    void step() override;
+    [[nodiscard]] ArrayPool::Retention make_retention();
+
+private:
+    ImagePixelFormat format_;
+    std::uint64_t source_id_;
+    ArrayDescriptor descriptor_;
+    ArrayPool pool_;
+    ArrayOutputSlot& output_;
+    std::uint64_t sequence_{};
+};
+
 template <SignalType Type>
 class VectorConstantT final : public ArrayElement {
 public:

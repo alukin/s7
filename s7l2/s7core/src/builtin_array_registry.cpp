@@ -27,6 +27,12 @@ std::shared_ptr<ArrayMemoryBudget> budget(const ArrayDescriptor& shape, std::siz
 
 void register_builtin_array_elements(ElementRegistry& registry, const ElementMetadataLibrary& metadata)
 {
+    registry.register_element(ElementDescriptor("TestPatternFrame", [](const ElementCreationContext& ctx) {
+        const auto format = ctx.get_string("format") == "rgb8" ? ImagePixelFormat::RGB8 : ImagePixelFormat::Gray8;
+        return std::make_unique<TestPatternFrame>(ctx.get_int("width"), ctx.get_int("height"), format,
+                                                  static_cast<std::uint64_t>(ctx.get_int("source_id")));
+    }, metadata.at("TestPatternFrame"), true));
+
     registry.register_element(ElementDescriptor("VectorConstant", [](const ElementCreationContext& ctx) {
         const auto& values = ctx.params.at("values").as_array();
         if (values.empty() || values.size() > max_vector_length) {

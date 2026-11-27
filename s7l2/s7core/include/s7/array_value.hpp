@@ -42,11 +42,19 @@ struct ArraySpectrum {
     std::optional<Rate> sample_rate;
 };
 
+enum class ImagePixelFormat { Gray8, RGB8 };
+
+// Image layout is compact, interleaved, row-major CPU storage.
+struct ArrayImage {
+    ImagePixelFormat pixel_format;
+};
+
 struct ArrayValue {
     ArrayPool::ReadLease lease;
     std::optional<ArraySourceOccurrence> origin{};
     std::optional<ArraySampleWindow> sample_window{};
     std::optional<ArraySpectrum> spectrum{};
+    std::optional<ArrayImage> image{};
 
     explicit operator bool() const noexcept { return static_cast<bool>(lease); }
 };

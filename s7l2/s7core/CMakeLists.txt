@@ -170,6 +170,11 @@ s7_add_test_executable(s7core_array_validation_smoke tests/array_validation_smok
 target_link_libraries(s7core_array_validation_smoke PRIVATE s7core)
 add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smoke)
 
+s7_add_test_executable(s7core_test_pattern_frame_smoke tests/test_pattern_frame_smoke.cpp)
+target_link_libraries(s7core_test_pattern_frame_smoke PRIVATE s7core)
+add_test(NAME s7core_test_pattern_frame_smoke COMMAND s7core_test_pattern_frame_smoke
+    ${PROJECT_SOURCE_DIR}/s7runtime/examples/schema_test_pattern_frames.json)
+
 s7_add_test_executable(s7core_vector_adapters_smoke tests/vector_adapters_smoke.cpp)
 target_link_libraries(s7core_vector_adapters_smoke PRIVATE s7core)
 add_test(NAME s7core_vector_adapters_smoke COMMAND s7core_vector_adapters_smoke

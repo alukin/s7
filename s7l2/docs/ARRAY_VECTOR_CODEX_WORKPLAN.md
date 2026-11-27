@@ -311,6 +311,8 @@ Use the direct DFT of the windowed samples as the bin-by-bin oracle. An independ
 
 **Scope:** separate new frame fixture source producing known grayscale [H,W] and RGB [H,W,3] arrays through real graph ports with deterministic frame identity. Support compact CPU layout first; specify any padded row-stride fixture and ensure validation matches actual layout. Define presentation-relevant frame identity separately from model clock and media timestamps. No camera, codec or FFmpeg/GStreamer.
 
+**AV12 evidence:** The headless runtime executed the saved grayscale/RGB fixture for five steps. The C++ smoke checks exact pixel bytes and row strides for two successive frames in each format, the source and sequence identity, and progress while the first frame remains retained. It rejects invalid configuration and RGB metadata inconsistent with the array shape. The fixture supplies compact row-major frames with absent media timestamps.
+
 **Accept:** pixel oracle (checkerboard/moving bar), width/height/type metadata, nontrivial row stride tested if supported by chosen first layout, sequential frame IDs, bounded allocation, unsupported format and invalid extent tests. Saved diagram must execute headlessly.
 
 ### AV13 — Read-only array Observation API, bounded delivery

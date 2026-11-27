@@ -1,0 +1,10 @@
+{
+  "name": "test_pattern_frames",
+  "dt": 0.04,
+  "simulation": {"periods": 1, "sample_rate_hz": 25, "frequency_hz": 5},
+  "elements": [
+    {"id": "gray", "type": "TestPatternFrame", "params": {"source_id": 11, "width": 4, "height": 2, "format": "gray8"}},
+    {"id": "rgb", "type": "TestPatternFrame", "params": {"source_id": 12, "width": 4, "height": 2, "format": "rgb8"}}
+  ],
+  "connections": []
+}

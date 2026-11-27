@@ -4586,6 +4586,99 @@
         "type_rule": "",
         "count_parameter": "components"
       }
+    },
+    {
+      "type_name": "TestPatternFrame",
+      "stateless": true,
+      "display_name": "Test Pattern Frame",
+      "description": "Generate a compact checkerboard frame with a moving vertical bar and stable frame identity.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [
+        "video",
+        "fixture"
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Compact full frame in the selected pixel format",
+          "type": "U8",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2,
+            4
+          ]
+        },
+        {
+          "name": "sequence",
+          "description": "Frame sequence",
+          "type": "U64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "width",
+          "type": "int",
+          "description": "Frame width",
+          "default": 4,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 2048
+        },
+        {
+          "name": "height",
+          "type": "int",
+          "description": "Frame height",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 2048
+        },
+        {
+          "name": "format",
+          "type": "enum",
+          "description": "Pixel format",
+          "default": "gray8",
+          "required": false,
+          "enum_values": [
+            "gray8",
+            "rgb8"
+          ]
+        },
+        {
+          "name": "source_id",
+          "type": "int",
+          "description": "Run-unique source identity",
+          "default": 1,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 2147483647
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "U8",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

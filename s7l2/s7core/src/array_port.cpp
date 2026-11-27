@@ -23,7 +23,7 @@ DenseCpuArrayView ArrayOutputSlot::view() const & { return graph_value().lease.v
 
 ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
 {
-    if (!next && (next.origin || next.sample_window || next.spectrum)) {
+    if (!next && (next.origin || next.sample_window || next.spectrum || next.image)) {
         throw std::invalid_argument("An empty array value cannot carry metadata.");
     }
     if (next.lease.retention_) {
@@ -31,6 +31,15 @@ ArrayValue ArrayOutputSlot::exchange(ArrayValue&& next)
     }
     if (next && next.lease.view().descriptor() != descriptor_) {
         throw std::invalid_argument("Array lease does not match the output descriptor.");
+    }
+    if (next.image) {
+        const auto extents = descriptor_.extents();
+        const auto format = next.image->pixel_format;
+        const bool gray = format == ImagePixelFormat::Gray8 && extents.size() == 2;
+        const bool rgb = format == ImagePixelFormat::RGB8 && extents.size() == 3 && extents[2] == 3;
+        if (descriptor_.type() != SignalType::U8 || (!gray && !rgb)) {
+            throw std::invalid_argument("Image pixel format does not match the array descriptor.");
+        }
     }
     if (mode_ == Mode::Standalone) return std::exchange(published_, std::move(next));
     if (mode_ == Mode::MemoryIdle || (mode_ == Mode::MemoryEvaluating && !next)) {
@@ -68,7 +77,7 @@ std::expected<ArrayValue, ArrayPoolError> ArrayOutputSlot::try_retain(
     if (mode_ != Mode::Standalone && committed_step_ == 0) return std::unexpected(ArrayPoolError::InvalidLease);
     auto lease = retention.try_retain(published_.lease);
     if (!lease) return std::unexpected(lease.error());
-    return ArrayValue{std::move(*lease), published_.origin, published_.sample_window, published_.spectrum};
+    return ArrayValue{std::move(*lease), published_.origin, published_.sample_window, published_.spectrum, published_.image};
 }
 
 ArrayInputBinding::ArrayInputBinding(ArrayDescriptor descriptor) : descriptor_(std::move(descriptor))
