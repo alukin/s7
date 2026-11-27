@@ -217,7 +217,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     auto shared = std::make_shared<const ElementDescriptor>(descriptor);
     const auto& metadata = shared->metadata();
     std::shared_ptr<const ElementMetadata> array_metadata;
-    if (declares_array_ports(metadata) && !metadata.schema_definition) {
+    if (declares_array_ports(metadata) && !metadata.schema_definition && !shared->executable_array_factory()) {
         if (metadata.variadic_inputs.enabled || metadata.variadic_outputs.enabled) {
             throw std::invalid_argument("Element '" + id + "': array declarations require fixed port counts.");
         }
@@ -238,7 +238,7 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                                    throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
                                }
                            },
-                           {}, std::move(array_metadata)};
+                           {}, std::move(array_metadata), shared->executable_array_factory()};
     }
 
     std::vector<std::string> names;
@@ -344,14 +344,19 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
 ElementDescriptor::ElementDescriptor(
     std::string type_name,
     std::function<std::unique_ptr<Element>(const ElementCreationContext&)> factory,
-    const ElementMetadata& metadata
+    const ElementMetadata& metadata,
+    bool executable_array_factory
 )
     : type_name_(std::move(type_name)),
       factory_(factory),
-      metadata_(metadata)
+      metadata_(metadata),
+      executable_array_factory_(executable_array_factory)
 {
     if (!factory_) {
         throw std::invalid_argument("Factory function cannot be null");
+    }
+    if (executable_array_factory_ && !metadata_.type_variables.empty()) {
+        throw std::invalid_argument("An executable array factory requires concrete types from its parameters.");
     }
     for (const auto* ports : {&metadata_.input_ports, &metadata_.output_ports}) {
         for (const auto& port : *ports) {
@@ -364,10 +369,14 @@ ElementDescriptor::ElementDescriptor(
 }
 
 std::unique_ptr<Element> ElementDescriptor::create(const ElementCreationContext& ctx) const {
-    if (declares_array_ports(metadata_)) {
+    if (declares_array_ports(metadata_) && !executable_array_factory_) {
         throw std::logic_error("Element '" + type_name_ + "' declares array ports. Array execution is not available.");
     }
-    return factory_(ctx);
+    auto element = factory_(ctx);
+    if (executable_array_factory_ && (!element || !element->has_array_ports())) {
+        throw std::logic_error("Element '" + type_name_ + "' did not create its declared array ports.");
+    }
+    return element;
 }
 
 // ============================================================================

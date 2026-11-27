@@ -72,7 +72,7 @@ struct ExecutableGraph {
 private:
     friend class Compiler;
     friend class NodeRuntime;
-    bool experimental_arrays_{};
+    bool array_ports_validated_{};
 };
 
 } // namespace s7

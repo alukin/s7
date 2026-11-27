@@ -28,4 +28,15 @@ void VectorDelay::step()
     static_cast<void>(output_.exchange(array_input(0).share()));
 }
 
+VectorPassThrough::VectorPassThrough(ArrayDescriptor descriptor)
+    : ArrayElement("VectorPassThrough"), output_(register_array_output(port_names::out, descriptor))
+{
+    register_array_input(port_names::in, std::move(descriptor));
+}
+
+void VectorPassThrough::step()
+{
+    static_cast<void>(output_.exchange(array_input(0).share()));
+}
+
 } // namespace s7

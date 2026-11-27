@@ -399,12 +399,14 @@ public:
 
 namespace detail {
 
+enum class ArrayExecution { Disabled, Registered, Experimental };
+
 static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve_timing,
-                                       bool experimental_arrays = false) {
+                                       ArrayExecution arrays = ArrayExecution::Disabled) {
     CheckedSchema checked;
     // Nested schemas are inlined first (ADR-024): every check below sees the
     // flattened graph, so a nested schema behaves exactly like its contents.
-    auto flat = flatten_schema(nested_schema, experimental_arrays);
+    auto flat = flatten_schema(nested_schema, arrays != ArrayExecution::Disabled);
     checked.flat = std::move(flat.schema);
     checked.nested_outputs = std::move(flat.nested_outputs);
     const auto seeds = std::move(flat.seeds);
@@ -443,11 +445,12 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                 throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
             }
             if (element->has_array_ports()) {
-                if (!experimental_arrays) {
+                const bool alias = dynamic_cast<const SchemaPort*>(element.get()) != nullptr;
+                if (arrays == ArrayExecution::Disabled ||
+                    (arrays == ArrayExecution::Registered && !alias && !spec.executable_array_factory)) {
                     throw std::invalid_argument("Element '" + spec.id + "' registers array ports. Array execution is not available.");
                 }
-                const bool supported = dynamic_cast<const ArrayElement*>(element.get()) ||
-                                       dynamic_cast<const SchemaPort*>(element.get());
+                const bool supported = alias || dynamic_cast<const ArrayElement*>(element.get());
                 if (!spec.factory || !supported ||
                     dynamic_cast<const RateChangingElement*>(element.get()) ||
                     dynamic_cast<const TrapezoidIntegration*>(element.get()) ||
@@ -757,9 +760,9 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
 }
 
 static CheckedSchema check_executable_schema(const Schema& schema, const bool resolve_timing,
-                                             const bool experimental_arrays = false)
+                                             ArrayExecution arrays = ArrayExecution::Disabled)
 {
-    auto checked = check_schema_impl(schema, resolve_timing, experimental_arrays);
+    auto checked = check_schema_impl(schema, resolve_timing, arrays);
     if (checked.errors.empty()) {
         const auto& elements = checked.flat->elements();
         const auto array = std::ranges::find_if(elements, [](const ElementSpec& spec) { return spec.array_metadata != nullptr; });
@@ -771,14 +774,15 @@ static CheckedSchema check_executable_schema(const Schema& schema, const bool re
 }
 
 CheckedSchema check_schema(const Schema& schema) { return check_executable_schema(schema, true); }
-CheckedSchema check_experimental_array_schema(const Schema& schema) { return check_executable_schema(schema, true, true); }
+CheckedSchema check_local_schema(const Schema& schema) { return check_executable_schema(schema, true, ArrayExecution::Registered); }
+CheckedSchema check_experimental_array_schema(const Schema& schema) { return check_executable_schema(schema, true, ArrayExecution::Experimental); }
 CheckedSchema check_schema_structure(const Schema& schema) { return check_executable_schema(schema, false); }
 
 } // namespace detail
 
 ValidationResult Validator::validate(const Schema& schema) {
     ValidationResult result;
-    result.errors = detail::check_schema_impl(schema, true).errors;
+    result.errors = detail::check_schema_impl(schema, true, detail::ArrayExecution::Registered).errors;
     return result;
 }
 

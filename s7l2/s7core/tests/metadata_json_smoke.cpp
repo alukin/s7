@@ -7,6 +7,7 @@
 #include "s7/compiler.hpp"
 #include "s7/elements.hpp"
 #include "s7/schema_library.hpp"
+#include "s7/validation.hpp"
 #include "core_metadata.hpp"
 #include <algorithm>
 #include <iostream>
@@ -104,7 +105,7 @@ void check_array_schema(s7::ElementRegistry& registry)
     parent.add_element("nested", [&] {
         return std::make_unique<s7::Schema>(s7::SchemaLibraryLoader::build_schema(schema_json, registry));
     });
-    rejects([&] { static_cast<void>(s7::Compiler::compile(parent)); }, "Schema 'nested' declares array ports");
+    require(!s7::detail::check_schema(parent).errors.empty(), "deployment rejects nested array declarations");
     registry.unregister({"ArraySchemaFixture"});
 
     auto malformed = schema_json;

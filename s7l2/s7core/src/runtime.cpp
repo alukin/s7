@@ -65,7 +65,7 @@ void NodeRuntime::CoupledStage::prepare_storage() {
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
     for (const auto& [id, element] : graph_.elements) {
-        if (element->has_array_ports() && !graph_.experimental_arrays_) {
+        if (element->has_array_ports() && !graph_.array_ports_validated_) {
             throw std::invalid_argument("Element '" + id + "' registers array ports. Array execution is not available.");
         }
     }

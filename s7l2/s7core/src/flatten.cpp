@@ -87,7 +87,7 @@ public:
                 level.nested.emplace(spec.id, Ports{nested->exposed_inputs(), nested->exposed_outputs()});
                 continue;
             }
-            add_spec(ElementSpec{id, reuse_once(std::move(created), spec.factory), {}}, seed);
+            add_spec(ElementSpec{id, reuse_once(std::move(created), spec.factory), {}, {}, spec.executable_array_factory}, seed);
         }
         for (const auto& connection : schema.connections()) {
             const auto from = level.source(connection.from_element, connection.from_port, flat_.errors);

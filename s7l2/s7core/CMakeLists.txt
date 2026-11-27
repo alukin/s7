@@ -26,6 +26,7 @@ add_library(s7core SHARED
     src/element_catalog.cpp
     src/metadata_json.cpp
     src/builtin_element_registry.cpp
+    src/builtin_array_registry.cpp
     src/type_inference.cpp
     src/rate.cpp
     src/resampler.cpp
@@ -171,7 +172,8 @@ add_test(NAME s7core_array_validation_smoke COMMAND s7core_array_validation_smok
 
 s7_add_test_executable(s7core_vector_adapters_smoke tests/vector_adapters_smoke.cpp)
 target_link_libraries(s7core_vector_adapters_smoke PRIVATE s7core)
-add_test(NAME s7core_vector_adapters_smoke COMMAND s7core_vector_adapters_smoke)
+add_test(NAME s7core_vector_adapters_smoke COMMAND s7core_vector_adapters_smoke
+    ${PROJECT_SOURCE_DIR}/s7runtime/examples/schema_vector_adapters.json)
 
 s7_add_test_executable(s7core_vector_delay_smoke tests/vector_delay_smoke.cpp)
 target_link_libraries(s7core_vector_delay_smoke PRIVATE s7core)

@@ -1,0 +1,25 @@
+{
+  "name": "vector_adapters",
+  "dt": 0.01,
+  "simulation": {"periods": 1, "sample_rate_hz": 100, "frequency_hz": 10},
+  "elements": [
+    {"id": "first", "type": "Constant", "params": {"type": "F32", "value": 1.5}},
+    {"id": "second", "type": "Constant", "params": {"type": "F32", "value": -3}},
+    {"id": "third", "type": "Constant", "params": {"type": "F32", "value": 7}},
+    {"id": "pack", "type": "PackVector", "params": {"components": 3}},
+    {"id": "gain", "type": "VectorGain", "params": {"components": 3, "factor": 2}},
+    {"id": "forward", "type": "VectorPassThrough", "params": {"components": 3}},
+    {"id": "unpack", "type": "UnpackVector", "params": {"components": 3}},
+    {"id": "reference", "type": "VectorConstant", "params": {"values": [3, -6, 14]}},
+    {"id": "reference_components", "type": "UnpackVector", "params": {"components": 3}}
+  ],
+  "connections": [
+    {"from_element": "first", "from_port": 0, "to_element": "pack", "to_port": 0},
+    {"from_element": "second", "from_port": 0, "to_element": "pack", "to_port": 1},
+    {"from_element": "third", "from_port": 0, "to_element": "pack", "to_port": 2},
+    {"from_element": "pack", "from_port": 0, "to_element": "gain", "to_port": 0},
+    {"from_element": "gain", "from_port": 0, "to_element": "forward", "to_port": 0},
+    {"from_element": "forward", "from_port": 0, "to_element": "unpack", "to_port": 0},
+    {"from_element": "reference", "from_port": 0, "to_element": "reference_components", "to_port": 0}
+  ]
+}

@@ -258,6 +258,8 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 
 **AV09b progress:** The C++ `PackVectorT` and `UnpackVectorT` steps round-trip distinct F32 and C32 components in port order. Tests reject insufficient components or reserve, incompatible types and lengths, and conflicting scalar rates. The selected 24 headless Release tests passed. Registration and execution from saved diagrams remain open.
 
+The local registry and runtime now load and execute the vector source, forwarder, gain and adapters. The saved `schema_vector_adapters.json` example ran ten steps through `s7runtime`. The elementwise oracle checks all three gained components and the separate U64 count output. Concrete descriptors come from each instance's checked parameters. Distributed placement continues to reject array wires. All 24 selected headless tests passed after registration.
+
 **Depends:** AV08.
 
 **Scope:** register **new** VectorConstant/fixture source, VectorPassThrough and VectorGain with concrete shapes and CPU lease-backed outputs; a deterministic U8 array source may be started here but video metadata/layout and full frames are AV12. Provide a small canonical saved diagram running via the actual headless production runtime. No replacement of scalar Constant/Gain.
@@ -271,6 +273,19 @@ The scalar feedback median increased by 1.42 ns (4.9%). The run ranges overlappe
 **Scope:** new whole-array FFT (not a rewrite of scalar WindowedFFT), minimally C32[N] input/output for a fixed tested transform size. Reuse existing backend/code only after checking normalization, licensing/SDK and build linkage; choose a deterministic supported size/profile and document unsupported lengths. Do not hard-wire Qt or external hardware into the graph transform.
 
 **Accept:** independently generated impulse, DC, single complex tone and two-tone fixtures; complex bin order and inverse convention documented; known-output array checked against independent DFT/FFT oracle; allocation/copy instrumentation. Keep plugin SDK boundary qualified if output lives in a plugin.
+
+**AV10a backend audit**
+
+| Existing path | Runtime use |
+| --- | --- |
+| `s7spectral::Transform` in `analysis.hpp` | Reuse its in-place radix-2 algorithm and precomputed roots. Generalize the component type and preserve the existing C64 analysis entry point. |
+| `s7spectral::WindowedFFT` | Retain the FFTW real-input streaming peak analysis. Its one-sided peak values and window normalization have a separate contract. |
+| `s7core` overlap-save convolution | Keep the convolution kernel spectrum, overlap history and work arrays with convolution. Its padded stream processing needs a different lifetime from a whole-array transform. |
+| Studio's FFTW wrapper | Keep its C64 scratch, planner and allocating return value in Studio analysis. |
+
+Use fixed lengths from 2 through 1,048,576, powers of two only. A C32 transform keeps N/2 roots and a bounded output pool. At the largest length, two output slots and the root table account for 20 MiB of numeric storage. The baseline writes N C32 values into the output candidate, transforms them in place, and forwards the corresponding source occurrence. No wider scratch buffer or FFTW planner is required. The vector transform builds and loads through the installed SDK as part of the spectral plugin. The plugin already links FFTW for `WindowedFFT`.
+
+The direct long-double DFT oracle lives in `s7spectral/tests/direct_dft.hpp`. For the C32 fixture, compare absolute forward error to `8 × ε × log2(N) × max(1, sum(abs(x)))`, with ε the C32 component epsilon. Compare inverse reconstruction to `16 × ε × log2(N) × max(1, max(abs(x)))`. Use small lengths for the independent oracle and 256, 1,024, 4,096 and 65,536 for full-step performance comparisons. Report the input initialization separately from wire materialization.
 
 ### AV11 — Vector power / PSD and spectral contract
 

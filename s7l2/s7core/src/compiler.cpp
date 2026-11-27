@@ -136,7 +136,7 @@ ExecutableGraph Compiler::compile_impl(const Schema& nested_schema,
                                        bool experimental_arrays) {
     // Validation creates every element once; the graph is built from them.
     auto checked = experimental_arrays ? detail::check_experimental_array_schema(nested_schema)
-                                       : detail::check_schema(nested_schema);
+                                       : detail::check_local_schema(nested_schema);
     if (!checked.errors.empty()) {
         throw std::invalid_argument("Schema validation failed:\n" + join_errors(checked.errors));
     }
@@ -144,7 +144,7 @@ ExecutableGraph Compiler::compile_impl(const Schema& nested_schema,
     const Schema& schema = *checked.flat;
 
     ExecutableGraph executable_graph;
-    executable_graph.experimental_arrays_ = experimental_arrays;
+    executable_graph.array_ports_validated_ = true;
     executable_graph.schema_name = schema.name();
     executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
     executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);

@@ -35,6 +35,7 @@ struct ElementSpec {
     ElementFactory factory;
     GenericElement generic;
     std::shared_ptr<const ElementMetadata> array_metadata{}; // Declaration-only array ports.
+    bool executable_array_factory{};
 };
 
 class Schema : public Element {

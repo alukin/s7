@@ -17,6 +17,10 @@
 #include <utility>
 
 namespace s7 {
+namespace detail {
+void register_builtin_array_elements(ElementRegistry& registry, const ElementMetadataLibrary& metadata);
+}
+
 namespace {
 
 Overflow overflow_param(const ElementCreationContext& ctx)
@@ -610,6 +614,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return make_convert(ctx.type("from"), ctx.type("to"), options);
         },
         metadata.at("Convert")));
+    detail::register_builtin_array_elements(registry, metadata);
     SchemaLibraryLoader::register_library(SchemaLibraryLoader::load_from_json(
         boost::json::parse(detail::builtin_schema_resource)), registry);
 

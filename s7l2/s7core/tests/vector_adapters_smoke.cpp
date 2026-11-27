@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/core.hpp"
+#include "s7/validation.hpp"
 
 #include <array>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string_view>
 
 namespace {
@@ -98,12 +101,42 @@ void check_errors()
     rates.connect("slow", 0, "pack", 1);
     rejects([&] { static_cast<void>(Compiler::compile_experimental_arrays(rates)); }, "Rate conflict");
 }
+void check_saved_graph(const char* filename)
+{
+    std::ifstream input(filename);
+    require(input.is_open(), "cannot open the saved array graph");
+    const std::string json(std::istreambuf_iterator<char>{input}, {});
+    auto& registry = ElementRegistry::instance();
+    register_builtin_elements(registry);
+    const auto definition = boost::json::parse(json);
+    auto schema = SchemaLibraryLoader::build_schema(definition, registry);
+    const auto validation = Validator::validate(schema);
+    if (!validation.ok()) throw std::runtime_error(validation.errors.front());
+    require(!detail::check_schema(schema).errors.empty(), "distributed placement accepted local array wires");
+
+    auto graph = Compiler::compile(schema);
+    require(graph.elements.at("pack")->input_count() == 3 && graph.elements.at("unpack")->output_count() == 3,
+            "registered vector adapter width differs from saved parameters");
+    NodeRuntime runtime(std::move(graph));
+    const std::array<float, 3> expected{3, -6, 14};
+    for (int step = 0; step < 10; ++step) {
+        runtime.step();
+        for (std::size_t port = 0; port < expected.size(); ++port) {
+            require(runtime.output_of<SignalType::F32>("unpack", port) == expected[port] &&
+                        runtime.output_of<SignalType::F32>("reference_components", port) == expected[port],
+                    "saved vector graph differs from the independent elementwise oracle");
+        }
+        require(runtime.output_of<SignalType::U64>("reference", 1) == 3, "mixed scalar status port differs");
+    }
+}
 } // namespace
 
-int main() try {
+int main(int argc, char** argv) try {
     check_round_trip<SignalType::F32>({1.25f, -3.5f, 0.25f});
     check_round_trip<SignalType::C32>({std::complex<float>{2, 3}, {4, -7}, {-1, 9}});
     check_errors();
+    require(argc == 2, "pass the path of the saved array graph");
+    check_saved_graph(argv[1]);
     return 0;
 } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

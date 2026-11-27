@@ -67,6 +67,7 @@ public:
     /// Alias the current input for a graph output. This lease counts toward
     /// the producer's execution reserve.
     [[nodiscard]] ArrayValue share() const;
+    [[nodiscard]] std::optional<ArraySourceOccurrence> origin() const { return source().graph_value().origin; }
 
     template <SignalType Type>
     [[nodiscard]] std::span<const signal_storage_t<Type>> values() const & {
