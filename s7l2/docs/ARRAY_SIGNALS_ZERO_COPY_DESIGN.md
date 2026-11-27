@@ -193,6 +193,14 @@ AV07b needs a fixed-size optional origin carrying a run-scoped source ID, contin
 
 Audit `s7spectral/include/s7spectral/analysis.hpp` (portable C64), the FFTW scalar peak-only `WindowedFFT`, `s7core/src/convolution.cpp` (other transform) and Studio's FFTW analysis before selecting a C32 FFT. D5 covers backend reuse, C32-native vs C64 scratch/copies, out-of-tree SDK/linkage, forward/inverse convention, bin orientation, window/PSD normalization and dB floor. Validate against an **independent DFT oracle**; comparing the chosen backend to itself is insufficient.
 
+### D7 proposal — Array ports on nested schemas
+
+**Open.** For 0.2.0, support array ports on nested schemas through the parent graph compiler. Treat exposed ports as typed aliases of the producing slot under ADR-024. Validate their descriptors at each boundary. Preserve the lease, source occurrence, rate-domain position and causal-memory timing across any number of nested boundaries. An exposed port contributes dependencies and type constraints during compilation and has no runtime storage or evaluation phase.
+
+Defer standalone array-valued `Schema::bind_inputs()` and `Schema::step()`. Refuse that use before allocating scalar proxy storage or binding the graph. A future standalone API will need a contract for admitting external array leases, retaining outputs and scheduling the graph on behalf of its caller. Flattening covers reusable submodels, including future spatial blocks, with the same scheduling and publication semantics as an inlined graph.
+
+AV08a will check exact shape and type through nested ports, output aliases, and array feedback through a nested delay against an equivalent inlined graph. AV08b will cover persistence and Studio round trips. A boundary that crosses rate domains still requires an explicit rate-conversion element with a compatible contract.
+
 ### Plugin and format compatibility policy (D1)
 
 On 2026-11-26 the maintainer confirmed that S7 has no production releases and owes no compatibility to earlier versions or third-party plugins. Choose the API, ABI, schema and wire formats that best serve the design. Qualify the current SDK, repository-owned plugins and bundled diagrams together. If a shared C++ plugin boundary remains, require a valid ABI version before registration. See the [plugin interface](PLUGIN_INTERFACE.md) and [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
@@ -207,7 +215,7 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D4 | **Accepted.** Generic fixed numeric shapes, compact CPU views and separate typed domain semantics. [Descriptor foundation](#d4--fixed-shape-cpu-layout-and-domain-semantics) | AV01/AV02/AV12 |
 | D5 | Approve FFT backend/C32 conversion, PSD/window normalization, bin order, axis and package dependencies. | AV10/AV11/AV15 |
 | D6 | **Accepted.** [Array provenance and whole-array delay](#d6--array-provenance-and-whole-array-delay). Producer-specific field contracts belong to AV11/AV12. | AV07b/AV11/AV12/AV15/AV16 |
-| D7 | Approve explicit standalone array Schema deferral **or** separately scoped proxy/storage implementation. | AV08 |
+| D7 | **Open.** [Array ports on nested schemas](#d7-proposal--array-ports-on-nested-schemas). Approve compiled slot aliases and standalone deferral, or scope a standalone interface separately. | AV08 |
 
 **D5 and D7 are open.** Record approved answers in an ADR or decision log before executing gated cards. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
