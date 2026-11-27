@@ -63,16 +63,25 @@ path must not silently skip processing elements present in the schema.
 
 ### Codec elements in `s7video`
 
-`VideoDecoder` will consume an encoded video stream and publish complete
-decoded S7 frames. `VideoEncoder` will consume complete decoded S7 frames
-and publish encoded packets. A PipeWire source can negotiate raw video or an
-encoded format such as MJPEG or H.264. Raw video can go directly to frame
-processing when its layout matches. Encoded capture can feed the decoder
-before processing or display. Plan optional linkage to FFmpeg's `libavcodec`
-and `libavutil` in the codec provider, with pixel conversion where the
-negotiated format requires it. The Studio viewer consumes the resulting
-decoded frame port. The production GStreamer media adapter has its own
-qualification gate.
+`VideoDecoder` and `VideoEncoder` are representation boundaries around
+the decoded-frame graph. The decoder takes encoded packets from an ingress
+source and publishes complete decoded S7 frames. Image processing and Studio
+display consume those frames. The encoder takes the processed frames and
+publishes encoded packets for egress. Sources and sinks own device capture,
+file I/O, container handling and network transport. The codec elements own
+the conversion between encoded packets and decoded frames.
+
+```text
+Encoded source → VideoDecoder → decoded-frame processing → VideoEncoder → file or network sink
+                                           └─────────────→ Studio Video Player
+```
+
+A source such as PipeWire can supply an encoded format such as MJPEG or H.264,
+or publish a decoded frame directly when its raw layout matches the S7 input.
+The proposed typed packet connections are used at the encoded edges of the
+pipeline. The initial codec provider links FFmpeg's `libavcodec`,
+`libavutil` and `libswscale`. The production GStreamer media adapter has
+its own qualification gate.
 
 The encoded port contract needs review before registration. It must identify
 the codec and required initialization data, bound the packet payload and
