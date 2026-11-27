@@ -20,19 +20,20 @@ inline void cancelled(const Cancel &cancel) {
 }
 // Bounded, portable radix-2 transform shared by headless processors and plugin
 // elements. No global FFT planner, Qt, wall clock or runtime dependency.
-class Transform {
+template <typename Real>
+class Radix2Transform {
   public:
     static constexpr std::size_t maxSize = 1U << 20;
-    explicit Transform(std::size_t size) : size_(size) {
+    explicit Radix2Transform(std::size_t size) : size_(size) {
         if (size < 2 || size > maxSize || (size & (size - 1)))
             throw std::invalid_argument("FFT size must be a power of two in [2, 1048576]");
         roots_.resize(size / 2);
         for (std::size_t k = 0; k < size / 2; ++k) {
             const double a = -2 * std::numbers::pi * double(k) / double(size);
-            roots_[k] = {s7::math::cos(a), s7::math::sin(a)};
+            roots_[k] = {static_cast<Real>(s7::math::cos(a)), static_cast<Real>(s7::math::sin(a))};
         }
     }
-    void apply(std::span<Complex> data, bool inverse = false, const Cancel &cancel = {}) const {
+    void apply(std::span<std::complex<Real>> data, bool inverse = false, const Cancel &cancel = {}) const {
         if (data.size() != size_)
             throw std::invalid_argument("FFT input size mismatch");
         for (std::size_t i = 1, j = 0; i < size_; ++i) {
@@ -57,7 +58,7 @@ class Transform {
         }
         if (inverse)
             for (auto &v : data)
-                v /= double(size_);
+                v /= static_cast<Real>(size_);
     }
     static std::size_t padded(std::size_t samples) {
         if (samples > maxSize)
@@ -70,8 +71,10 @@ class Transform {
 
   private:
     std::size_t size_;
-    std::vector<Complex> roots_;
+    std::vector<std::complex<Real>> roots_;
 };
+
+using Transform = Radix2Transform<double>;
 struct Response {
     std::vector<double> frequency;
     std::vector<Complex> values;

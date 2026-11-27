@@ -1,11 +1,50 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: MIT-0
+#include "direct_dft.hpp"
+
+#include <cstdlib>
 #include <iostream>
+#include <new>
 #include <s7spectral/fft_element.hpp>
 #include <limits>
 #include <s7/core.hpp>
 #include <s7spectral/analysis.hpp>
 #include <s7spectral/fourier_element.hpp>
+#include <s7spectral/vector_fft.hpp>
+#if defined(__ELF__)
+namespace {
+thread_local bool measuring_fft{};
+thread_local std::size_t fft_allocations{};
+
+void* checked_allocation(void* pointer)
+{
+    if (!pointer) throw std::bad_alloc();
+    if (measuring_fft) ++fft_allocations;
+    return pointer;
+}
+} // namespace
+
+void* operator new(std::size_t size) { return checked_allocation(std::malloc(size == 0 ? 1 : size)); }
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* pointer) noexcept { std::free(pointer); }
+void operator delete[](void* pointer) noexcept { std::free(pointer); }
+void operator delete(void* pointer, std::size_t) noexcept { std::free(pointer); }
+void operator delete[](void* pointer, std::size_t) noexcept { std::free(pointer); }
+
+void* operator new(std::size_t size, std::align_val_t alignment)
+{
+    void* pointer = nullptr;
+    if (posix_memalign(&pointer, static_cast<std::size_t>(alignment), size == 0 ? 1 : size) != 0) throw std::bad_alloc();
+    return checked_allocation(pointer);
+}
+
+void* operator new[](std::size_t size, std::align_val_t alignment) { return ::operator new(size, alignment); }
+void operator delete(void* pointer, std::align_val_t) noexcept { std::free(pointer); }
+void operator delete[](void* pointer, std::align_val_t) noexcept { std::free(pointer); }
+void operator delete(void* pointer, std::size_t, std::align_val_t) noexcept { std::free(pointer); }
+void operator delete[](void* pointer, std::size_t, std::align_val_t) noexcept { std::free(pointer); }
+#endif
+
 namespace {
 void require(bool ok, const char *text) {
     if (!ok)
@@ -23,8 +62,92 @@ template <class F> void rejects(F f) {
     }
     require(failed, "Invalid analysis input accepted");
 }
+void check_vector_fft()
+{
+    using s7::SignalType;
+    using C32 = std::complex<float>;
+    static constexpr std::size_t size = 16;
+    constexpr long double epsilon = std::numeric_limits<float>::epsilon();
+    for (const auto pattern : {0, 1, 2, 3, 4}) {
+        std::array<C32, size> values{};
+        for (std::size_t index = 0; index < size; ++index) {
+            const auto phase = 2.0 * std::numbers::pi * static_cast<double>(index) / size;
+            const auto positive = std::polar(1.0, 3 * phase);
+            const auto negative = std::polar(0.5, -2 * phase);
+            const std::array<C32, 5> cases{
+                index == 3 ? C32{1, 1} : C32{},
+                C32{0.8f, -0.3f},
+                C32(positive),
+                C32(negative),
+                C32(positive + negative)
+            };
+            values[index] = cases[static_cast<std::size_t>(pattern)];
+        }
+        const auto expected = s7spectral::test::direct_dft<float>(values);
+        long double input_sum = 0;
+        long double input_max = 0;
+        for (const auto value : values) {
+            const auto magnitude = static_cast<long double>(std::abs(value));
+            input_sum += magnitude;
+            input_max = std::max(input_max, magnitude);
+        }
+        const auto forward_tolerance = 8 * epsilon * 4 * std::max(1.0L, input_sum);
+        const auto inverse_tolerance = 16 * epsilon * 4 * std::max(1.0L, input_max);
+
+        s7::Schema schema("vector_fft_oracle");
+        schema.set_rate(s7::Rate::from_hz(100));
+        schema.add_element("source", [&] {
+            return std::make_unique<s7::VectorConstantT<SignalType::C32>>(values, 0,
+                std::make_shared<s7::ArrayMemoryBudget>(size * sizeof(C32)));
+        });
+        schema.add_element("forward", [] { return std::make_unique<s7spectral::VectorFFT>(size, false, 2); });
+        schema.add_element("inverse", [] { return std::make_unique<s7spectral::VectorFFT>(size, true, 2); });
+        schema.connect("source", 0, "forward", 0);
+        schema.connect("forward", 0, "inverse", 0);
+#if defined(__ELF__)
+        fft_allocations = 0;
+        measuring_fft = true;
+#endif
+        auto graph = s7::Compiler::compile_experimental_arrays(schema);
+#if defined(__ELF__)
+        measuring_fft = false;
+        require(fft_allocations > 0, "FFT allocation probe did not detect setup");
+#endif
+        const auto& forward = static_cast<const s7spectral::VectorFFT&>(*graph.elements.at("forward")).array_output(0);
+        const auto& inverse = static_cast<const s7spectral::VectorFFT&>(*graph.elements.at("inverse")).array_output(0);
+        const auto& source = static_cast<const s7::VectorConstantT<SignalType::C32>&>(*graph.elements.at("source")).array_output(0);
+        s7::NodeRuntime runtime(std::move(graph));
+        runtime.step();
+        for (int step = 0; step < 64; ++step) {
+#if defined(__ELF__)
+            fft_allocations = 0;
+            measuring_fft = true;
+#endif
+            runtime.step();
+#if defined(__ELF__)
+            measuring_fft = false;
+            require(fft_allocations == 0, "whole-array FFT step made a C++ allocation");
+#endif
+            const auto* input = reinterpret_cast<const C32*>(source.view().bytes().data());
+            const auto* bins = reinterpret_cast<const C32*>(forward.view().bytes().data());
+            const auto* reconstruction = reinterpret_cast<const C32*>(inverse.view().bytes().data());
+            require(input != bins && bins != reconstruction, "FFT aliased immutable input storage");
+            for (std::size_t index = 0; index < size; ++index) {
+                require(input[index] == values[index], "FFT modified its input");
+                require(std::abs(std::complex<long double>(bins[index]) - expected[index]) <= forward_tolerance,
+                        "C32 forward FFT differs from the direct DFT");
+                require(std::abs(std::complex<long double>(reconstruction[index]) -
+                                std::complex<long double>(values[index])) <= inverse_tolerance,
+                        "C32 inverse reconstruction mismatch");
+            }
+        }
+    }
+    rejects([] { s7spectral::VectorFFT fft(15, false, 2); });
+    rejects([] { s7spectral::VectorFFT fft(16, false, 1); });
+}
 } // namespace
 int main() try {
+    check_vector_fft();
     for (double rate : {1024., 2048.}) {
         s7::Schema mismatch("mismatched-fft"); mismatch.set_rate(s7::Rate::from_hz(rate));
         mismatch.add_element("source", [rate] { return std::make_unique<s7::AnalogOscillator>(1, 32, rate); });
@@ -46,15 +169,9 @@ int main() try {
         result = signal;
         s7spectral::Transform fft(n);
         fft.apply(result);
+        const auto expected = s7spectral::test::direct_dft<double>(signal);
         for (std::size_t k = 0; k < n; ++k) {
-            std::complex<long double> expected{};
-            for (std::size_t j = 0; j < n; ++j) {
-                const auto a = -2 * std::numbers::pi_v<long double> * static_cast<long double>(j * k) /
-                               static_cast<long double>(n);
-                expected += std::complex<long double>(signal[j].real(), signal[j].imag()) *
-                            std::complex<long double>(std::cos(a), std::sin(a));
-            }
-            near(result[k], {double(expected.real()), double(expected.imag())});
+            near(result[k], {double(expected[k].real()), double(expected[k].imag())});
         }
         fft.apply(result, true);
         for (std::size_t i = 0; i < n; ++i)
