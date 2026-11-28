@@ -25,7 +25,8 @@ boost::json::object document(bool windup,bool edited,double rate) {
 ControlTrace run(bool windup,bool edited=false,double rate=100) {
     auto doc=document(windup,edited,rate);auto schema=s7::SchemaLibraryLoader::build_schema(doc.at("schema"));
     schema.set_rate(s7::Rate::from_hz(rate));const auto validation=s7::Validator::validate(schema);
-    for(const auto& e:validation.errors) std::cerr<<e<<'\n';require(validation.ok(),"control lab validation");
+    for(const auto& e:validation.errors) std::cerr<<e<<'\n';
+    require(validation.ok(),"control lab validation");
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));runtime.set_model_time_rate(s7::Rate::from_hz(rate));
     s7::ObservationService observe(runtime);
     std::vector<s7::ProbePoint> probes;
@@ -59,7 +60,7 @@ int main() try {
         require(base==run(windup,false,rate),"fresh-run same-build repeatability");
         const auto onset=std::size_t(rate),release=std::size_t(4*rate);
         for(std::size_t n=0;n<base.size();++n) {
-            for(const std::string mode:windup ? std::vector<std::string>{"aw","free"}:std::vector<std::string>{"pi","pid"})
+            for(const std::string& mode:windup ? std::vector<std::string>{"aw","free"}:std::vector<std::string>{"pi","pid"})
                 require(std::abs(at(base,n,mode))<=1,"bounded applied actuator");
             if(windup) {
                 for(std::size_t port=0;port<3;++port)

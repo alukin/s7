@@ -3691,7 +3691,8 @@ private slots:
                         for(std::size_t k=0;k<expected.frequencies.size();++k) for(std::size_t t=0;t<expected.times.size();++t) {
                             const auto i=k*expected.times.size()+t;const auto c=expected.coefficients[i];
                             const bool valid=q!=2 || std::abs(c)>1e-12;QCOMPARE(bool(grid->present[i]),valid);
-                            if(!valid) continue;const auto value=stft_quantity(c,k,std::size_t(n),q);
+                            if(!valid) continue;
+                            const auto value=stft_quantity(c,k,std::size_t(n),q);
                             const auto error=q==2 ? std::remainder(grid->values[i].real()-value,2*std::numbers::pi) : grid->values[i].real()-value;
                             QVERIFY(std::abs(error)<(q==2 ? 1e-6 : 1e-9));
                         }

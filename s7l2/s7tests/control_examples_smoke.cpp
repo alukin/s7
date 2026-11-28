@@ -53,9 +53,9 @@ ControlResult control(const std::string& plant, const std::string& mode, double 
     const auto steps = static_cast<std::size_t>(std::llround(12/dt));
     for (std::size_t n = 0; n < steps; ++n) {
         const double t = n*dt;
-        const double ref = n < std::llround(.5/dt) ? 0 :
-                           n < std::llround(2/dt) ? .6 : n < std::llround(4/dt) ? 2 : .6;
-        const double load = n < std::llround(6/dt) ? 0 : plant == "dc_motor" ? .1 : .2;
+        const double ref = static_cast<long long>(n) < std::llround(.5/dt) ? 0 :
+                           static_cast<long long>(n) < std::llround(2/dt) ? .6 : static_cast<long long>(n) < std::llround(4/dt) ? 2 : .6;
+        const double load = static_cast<long long>(n) < std::llround(6/dt) ? 0 : plant == "dc_motor" ? .1 : .2;
         const double error = ref-y;
         const double rate = (y-filter)/.03;
         const double raw = mode == "open_loop" ? ref : mode == "p" ? 1.2*error :
@@ -123,7 +123,7 @@ BuckResult buck(bool closed_loop, double dt) {
     for (std::size_t n=0; n<steps; ++n) {
         runtime->step();
         const double i=out("inductor_current"), v=out("output_voltage"), gate=out("pwm");
-        const double r=n<std::llround(.5/dt) ? 8 : 4;
+        const double r=static_cast<long long>(n)<std::llround(.5/dt) ? 8 : 4;
         require(out("load_resistance")==r, name+": load step timing");
         const double duty=out("controller");
         require(duty>=0 && duty<=1, name+": bounded duty");
@@ -148,9 +148,9 @@ BuckResult buck(bool closed_loop, double dt) {
         previous_power=24*gate*i-.2*i*i-v*v/r;
         input_energy += dt*24*gate*i;
         peak=std::max(peak,v);
-        if (n>=std::llround(.3/dt) && n<std::llround(.45/dt)) {pre_sum+=v; ++pre_count;}
-        if (n>=std::llround(.8/dt)) {post_sum+=v; ++post_count;}
-        if (n>=std::llround(.9/dt)) {ripple_low=std::min(ripple_low,v);ripple_high=std::max(ripple_high,v);}
+        if (static_cast<long long>(n)>=std::llround(.3/dt) && static_cast<long long>(n)<std::llround(.45/dt)) {pre_sum+=v; ++pre_count;}
+        if (static_cast<long long>(n)>=std::llround(.8/dt)) {post_sum+=v; ++post_count;}
+        if (static_cast<long long>(n)>=std::llround(.9/dt)) {ripple_low=std::min(ripple_low,v);ripple_high=std::max(ripple_high,v);}
     }
     const double pre=pre_sum/pre_count, mean=post_sum/post_count, ripple=ripple_high-ripple_low;
     std::cout << name << " dt=" << dt << " mean=" << mean << " ripple=" << ripple
@@ -179,7 +179,7 @@ ThermalResult thermostat(double band, double dt) {
     double lowest=100, highest=-100, post_low=100, post_high=-100;
     const auto steps=static_cast<std::size_t>(std::llround(1200/dt));
     for(std::size_t n=0;n<steps;++n) {
-        const double t=n*dt, ambient=n<std::llround(600/dt) ? 15 : 10;
+        const double t=n*dt, ambient=static_cast<long long>(n)<std::llround(600/dt) ? 15 : 10;
         const double error=20-temp;
         if(error>=band) on=true;
         else if(error<=-band) on=false;

@@ -1,6 +1,6 @@
 # S7 Runtime Test Certificates
 
-Test-only certificates for local development and smoke tests. Regenerate them with `tools/generate_test_runtime_certs.sh` (this changes every fingerprint).
+Test-only certificates for local development and smoke tests. Regenerate them with `tools/generate_test_runtime_certs.sh --force` (this changes every fingerprint; `--help` lists the options).
 
 | Files | Signed by | Identity | Purpose |
 |---|---|---|---|

@@ -28,7 +28,9 @@ s7_embed_metadata(s7spectral resources/element_metadata.json spectral_metadata)
 target_compile_options(s7spectral PRIVATE -Wall -Wextra -Wpedantic)
 set_target_properties(s7spectral PROPERTIES PREFIX "lib")
 
-install(TARGETS s7spectral LIBRARY DESTINATION lib/s7/plugins)
+# The loader searches <prefix>/${CMAKE_INSTALL_LIBDIR}/s7/plugins (lib64 on Fedora).
+include(GNUInstallDirs)
+install(TARGETS s7spectral LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins)
 
 # The reusable, Qt-free processors are header-only and use the installed SDK.
 # They can also be used without loading an element plugin.

@@ -9,7 +9,9 @@ target_include_directories(s7wavelet PRIVATE include ${S7SPECTRAL_INCLUDE_DIR})
 target_link_libraries(s7wavelet PRIVATE s7::s7core s7spectral::analysis)
 s7_embed_metadata(s7wavelet resources/element_metadata.json wavelet_metadata)
 target_compile_options(s7wavelet PRIVATE -Wall -Wextra -Wpedantic)
-install(TARGETS s7wavelet LIBRARY DESTINATION lib/s7/plugins)
+# The loader searches <prefix>/${CMAKE_INSTALL_LIBDIR}/s7/plugins (lib64 on Fedora).
+include(GNUInstallDirs)
+install(TARGETS s7wavelet LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins)
 install(DIRECTORY include/ DESTINATION include COMPONENT s7sdk)
 
 include(CTest)

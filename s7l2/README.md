@@ -116,6 +116,12 @@ ctest --test-dir build --output-on-failure
 The normal build excludes test binaries. Build `build-tests` before running CTest,
 or build an individual test with `cmake --build build --target <test-target>`.
 
+Sanitizer and strict-warning builds use their own build directory:
+`cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DS7_SANITIZE=address,undefined`
+(or `-DS7_SANITIZE=thread`), and `-DS7_WARNINGS_AS_ERRORS=ON` turns project
+warnings into errors (GCC/Clang `-Wall -Wextra -Wpedantic`, on every first-party
+target and test).
+
 Sound and SDR integration has a separate [hardware I/O guide](docs/HARDWARE_IO.md).
 Backend switches `S7_PORTAUDIO`, `S7_PIPEWIRE`, `S7_SOAPYSDR` accept `AUTO` (default),
 `ON` (required), or `OFF` (no dependency). `build_for_linux` explicitly enables

@@ -4,7 +4,48 @@
 
 set -euo pipefail
 
-OUT_DIR="${1:-$(cd "$(dirname "$0")/../s7runtime/examples/certs" && pwd)}"
+usage() {
+  cat <<'USAGE'
+Usage: tools/generate_test_runtime_certs.sh [--force] [--dry-run] [OUT_DIR]
+
+Generates the test-only S7 CA, runtime node, Studio and untrusted
+certificates (development fixtures, never production credentials).
+
+OUT_DIR defaults to s7runtime/examples/certs, the tracked fixtures used by
+the tests. Writing into a directory that already holds certificates
+(including the default) replaces them and changes every fingerprint, so it
+requires --force.
+
+  --force    replace existing certificates in OUT_DIR
+  --dry-run  print what would be generated and exit
+  -h, --help show this help
+USAGE
+}
+
+FORCE=0
+DRY_RUN=0
+OUT_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --force) FORCE=1 ;;
+    --dry-run) DRY_RUN=1 ;;
+    --) shift; [ $# -le 1 ] || { usage >&2; exit 2; }; OUT_DIR="${1:-}"; break ;;
+    -*) echo "error: unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) [ -z "$OUT_DIR" ] || { echo "error: more than one OUT_DIR" >&2; exit 2; }; OUT_DIR="$1" ;;
+  esac
+  shift
+done
+OUT_DIR="${OUT_DIR:-$(cd "$(dirname "$0")/../s7runtime/examples/certs" && pwd)}"
+
+if compgen -G "$OUT_DIR/*.pem" > /dev/null && [ "$FORCE" -ne 1 ]; then
+  echo "error: $OUT_DIR already holds certificates; pass --force to replace them" >&2
+  exit 1
+fi
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "Would generate the S7 test CA, node, Studio and untrusted certificates in: $OUT_DIR"
+  exit 0
+fi
 mkdir -p "$OUT_DIR"
 
 ROOT_KEY="$OUT_DIR/s7_root_ca.key.pem"

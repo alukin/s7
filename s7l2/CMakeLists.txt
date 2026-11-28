@@ -22,6 +22,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # only with GNU extensions enabled.
 set(CMAKE_CXX_EXTENSIONS ON)
 
+# Sanitizers for every target of this build (GCC/Clang), e.g.
+#   cmake -S . -B build-asan -DS7_SANITIZE=address,undefined
+#   cmake -S . -B build-tsan -DS7_SANITIZE=thread
+set(S7_SANITIZE "" CACHE STRING "Comma-separated -fsanitize= list for all targets (empty: none)")
+if (S7_SANITIZE)
+	if (MSVC)
+		message(FATAL_ERROR "S7_SANITIZE supports GCC and Clang only.")
+	endif()
+	add_compile_options(-fsanitize=${S7_SANITIZE} -fno-omit-frame-pointer -fno-sanitize-recover=all)
+	add_link_options(-fsanitize=${S7_SANITIZE})
+endif()
+option(S7_WARNINGS_AS_ERRORS "Treat project warnings as errors" OFF)
+
 # Give selected real-time DSP sources optimization in standard development builds.
 set(S7_REALTIME_COMPILE_OPTIONS "$<$<OR:$<CONFIG:Debug>,$<STREQUAL:$<CONFIG>,>>:-O2>")
 
@@ -33,10 +46,15 @@ function(s7_enable_project_warnings target_name)
 	if (MSVC)
 		target_compile_options(${target_name} PRIVATE /W4)
 	else()
-		target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+		# Designated initializers that leave members at their defaults are
+		# the project's idiom (e.g. ControlPlaneOptions{.authorization = ...}).
+		target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
 		if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 			target_compile_options(${target_name} PRIVATE -Wno-implicit-const-int-float-conversion)
 		endif()
+	endif()
+	if (S7_WARNINGS_AS_ERRORS)
+		target_compile_options(${target_name} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/WX,-Werror>)
 	endif()
 endfunction()
 
@@ -125,6 +143,7 @@ function(s7_add_test_executable target_name)
 		target_compile_options(${target_name} PRIVATE -UNDEBUG)
 	endif()
 	add_dependencies(build-tests ${target_name})
+	s7_enable_project_warnings(${target_name})
 endfunction()
 
 if (WIN32)
@@ -255,7 +274,9 @@ s7_enable_project_warnings(s7ctl)
 s7_enable_project_warnings(s7io_smoke)
 s7_enable_project_warnings(s7runtime_control_smoke)
 s7_enable_project_warnings(s7studio)
-s7_enable_project_warnings(s7spectral)
+foreach(plugin s7audio_plugin s7sdr_plugin s7radio_plugin s7_f128_abi)
+	s7_enable_project_warnings(${plugin})
+endforeach()
 
 set(S7_ALL_TARGETS
 	s7core
@@ -275,9 +296,6 @@ if(S7_BUILD_SDR)
     list(APPEND S7_ALL_TARGETS s7sdr s7sdr_plugin s7radio_plugin)
 endif()
 
-if (TARGET s7spectral)
-	list(APPEND S7_ALL_TARGETS s7spectral)
-endif()
 
 if (S7_BUILD_STUDIO)
 	list(APPEND S7_ALL_TARGETS s7studio)

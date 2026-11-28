@@ -152,7 +152,7 @@ void independence_and_limits() {
     require(direct_cycle,"A direct nested path still cannot close a feedback cycle");
 }
 void lead_lag() {
-    for(const auto [scale,zero,pole]:{std::tuple{16.,.8,.2},std::tuple{16.,.2,.2},std::tuple{1.,.2,.8},std::tuple{1.,.2,1.2}}) {
+    for(const auto& [scale,zero,pole]:{std::tuple{16.,.8,.2},std::tuple{16.,.2,.2},std::tuple{1.,.2,.8},std::tuple{1.,.2,1.2}}) {
         auto json=model("LeadLagController",{0,scale,zero,pole});
         auto& input=json.as_object().at("elements").as_array()[1].as_object();
         input["type"]="StepGenerator";

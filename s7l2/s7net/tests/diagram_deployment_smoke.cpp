@@ -381,8 +381,9 @@ void test_nested_stream_ends()
     auto& registry = s7::ElementRegistry::instance();
     expect(deployment::assign_streams(diagram, deployment::infer_output_types(diagram, registry)).empty(), "streams assigned");
     const auto streams = deployment::parse_streams(diagram);
+    const std::vector<deployment::StreamEndpoint> consumers{{kB, "sum", 0}};
     expect(streams.size() == 1 && streams[0].producer == deployment::StreamEndpoint{kA, "box_a", 0} &&
-               streams[0].consumers == std::vector<deployment::StreamEndpoint>{{kB, "sum", 0}},
+               streams[0].consumers == consumers,
            "the stream starts at the nested schema's exposed output");
     const auto a = deployment::extract_node_schema(diagram, kA);
     const auto b = deployment::extract_node_schema(diagram, kB);

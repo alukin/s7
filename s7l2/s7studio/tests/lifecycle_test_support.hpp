@@ -50,7 +50,7 @@ public:
         if (gate_->fail.load()) throw std::runtime_error("injected worker step failure");
     }
 };
-auto schema(double value = 1) -> boost::json::value {
+[[maybe_unused]] auto schema(double value = 1) -> boost::json::value {
     return boost::json::object{{"name", "lifecycle"}, {"dt", .001},
         {"elements", boost::json::array{boost::json::object{{"id", "source"}, {"type", "LifecycleGate"}, {"params", {{"value", value}}}}}},
         {"connections", boost::json::array{}}};

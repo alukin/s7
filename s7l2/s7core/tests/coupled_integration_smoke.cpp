@@ -232,7 +232,7 @@ void gauss_equilibrium_scaling() {
     s7::register_builtin_elements(registry);
     const auto* gauss = registry.find("GaussLegendreIntegrator");
     require(gauss, "Gauss element metadata is registered");
-    for (const auto [voltage, tau, h, steps] : {
+    for (const auto& [voltage, tau, h, steps] : {
              std::tuple{12., .001, .001, 30},
              std::tuple{100., .01, .001, 120},
              std::tuple{1e6, .001, .001, 30}}) {

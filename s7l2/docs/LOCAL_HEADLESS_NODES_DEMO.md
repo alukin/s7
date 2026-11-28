@@ -66,7 +66,7 @@ loopback, trusted LAN interfaces, deployment endpoints and other languages.
 Test certificates are in `s7runtime/examples/certs` (development fixtures only). To regenerate them:
 
 ```bash
-tools/generate_test_runtime_certs.sh
+tools/generate_test_runtime_certs.sh --force
 ```
 
 Enable `websocket.server.tls` in the schema with `cert_file`, `key_file`, and `ca_file`. For `wss://` seeds in Studio, fill the CA/cert/key fields in the `Headless Nodes` dock.

@@ -24,7 +24,8 @@ if [ -n "$TOOLCHAIN" ]; then CROSS=(--toolchain "$TOOLCHAIN"); fi
 for module in s7spectral s7wavelet; do
     cmake -S "$SOURCE_DIR/$module" -B "$WORK_DIR/$module" "${CROSS[@]}" \
         -DCMAKE_CXX_COMPILER="$COMPILER" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_PREFIX_PATH="$SDK" \
-        -Ds7core_DIR="$SDK/$LIBDIR/cmake/s7core" -Ds7spectral_DIR="$SDK/lib/cmake/s7spectral" -DBUILD_TESTING=OFF
+        -Ds7core_DIR="$SDK/$LIBDIR/cmake/s7core" -Ds7spectral_DIR="$SDK/lib/cmake/s7spectral" -DBUILD_TESTING=OFF \
+        -DCMAKE_INSTALL_LIBDIR=lib # the staging layout package.sh and LinuxInstall.cmake read
     cmake --build "$WORK_DIR/$module" --parallel "${S7_BUILD_JOBS:-2}"
     cmake --install "$WORK_DIR/$module" --prefix "$SDK"
 done

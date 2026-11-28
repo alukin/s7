@@ -245,7 +245,7 @@ void first_order(double coarse,double fine,const std::string& name) {
 
 int main() try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
-    for(const auto [mu,symplectic]:{std::pair{1,false},std::pair{1,true},std::pair{3,true}}) {
+    for(const auto& [mu,symplectic]:{std::pair{1,false},std::pair{1,true},std::pair{3,true}}) {
         const auto coarse=vdp(mu,symplectic,.001),fine=vdp(mu,symplectic,.0005);
         first_order(coarse,fine,"Van der Pol");
     }
@@ -253,7 +253,7 @@ int main() try {
         const auto coarse=lorenz(rho,.00025),fine=lorenz(rho,.000125);
         first_order(coarse,fine,"Lorenz short horizon");
     }
-    for(const PopulationCase spec: {
+    for(const PopulationCase& spec: {
         PopulationCase{"predator_prey",1,4,1},
         PopulationCase{"predator_prey_near_equilibrium",1,2.2L,2},
         PopulationCase{"predator_prey_equilibrium",1,2,2},
