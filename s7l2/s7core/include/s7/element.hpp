@@ -180,6 +180,13 @@ public:
     // This notification does not roll back private state or external effects.
     virtual void on_step_failure() noexcept {}
 
+    // Causal memory: whether everything step() advances is in the published
+    // outputs, which NodeRuntime stages and rolls back (ADR-021). An element
+    // that keeps more (e.g. an edge detector's previous input) returns false:
+    // NodeRuntime then steps it after the other memory elements, and reports
+    // a retry as inexact when a fault still follows it (ADR-029).
+    [[nodiscard]] virtual bool memory_state_is_published() const { return true; }
+
 protected:
     Element(std::string_view type_name,
             bool has_state = false,

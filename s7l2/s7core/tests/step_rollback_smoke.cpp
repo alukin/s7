@@ -194,6 +194,83 @@ void check(FaultSite site, const std::vector<int>& faulting_attempts, const std:
     require(runtime.retry_exactness().inexact_faults == 0, label + ": exact retry reported as inexact");
 }
 
+// Direct source whose value is *level.
+class LevelSource final : public s7::Element {
+public:
+    explicit LevelSource(const double* level) : Element("LevelSource"), level_(level) {
+        register_output(0, "out", s7::SignalType::F64, &value_);
+    }
+    void step() override { value_ = *level_; }
+
+private:
+    const double* level_;
+    double value_{};
+};
+
+// A rising-edge ControlledIntegrator keeps its previous reset level outside
+// its output. A fault in another memory element must not leave that level
+// advanced: the retry still sees the edge and resets, exactly as a run
+// without the fault (it steps after the other memory elements). Only when a
+// fault still follows it (here a second such integrator) is the retry
+// reported as inexact (ADR-029).
+void check_edge_state_retry() {
+    for (const bool second_integrator_faults : {false, true}) {
+        bool fail = false;
+        const bool never = false;
+        double level = 0.0;
+        const auto graph = [&level, second_integrator_faults](const bool* flag) {
+            s7::Schema schema("edge_retry");
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element("one", [] { return std::make_unique<s7::Constant>(1.0); });
+            schema.add_element("zero", [] { return std::make_unique<s7::Constant>(0.0); });
+            schema.add_element("reset", [&level] { return std::make_unique<LevelSource>(&level); });
+            for (const char* id : {"ci", "ci2"}) {
+                schema.add_element(id, [] {
+                    return std::make_unique<s7::ControlledIntegrator>(1.0, 0.0, std::numeric_limits<double>::lowest(),
+                                                                      std::numeric_limits<double>::max(), s7::IntegratorReset::Rising);
+                });
+                schema.connect("one", 0, id, 1);
+                schema.connect("zero", 0, id, 3);
+            }
+            schema.connect("reset", 0, "ci", 2);
+            schema.connect("zero", 0, "ci2", 2); // never resets: it reads its (NaN) derivative
+            schema.connect("one", 0, "ci", 0);
+            // Added after the integrators, so it would otherwise step after them.
+            schema.add_element("faulting", [flag, second_integrator_faults] {
+                return std::make_unique<FaultingDelay>(second_integrator_faults ? nullptr : flag);
+            });
+            schema.connect("one", 0, "faulting", 0);
+            schema.add_element("forcing", [flag, second_integrator_faults] {
+                return std::make_unique<FaultingForcing>(second_integrator_faults ? flag : nullptr);
+            });
+            schema.connect("forcing", 0, "ci2", 0);
+            return schema;
+        };
+        s7::NodeRuntime runtime(s7::Compiler::compile(graph(&fail)));
+        s7::NodeRuntime reference(s7::Compiler::compile(graph(&never)));
+        for (int step = 0; step < 3; ++step) { runtime.step(); reference.step(); }
+        level = 1.0; // a rising edge on the faulting step
+        fail = true;
+        bool threw = false;
+        try { runtime.step(); } catch (const std::exception&) { threw = true; }
+        require(threw, "edge retry: injected fault did not propagate");
+        fail = false;
+        runtime.step();
+        reference.step();
+        runtime.step();
+        reference.step();
+        const auto& retry = runtime.retry_exactness();
+        if (!second_integrator_faults) {
+            require(runtime.real_output_of("ci") == reference.real_output_of("ci"),
+                    "edge retry: the retried step lost the rising edge");
+            require(retry.inexact_faults == 0, "edge retry: an exact retry was reported as inexact");
+        } else {
+            require(retry.inexact_faults == 1 && std::ranges::find(retry.last_elements, std::string("ci")) != retry.last_elements.end(),
+                    "edge retry: an advanced edge state was not reported");
+        }
+    }
+}
+
 // ADR-029: when an element with private state steps before the fault, the
 // retry advances that state again. The runtime must say so, and only then.
 void check_retry_exactness() {
@@ -328,6 +405,7 @@ int main() try {
         check(site, {6, 7, 8}, std::string(name) + ", consecutive faults");
     }
     check_retry_exactness();
+    check_edge_state_retry();
     check_multirate({1}, "two rate domains, first step");
     check_multirate({5, 6}, "two rate domains, later steps");
     std::cout << "Faulting direct, causal-memory and numerical-stage steps roll back completely and recover exactly,"

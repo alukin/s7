@@ -339,6 +339,39 @@ void nested_coupled_trapezoid() {
     }
 }
 
+// A coupled Gauss-Legendre state inside a nested schema with its feedback
+// closed outside: the derivative crosses the schema's ports, which are wires
+// (ADR-024), so it validates and runs exactly like the flat model.
+void nested_coupled_gauss_across_ports() {
+    s7::Schema flat("flat_plant");
+    flat.add_element("x", [] { return std::make_unique<s7::GaussLegendreIntegrator>(0.01, 1.0); });
+    flat.add_element("minus", [] { return std::make_unique<s7::Gain>(-2.0); });
+    flat.connect("x", 0, "minus", 0);
+    flat.connect("minus", 0, "x", 0);
+
+    s7::Schema nested("nested_plant");
+    nested.add_element("plant", [] {
+        auto inner = std::make_unique<s7::Schema>("plant");
+        inner->set_rate(s7::Rate::from_hz(100));
+        inner->add_element("x", [] { return std::make_unique<s7::GaussLegendreIntegrator>(0.01, 1.0); });
+        inner->expose_input("u", s7::SignalType::F64, "x", 0);
+        inner->expose_output("y", s7::SignalType::F64, "x", 0);
+        return inner;
+    });
+    nested.add_element("minus", [] { return std::make_unique<s7::Gain>(-2.0); });
+    nested.connect("plant", 0, "minus", 0);
+    nested.connect("minus", 0, "plant", 0);
+
+    s7::NodeRuntime flatRuntime(s7::Compiler::compile(flat));
+    s7::NodeRuntime nestedRuntime(s7::Compiler::compile(nested));
+    for (int step = 0; step < 200; ++step) {
+        flatRuntime.step();
+        nestedRuntime.step();
+        require(nestedRuntime.real_output_of("plant", 0) == flatRuntime.real_output_of("x"),
+                "Nested coupled Gauss-Legendre across ports differs from flat model");
+    }
+}
+
 void recompilation_after_changes() {
     s7::Schema schema("editable");
     schema.set_rate(s7::Rate::from_hz(1));
@@ -683,6 +716,7 @@ int main() try {
     deep_nesting();
     independent_stateful_instances_and_feedback();
     nested_coupled_trapezoid();
+    nested_coupled_gauss_across_ports();
     recompilation_after_changes();
     moves();
     repeated_construction();

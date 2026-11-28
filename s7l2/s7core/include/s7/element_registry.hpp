@@ -82,7 +82,8 @@ class ElementRegistry {
 public:
     static ElementRegistry& instance();
 
-    // Register element
+    // Register element. Like unregister(), this invalidates pointers from
+    // find() and all_descriptors() (the descriptors may be reallocated).
     void register_element(const ElementDescriptor& descriptor);
 
     // Find element by type name

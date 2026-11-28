@@ -92,8 +92,10 @@ std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& 
                     errors.emplace_back((restricted ? "Coupled integration" : "Implicit TrapezoidIntegrator") +
                         std::string(" derivative depends on stateful direct-feedthrough element '") + id +
                         "'; only stateless feedback operations may be reevaluated.");
-                } else if (restricted && !dynamic_cast<const Gain*>(element) &&
-                           !dynamic_cast<const Adder*>(element) && !dynamic_cast<const Multiply*>(element)) {
+                } else if (restricted && !dynamic_cast<const Gain*>(element) && !dynamic_cast<const Adder*>(element) &&
+                           !dynamic_cast<const Multiply*>(element) && !dynamic_cast<const detail::SchemaPort*>(element)) {
+                    // A flattened nested schema's port is a wire (ADR-024): the
+                    // compiler resolves through it and never executes it.
                     errors.emplace_back("Coupled integration derivative contains unsupported trial element '" + id +
                                         "'; only built-in F64 arithmetic may be replayed.");
                 } else {
@@ -610,8 +612,24 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
         if (!implicit.empty() || !checked.coupled_regions.empty()) {
             const auto parents = parents_of(schema);
             for (const auto& spec : schema.elements()) if (spec.array_metadata) array_elements.insert(spec.id);
-            if (!implicit.empty())
-                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, implicit, array_elements, false, checked.errors);
+            if (!implicit.empty()) {
+                // Each rate domain solves only its own trapezoids; another
+                // domain's state reaches it through a Resampler as a held
+                // input, so the trial cones are computed per domain.
+                std::vector<std::pair<Rate, std::unordered_set<std::string>>> implicit_by_domain;
+                for (const auto& id : implicit) {
+                    const auto& rate = checked.rates.at(id);
+                    auto domain = std::ranges::find_if(implicit_by_domain, [&rate](const auto& entry) { return entry.first == rate; });
+                    if (domain == implicit_by_domain.end()) domain = implicit_by_domain.insert(implicit_by_domain.end(), {rate, {}});
+                    domain->second.insert(id);
+                }
+                for (const auto& [_, domain_implicit] : implicit_by_domain) {
+                    for (auto& id : trial_rhs(instances, parents, domain_implicit, domain_implicit, array_elements, false, checked.errors)) {
+                        if (std::ranges::find(checked.trapezoid_rhs, id) == checked.trapezoid_rhs.end())
+                            checked.trapezoid_rhs.push_back(std::move(id));
+                    }
+                }
+            }
             if (!checked.coupled_regions.empty()) {
                 const auto dependencies = memory_dependencies(instances, parents);
                 AdjacencyMap memory_graph;

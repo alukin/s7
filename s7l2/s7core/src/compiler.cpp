@@ -232,7 +232,7 @@ ExecutableGraph Compiler::compile_impl(const Schema& nested_schema,
     }
 
     // Validation gave every element its resolved rate (adopt_rate) before
-    // binding: a nested schema compiles on binding and checks against it.
+    // binding; nested schemas are already flattened (ADR-024).
 
     for (auto& [id, bindings] : element_inputs) {
         auto& element = *executable_graph.elements.at(id);

@@ -1362,9 +1362,16 @@ continues exactly. The headless runtime retries the same graph after
 2. `NodeRuntime` records each failed step after which a direct-feedthrough
    element with private state (`has_state`) had already stepped or started.
    It is conservative: an element whose state is only its published output
-   counts too. Memory elements count as exact, because their state is their
-   published output. `NodeRuntime::retry_exactness()` reports the count and
-   the elements of the latest such fault.
+   counts too. Memory elements count as exact when their state is their
+   published output. An element that keeps more (a rising-edge
+   `ControlledIntegrator`'s previous reset input) declares it with
+   `Element::memory_state_is_published() == false`: `NodeRuntime` steps such
+   elements after the other memory elements, which leaves results unchanged
+   because each published value is restored right after its element steps.
+   A fault in another memory element then cannot leave their state advanced.
+   A retry is reported as inexact only when a fault still follows one of them.
+   `NodeRuntime::retry_exactness()` reports the count and the elements of the
+   latest such fault. (Amended 2026-11-28; plugin API v6.)
 3. The headless node logs `runtime.execution.retry_inexact elements=...`.
    It reports the count and elements in the optional
    `STREAM_STATUS.execution` member (S7_Control_Protocol_MVP.md).

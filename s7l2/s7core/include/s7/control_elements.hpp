@@ -114,6 +114,8 @@ public:
         output_=next<lower_ ? lower_ : (next>upper_ ? upper_ : next);
         previous_reset_=requested;
     }
+    // previous_reset_ is private state beyond the output (rising-edge reset).
+    [[nodiscard]] bool memory_state_is_published() const override { return reset_==IntegratorReset::Level; }
     [[nodiscard]] std::optional<Rate> declared_rate() const override {
         if (follows_rate_) return std::nullopt;
         return Rate::from_seconds(static_cast<double>(dt_));

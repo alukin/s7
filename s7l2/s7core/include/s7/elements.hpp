@@ -171,6 +171,7 @@ private:
 };
 
 /// Saturation: clamp a real numeric input to inclusive lower and upper limits.
+/// A NaN input is passed through unchanged (it compares neither below nor above).
 template <SignalType Type>
 class SaturationT final : public Element {
 public:

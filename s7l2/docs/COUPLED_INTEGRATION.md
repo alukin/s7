@@ -102,10 +102,12 @@ inputs to each other. A Resampler can supply a held input from another rate
 domain; its input domain steps first under the normal domain scheduler.
 Other memory outputs can also be held inputs, but a
 feedback cycle crossing policies or a normal Euler/trapezoid state is a
-validation error. Stateful direct feedthrough, nested execution, unknown
-plugin operations, I/O, and unsupported pure elements **inside the varying
-trial cone** are rejected. They are never repeatedly stepped. Ordinary
-causal-cycle validation remains in force.
+validation error. Stateful direct feedthrough, unknown plugin operations,
+I/O, and unsupported pure elements **inside the varying trial cone** are
+rejected. They are never repeatedly stepped. A flattened nested schema's
+ports are wires (ADR-024), so a cone may cross them. Implicit trapezoids are
+solved per rate domain, so a trapezoid in another domain reaches through a
+Resampler as a held input. Ordinary causal-cycle validation remains in force.
 
 Gauss–Legendre currently supports at most 16 F64 state components in one
 strongly connected block. One-way cascades can have more total states. It

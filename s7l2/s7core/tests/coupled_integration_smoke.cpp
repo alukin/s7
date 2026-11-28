@@ -627,7 +627,9 @@ void region_size_limits() {
 void rate_domain_stages() {
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
-    for (const bool slow_trapezoid : {false, true}) {
+    // Implicit trapezoids in both domains are solved per domain too: the fast
+    // one holds the resampled slow state like a Gauss-Legendre stage does.
+    for (const auto& [slow_trapezoid, fast_trapezoid] : {std::pair{false, false}, std::pair{true, false}, std::pair{true, true}}) {
         s7::Schema schema("numerical_stages_in_two_rate_domains");
         schema.set_rate(s7::Rate::from_hz(4));
         schema.add_element("slow", [slow_trapezoid]() -> std::unique_ptr<s7::Element> {
@@ -639,13 +641,17 @@ void rate_domain_stages() {
         schema.connect("slow_rhs", 0, "slow", 0);
         schema.add_element(s7::make_element_spec("resample", *registry.find("Resampler"), {{"order", 0}}));
         schema.connect("slow", 0, "resample", 0);
-        schema.add_element("fast", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.25, 0.); });
+        schema.add_element("fast", [fast_trapezoid]() -> std::unique_ptr<s7::Element> {
+            if (fast_trapezoid) return std::make_unique<s7::TrapezoidIntegrator>(.25, 0.);
+            return std::make_unique<s7::GaussLegendreIntegrator>(.25, 0.);
+        });
         schema.add_element("fast_rhs", [] { return std::make_unique<s7::Adder>(std::vector<double>{1., -1.}); });
         schema.connect("resample", 0, "fast_rhs", 0);
         schema.connect("fast", 0, "fast_rhs", 1);
         schema.connect("fast_rhs", 0, "fast", 0);
         auto compiled = s7::Compiler::compile(schema);
-        require(compiled.domains.size() == 2 && compiled.coupled_regions.size() == (slow_trapezoid ? 1 : 2),
+        require(compiled.domains.size() == 2 &&
+                    compiled.coupled_regions.size() == static_cast<std::size_t>(!slow_trapezoid) + static_cast<std::size_t>(!fast_trapezoid),
                 "Numerical regions must stay in their rate domains");
         s7::NodeRuntime runtime(std::move(compiled));
         runtime.set_model_time_rate(s7::Rate::from_hz(4));
@@ -657,8 +663,9 @@ void rate_domain_stages() {
              "Slow numerical region must advance on its own domain schedule");
         require(std::isfinite(runtime.real_output_of("fast")) && runtime.real_output_of("fast") > 0,
                 "Fast coupled region must consume the held resampled source");
-        require(runtime.numerical_diagnostics().accepted_steps == (slow_trapezoid ? 4 : 6),
-                "Accepted integration samples count each active coupled rate domain once");
+        if (!fast_trapezoid)
+            require(runtime.numerical_diagnostics().accepted_steps == (slow_trapezoid ? 4 : 6),
+                    "Accepted integration samples count each active coupled rate domain once");
     }
 }
 } // namespace

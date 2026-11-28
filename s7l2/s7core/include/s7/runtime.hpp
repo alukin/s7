@@ -191,7 +191,7 @@ private:
         std::vector<StageInput> stage_inputs;
         NumericalDiagnostics diagnostics;
         // Reused numerical buffers; no per-step stage or Jacobian allocation.
-        std::vector<double> base, f0, current, endpoint, stage1, stage2, f1, f2;
+        std::vector<double> base, f0, current, endpoint, stage1, stage2, f1, f2, probe_magnitude;
         std::vector<double> k, residual, displaced, candidate, candidate_residual, jacobian, rhs, delta, row_scale;
         void prepare_storage();
     };
@@ -249,7 +249,7 @@ private:
     RetryExactness retry_exactness_;
     // Records whether direct elements with private state stepped before a
     // fault: the first `stepped` entries of domain.causal ran (or started).
-    void record_fault(const DomainState& domain, std::size_t stepped);
+    void record_fault(const DomainState& domain, std::size_t stepped, std::size_t memory_stepped = 0);
 };
 
 } // namespace s7

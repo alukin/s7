@@ -54,11 +54,11 @@ void NodeRuntime::TrialRegion::replay(std::size_t* evaluated) {
 void NodeRuntime::CoupledStage::prepare_storage() {
     const auto n = region.states.size(), d = 2*n;
     base.resize(n); f0.resize(n); current.resize(n); endpoint.resize(n);
-    stage1.resize(n); stage2.resize(n); f1.resize(n); f2.resize(n);
+    stage1.resize(n); stage2.resize(n); f1.resize(n); f2.resize(n); probe_magnitude.resize(n);
     k.resize(d); residual.resize(d); displaced.resize(d); candidate.resize(d);
     candidate_residual.resize(d); jacobian.resize(d*d); rhs.resize(d);
     delta.resize(d); row_scale.resize(d);
-    diagnostics.scratch_payload_bytes = sizeof(double)*(8*n + 8*d + d*d) +
+    diagnostics.scratch_payload_bytes = sizeof(double)*(9*n + 8*d + d*d) +
         trial.outputs.size()*sizeof(TrialRegion::Output) + stage_inputs.size()*sizeof(StageInput);
 }
 
@@ -113,6 +113,11 @@ void NodeRuntime::build_domain(DomainState& domain)
         }
         domain.array_outputs.push_back(slot);
     };
+    // Memory-phase order does not change results: each element's published
+    // value is restored right after it steps. Elements whose step() advances
+    // private state beyond their outputs step last, so a fault in another
+    // memory element cannot leave that state advanced for the retry (ADR-029).
+    std::ranges::stable_partition(domain.memory, [](const Element* element) { return element->memory_state_is_published(); });
     domain.memory_output_ranges.reserve(domain.memory.size());
     for (auto* element : domain.memory) {
         const auto ports = element->output_ports();
@@ -303,11 +308,15 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
         if (iteration == max_iterations)
             throw std::runtime_error("Gauss-Legendre stage solve did not converge after 12 Newton iterations; residual=" +
                                      std::to_string(normalized) + ".");
+        // Probe step sizes come from the current iterate's stages: each probe
+        // below overwrites stage1/stage2 with its displaced stages.
+        for (std::size_t state = 0; state < n; ++state)
+            stage.probe_magnitude[state] = std::max({std::abs(stage.base[state]),
+                std::abs(stage.stage1[state]), std::abs(stage.stage2[state])});
         for (std::size_t col = 0; col < d; ++col) {
             stage.candidate = stage.k;
             const auto state = col < n ? col : col-n;
-            const double stage_magnitude = std::max({std::abs(stage.base[state]),
-                std::abs(stage.stage1[state]), std::abs(stage.stage2[state])});
+            const double stage_magnitude = stage.probe_magnitude[state];
             const double epsilon = std::sqrt(std::numeric_limits<double>::epsilon())*
                 std::max({1., std::abs(stage.k[col]), stage_magnitude/stage.region.step_seconds});
             stage.candidate[col] += epsilon;
@@ -612,7 +621,8 @@ void NodeRuntime::step_domain(DomainState& domain) {
             domain.memory[element_index]->step();
         } catch (...) {
             roll_back_step(domain);
-            record_fault(domain, domain.causal.size());
+            // The faulting element may have advanced too (conservative).
+            record_fault(domain, domain.causal.size(), element_index + 1);
             throw;
         }
         const auto range = domain.memory_output_ranges[element_index];
@@ -629,15 +639,19 @@ void NodeRuntime::step_domain(DomainState& domain) {
     ++domain.steps;
 }
 
-void NodeRuntime::record_fault(const DomainState& domain, const std::size_t stepped) {
+void NodeRuntime::record_fault(const DomainState& domain, const std::size_t stepped, const std::size_t memory_stepped) {
     std::vector<std::string> advanced;
-    for (std::size_t index = 0; index < stepped && index < domain.causal.size(); ++index) {
-        const auto* element = domain.causal[index];
-        if (!element->has_state()) continue;
+    const auto add = [&](const Element* element) {
         // Faults are rare: resolve the id by searching the graph's elements.
         for (const auto& [id, owned] : graph_.elements) {
             if (owned.get() == element) { advanced.push_back(id); break; }
         }
+    };
+    for (std::size_t index = 0; index < stepped && index < domain.causal.size(); ++index) {
+        if (domain.causal[index]->has_state()) add(domain.causal[index]);
+    }
+    for (std::size_t index = 0; index < memory_stepped && index < domain.memory.size(); ++index) {
+        if (!domain.implicit_memory[index] && !domain.memory[index]->memory_state_is_published()) add(domain.memory[index]);
     }
     if (advanced.empty()) return;
     ++retry_exactness_.inexact_faults;
