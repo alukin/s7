@@ -651,7 +651,7 @@ void checkAudioBlockPsd()
                     sample->value.spectrum->sample_rate && sample->value.spectrum->sample_rate->to_hz() == 48000,
                     "audio PSD lost its spectrum metadata");
             const auto shape = descriptor->extents();
-            require(shape.size() == 2 && shape[0] == count && shape[1] == 1025, "audio PSD has the wrong shape");
+            require(shape.size() == 2 && shape[0] == static_cast<std::size_t>(count) && shape[1] == 1025, "audio PSD has the wrong shape");
             const auto powers = sample->value.lease.values<s7::SignalType::F32>();
             peaks.clear();
             for (int channel = 0; channel < count; ++channel) {
