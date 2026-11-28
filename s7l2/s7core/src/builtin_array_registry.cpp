@@ -65,6 +65,42 @@ void register_builtin_array_elements(ElementRegistry& registry, const ElementMet
         });
     }, metadata.at("VectorGain"), true));
 
+    // Causal memory for a whole vector: publishes initial_values (zeros when
+    // empty) first, then the previous step's input.
+    registry.register_element(ElementDescriptor("VectorDelay", [](const ElementCreationContext& ctx) {
+        const auto shape = descriptor(ctx);
+        const auto* initial = ctx.params.if_contains("initial_values");
+        const auto& values = initial && initial->is_array() ? initial->as_array() : boost::json::array{};
+        if (!values.empty() && values.size() != static_cast<std::size_t>(shape.extents()[0])) {
+            throw std::invalid_argument("VectorDelay initial_values must be empty or have one value per component.");
+        }
+        return visit_signal_type(shape.type(), [&]<SignalType Type>() -> std::unique_ptr<Element> {
+            ArrayPool pool(shape, 1, 0, budget(shape, 1)); // the sealed lease keeps its storage alive
+            auto writer = pool.try_acquire().value();
+            auto data = writer.template values<Type>();
+            if (values.empty()) std::ranges::fill(data, signal_storage_t<Type>{});
+            else for (std::size_t i = 0; i < data.size(); ++i) data[i] = signal_value_from_json<Type>(values[i], "VectorDelay initial value");
+            return std::make_unique<VectorDelay>(shape, std::move(writer).seal());
+        });
+    }, metadata.at("VectorDelay"), true));
+
+    const auto binary = [&registry, &metadata]<VectorBinaryOp Op>(const char* name) {
+        registry.register_element(ElementDescriptor(name, [name](const ElementCreationContext& ctx) {
+            const auto shape = descriptor(ctx);
+            const auto slots = static_cast<std::size_t>(ctx.get_int("execution_slots"));
+            return visit_signal_type(shape.type(), [&]<SignalType Type>() -> std::unique_ptr<Element> {
+                if constexpr (Type == SignalType::F32 || Type == SignalType::F64 ||
+                              Type == SignalType::C32 || Type == SignalType::C64) {
+                    return std::make_unique<VectorBinaryT<Type, Op>>(shape, slots, budget(shape, slots));
+                } else {
+                    throw std::invalid_argument(std::string(name) + " supports F32, F64, C32 and C64.");
+                }
+            });
+        }, metadata.at(name), true));
+    };
+    binary.template operator()<VectorBinaryOp::Add>("VectorAdd");
+    binary.template operator()<VectorBinaryOp::Multiply>("VectorMultiply");
+
     registry.register_element(ElementDescriptor("PackVector", [](const ElementCreationContext& ctx) {
         const auto shape = descriptor(ctx);
         const auto slots = static_cast<std::size_t>(ctx.get_int("execution_slots"));

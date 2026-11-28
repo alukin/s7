@@ -4438,6 +4438,296 @@
       }
     },
     {
+      "type_name": "VectorDelay",
+      "display_name": "VectorDelay",
+      "description": "Whole-vector causal memory: publishes initial_values first (zeros when empty), then the previous step's input vector with its provenance. Closes vector feedback loops.",
+      "category": "memory_integration",
+      "version": "1.0.0",
+      "tags": [
+        "vector"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input vector",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Native component type",
+          "default": "F32",
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "components",
+          "type": "int",
+          "description": "Fixed vector length",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 1048576
+        },
+        {
+          "name": "initial_values",
+          "type": "array",
+          "description": "Output before the first input: one native value per component, or empty for zeros",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      },
+      "variadic_outputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "VectorAdd",
+      "stateless": true,
+      "display_name": "VectorAdd",
+      "description": "Elementwise sum of two vectors of the same type and length (F32, F64, C32, C64).",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [
+        "vector"
+      ],
+      "input_ports": [
+        {
+          "name": "lhs",
+          "description": "First vector",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        },
+        {
+          "name": "rhs",
+          "description": "Second vector",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Native component type",
+          "default": "F32",
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "components",
+          "type": "int",
+          "description": "Fixed vector length",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 1048576
+        },
+        {
+          "name": "execution_slots",
+          "type": "int",
+          "description": "Preallocated execution buffers; a result held by a VectorDelay needs three",
+          "default": 3,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 64
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      },
+      "variadic_outputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "VectorMultiply",
+      "stateless": true,
+      "display_name": "VectorMultiply",
+      "description": "Elementwise product of two vectors of the same type and length (F32, F64, C32, C64).",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [
+        "vector"
+      ],
+      "input_ports": [
+        {
+          "name": "lhs",
+          "description": "First vector",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        },
+        {
+          "name": "rhs",
+          "description": "Second vector",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            2
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Native component type",
+          "default": "F32",
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "components",
+          "type": "int",
+          "description": "Fixed vector length",
+          "default": 2,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 1048576
+        },
+        {
+          "name": "execution_slots",
+          "type": "int",
+          "description": "Preallocated execution buffers; a result held by a VectorDelay needs three",
+          "default": 3,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 64
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      },
+      "variadic_outputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
       "type_name": "PackVector",
       "stateless": true,
       "display_name": "PackVector",

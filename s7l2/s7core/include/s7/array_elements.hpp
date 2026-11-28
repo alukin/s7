@@ -113,6 +113,46 @@ private:
     signal_storage_t<Type> gain_;
 };
 
+enum class VectorBinaryOp { Add, Multiply };
+
+/// Elementwise sum or product of two vectors of the same type and length.
+/// Neither input's source provenance is claimed for the result.
+template <SignalType Type, VectorBinaryOp Op>
+class VectorBinaryT final : public ArrayElement {
+    static_assert(signal_type_info(Type).kind == SignalKind::Float ||
+                  signal_type_info(Type).kind == SignalKind::ComplexFloat);
+public:
+    VectorBinaryT(ArrayDescriptor descriptor, std::size_t execution_slots, std::shared_ptr<ArrayMemoryBudget> budget)
+        : ArrayElement(Op == VectorBinaryOp::Add ? "VectorAdd" : "VectorMultiply"),
+          pool_(descriptor, execution_slots, 0, std::move(budget)),
+          output_(register_array_output(port_names::out, descriptor))
+    {
+        if (descriptor.rank() != 1 || descriptor.type() != Type || execution_slots < 2) {
+            throw std::invalid_argument("VectorAdd/VectorMultiply require an exact rank-one descriptor and at least two execution slots.");
+        }
+        register_array_input("lhs", descriptor);
+        register_array_input("rhs", std::move(descriptor));
+    }
+
+    void step() override
+    {
+        auto writer = pool_.try_acquire();
+        if (!writer) throw std::runtime_error("Vector arithmetic execution pool cannot supply an output.");
+        auto output = writer->template values<Type>();
+        const auto lhs = array_input(0).template values<Type>();
+        const auto rhs = array_input(1).template values<Type>();
+        for (std::size_t i = 0; i < output.size(); ++i) {
+            if constexpr (Op == VectorBinaryOp::Add) output[i] = lhs[i] + rhs[i];
+            else output[i] = lhs[i] * rhs[i];
+        }
+        static_cast<void>(output_.exchange({std::move(*writer).seal()}));
+    }
+
+private:
+    ArrayPool pool_;
+    ArrayOutputSlot& output_;
+};
+
 /// Assemble one vector from scalar inputs in port order.
 template <SignalType Type>
 class PackVectorT final : public ArrayElement {

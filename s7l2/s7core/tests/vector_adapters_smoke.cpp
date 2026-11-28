@@ -129,9 +129,57 @@ void check_saved_graph(const char* filename)
         require(runtime.output_of<SignalType::U64>("reference", 1) == 3, "mixed scalar status port differs");
     }
 }
+// Registered VectorDelay, VectorAdd and VectorMultiply from saved JSON: a
+// vector accumulator loop closed by VectorDelay, and an elementwise product,
+// against scalar oracles.
+void check_registered_vector_arithmetic()
+{
+    auto& registry = ElementRegistry::instance();
+    register_builtin_elements(registry);
+    const auto definition = boost::json::parse(R"({
+        "name": "vector_arithmetic", "dt": 0.01,
+        "elements": [
+            {"id": "step", "type": "VectorConstant", "params": {"type": "F64", "values": [1, -2, 0.5]}},
+            {"id": "sum", "type": "VectorAdd", "params": {"type": "F64", "components": 3}},
+            {"id": "memory", "type": "VectorDelay", "params": {"type": "F64", "components": 3, "initial_values": [10, 0, -1]}},
+            {"id": "square", "type": "VectorMultiply", "params": {"type": "F64", "components": 3}},
+            {"id": "total", "type": "UnpackVector", "params": {"type": "F64", "components": 3}},
+            {"id": "squared", "type": "UnpackVector", "params": {"type": "F64", "components": 3}}
+        ],
+        "connections": [
+            {"from_element": "step", "from_port": 0, "to_element": "sum", "to_port": 0},
+            {"from_element": "memory", "from_port": 0, "to_element": "sum", "to_port": 1},
+            {"from_element": "sum", "from_port": 0, "to_element": "memory", "to_port": 0},
+            {"from_element": "sum", "from_port": 0, "to_element": "square", "to_port": 0},
+            {"from_element": "sum", "from_port": 0, "to_element": "square", "to_port": 1},
+            {"from_element": "sum", "from_port": 0, "to_element": "total", "to_port": 0},
+            {"from_element": "square", "from_port": 0, "to_element": "squared", "to_port": 0}
+        ]})");
+    auto schema = SchemaLibraryLoader::build_schema(definition, registry);
+    const auto validation = Validator::validate(schema);
+    if (!validation.ok()) throw std::runtime_error(validation.errors.front());
+    NodeRuntime runtime(Compiler::compile(schema));
+    std::array<double, 3> total{10, 0, -1};
+    const std::array<double, 3> step{1, -2, 0.5};
+    for (int n = 0; n < 6; ++n) {
+        runtime.step();
+        for (std::size_t i = 0; i < 3; ++i) {
+            total[i] += step[i];
+            require(runtime.output_of<SignalType::F64>("total", i) == total[i], "vector accumulator loop differs from the scalar oracle");
+            require(runtime.output_of<SignalType::F64>("squared", i) == total[i] * total[i], "VectorMultiply differs from the scalar oracle");
+        }
+    }
+    auto bad = definition;
+    bad.as_object()["elements"].as_array()[2].as_object()["params"].as_object()["initial_values"] = boost::json::array{1, 2};
+    rejects([&] { static_cast<void>(Compiler::compile(SchemaLibraryLoader::build_schema(bad, registry))); }, "initial_values");
+    auto integer = definition;
+    integer.as_object()["elements"].as_array()[1].as_object()["params"].as_object()["type"] = "I32";
+    rejects([&] { static_cast<void>(Compiler::compile(SchemaLibraryLoader::build_schema(integer, registry))); }, "supports F32, F64, C32 and C64");
+}
 } // namespace
 
 int main(int argc, char** argv) try {
+    check_registered_vector_arithmetic();
     check_round_trip<SignalType::F32>({1.25f, -3.5f, 0.25f});
     check_round_trip<SignalType::C32>({std::complex<float>{2, 3}, {4, -7}, {-1, 9}});
     check_errors();

@@ -116,6 +116,29 @@ Acceptance includes synthetic and recorded input (no auto hardware), independent
 
 The initial implementation and qualification is a **mandatory new 0.2.0 scope amendment**, not an assertion that it exists. Any variation of the slice must be recorded in the release work plan.
 
+### Registered vector elements
+
+Saved diagrams can use these rank-one vector elements (metadata in
+`s7core/resources/element_metadata.json`, registration in
+`s7core/src/builtin_array_registry.cpp`):
+
+| Element | Behavior |
+|---|---|
+| `VectorConstant` | Publishes a fixed vector (any numeric type; complex values as `[re, im]`) |
+| `VectorPassThrough` | Forwards a vector and its source provenance |
+| `VectorGain` | Multiplies each component by a native gain (F32, F64, C32, C64) |
+| `VectorAdd`, `VectorMultiply` | Elementwise sum or product of two vectors of one type and length (F32, F64, C32, C64); no source provenance is claimed |
+| `VectorDelay` | Whole-vector causal memory: `initial_values` (zeros when empty) first, then the previous step's input with its provenance; closes vector feedback loops |
+| `PackVector`, `UnpackVector` | Scalars to one vector and back, in the same step |
+| `TestPatternFrame` | Deterministic U8 video frames |
+| `VectorFFT`, `VectorPSD` (s7spectral) | Complex vector FFT and power spectral density |
+
+An output held by a `VectorDelay` stays leased for one more step, so the
+producing element needs three execution buffers (the default for `VectorAdd`
+and `VectorMultiply`). Not implemented: vector integrators and an element
+that frames a scalar sample stream into blocks (a rate change that needs its
+own design).
+
 ## 6. Forward-compatible roadmap and tests
 
 - **0.3.0:** audio block convolution (existing C64 processor refactoring where appropriate), real hardware/audio/SDR/whole-frame video and production GStreamer adapters, optional FFmpeg adapter, basic image transforms, broader buffer/plane/stride support, performance and clock provenance, use/reuse 0.2.0 viewers. Keep video and audio sample clocks explicit.
