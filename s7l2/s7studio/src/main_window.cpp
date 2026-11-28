@@ -1547,14 +1547,16 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
                                             : diagram::ArrayObserverKind::None;
             if (arrayKind != diagram::ArrayObserverKind::None) {
                 const auto* viewer = viewers::ViewerRegistry::instance().find(QString::fromStdString(observer->element().type));
-                const auto role = viewer->inputSuffixes.value(connection.to.port).toStdString();
+                const auto role = viewer ? viewer->inputSuffixes.value(connection.to.port).toStdString() : channelName;
                 probes.push_back(RunProbe{connection.to.element + "/" + role, connection.from.element,
                     connection.from.port, {}, false, {}, arrayKind});
                 continue;
             }
             if (const auto scope = scene->elementNode(connection.to.element)) {
-                if (diagram::isAxisObserverElementType(scope->element().type)) {
-                    const auto& axes = viewers::ViewerRegistry::instance().find(QString::fromStdString(scope->element().type))->inputSuffixes;
+                const auto* axisType = diagram::isAxisObserverElementType(scope->element().type)
+                    ? viewers::ViewerRegistry::instance().find(QString::fromStdString(scope->element().type)) : nullptr;
+                if (axisType) {
+                    const auto& axes = axisType->inputSuffixes;
                     if (connection.to.port >= 0 && connection.to.port < static_cast<int>(axes.size())) {
                         channelName = axes[connection.to.port].toStdString();
                     }

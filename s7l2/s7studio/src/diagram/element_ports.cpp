@@ -73,7 +73,7 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
     -> ElementPorts
 {
     if (type == "Scope" || type == "LiveOscilloscope") {
-        const int count = std::max(0, json_utils::intValue(params, "channel_count", 0));
+        const int count = std::clamp(json_utils::intValue(params, "channel_count", 0), 0, kMaxElementPorts - 1);
         auto inputs = numbered("signal", count);
         inputs.push_back(QStringLiteral("+")); // connection target that grows the observer
         return {std::move(inputs), {}};
@@ -149,7 +149,7 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         return {numbered("in", 2), numbered("out", 1)};
     }
     if (type == "MinMax") {
-        return {numbered("in", std::max(2, json_utils::intValue(params, "input_count", 2))), numbered("out", 1)};
+        return {numbered("in", std::clamp(json_utils::intValue(params, "input_count", 2), 2, kMaxElementPorts)), numbered("out", 1)};
     }
     if (variadicInputs > 0) {
         return {numbered("in", variadicInputs), numbered("out", 1)};

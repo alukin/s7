@@ -4,6 +4,8 @@
 #include "viewers/observation_viewer.hpp"
 #include "observation/run_metadata.hpp"
 
+#include <QElapsedTimer>
+
 namespace s7studio::viewers {
 void ObservationViewer::attachSource(std::shared_ptr<const observation::ObservationSource> source,
                                     QVector<InputBinding> bindings, bool clear)
@@ -41,16 +43,26 @@ QString ObservationViewer::sourceStatusText() const
 bool ObservationViewer::refreshSource()
 {
     if (!source_) return false;
-    const auto page = source_->read(cursor_);
-    readError_ = page.error;
+    // Several pages per UI tick, within a small time budget: one page per
+    // tick capped intake at a page every 16 ms, so a fast run left the view
+    // further behind for its whole duration.
+    constexpr qint64 kRefreshBudgetMs = 4;
+    QElapsedTimer budget;
+    budget.start();
     const auto channels = source_->channels();
-    for (const auto& sample : page.samples) {
-        for (const auto& binding : bindings_) if (binding.channel == sample.channel)
-            appendObservedSample({channels[sample.channel].name, sample.step,
-                sample.timeSeconds, sample.value, source_->runId(), sample.channel, binding.role, units_.value(sample.channel)});
-    }
-    cursor_ = page.next;
+    bool more = false;
+    do {
+        const auto page = source_->read(cursor_);
+        readError_ = page.error;
+        for (const auto& sample : page.samples) {
+            for (const auto& binding : bindings_) if (binding.channel == sample.channel)
+                appendObservedSample({channels[sample.channel].name, sample.step,
+                    sample.timeSeconds, sample.value, source_->runId(), sample.channel, binding.role, units_.value(sample.channel)});
+        }
+        cursor_ = page.next;
+        more = page.error.isEmpty() && cursor_ < source_->status().samples;
+    } while (more && budget.elapsed() < kRefreshBudgetMs);
     setDroppedSampleCount(source_->status().captureDropped);
-    return page.error.isEmpty() && cursor_ < source_->status().samples;
+    return more;
 }
 } // namespace s7studio::viewers

@@ -13,6 +13,10 @@
 
 namespace s7studio::diagram {
 
+// Upper bound on one element's ports in Studio. Diagram files and parameters
+// are untrusted: a hostile count must not build millions of port items.
+inline constexpr int kMaxElementPorts = 4096;
+
 enum class ArrayObserverKind { None, Waterfall, VideoPlayer };
 
 [[nodiscard]] inline std::string_view arrayObserverType(ArrayObserverKind kind)

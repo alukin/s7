@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
@@ -40,6 +41,24 @@ struct ConnectionModel {
 auto error(const std::string& message) -> std::runtime_error
 {
     return std::runtime_error("diagram: " + message);
+}
+
+// A connection's port: a whole number in [0, kMaxElementPorts). An absent
+// field means port 0, as before; anything else is a malformed file rather
+// than a reason to build that many ports.
+auto portIndex(const boost::json::object& object, const char* key) -> int
+{
+    const auto* value = json_utils::findObjectValue(object, key);
+    if (!value) return 0;
+    double number = std::numeric_limits<double>::quiet_NaN();
+    if (value->is_int64()) number = static_cast<double>(value->as_int64());
+    else if (value->is_uint64()) number = static_cast<double>(value->as_uint64());
+    else if (value->is_double()) number = value->as_double();
+    if (!(number >= 0 && number < diagram::kMaxElementPorts) || number != std::floor(number)) {
+        throw error(std::string("connection ") + key + " must be a whole number from 0 to " +
+                    std::to_string(diagram::kMaxElementPorts - 1));
+    }
+    return static_cast<int>(number);
 }
 
 auto gridPoint(const boost::json::value& value, const std::string& what) -> QPoint
@@ -380,8 +399,8 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
                     continue;
                 }
                 const auto& object = value.as_object();
-                ConnectionModel connection{json_utils::stringValue(object, "from_element"), json_utils::intValue(object, "from_port"),
-                                           json_utils::stringValue(object, "to_element"), json_utils::intValue(object, "to_port")};
+                ConnectionModel connection{json_utils::stringValue(object, "from_element"), portIndex(object, "from_port"),
+                                           json_utils::stringValue(object, "to_element"), portIndex(object, "to_port")};
                 const auto from = index.find(connection.fromElement);
                 const auto to = index.find(connection.toElement);
                 if (from == index.end() || to == index.end()) {

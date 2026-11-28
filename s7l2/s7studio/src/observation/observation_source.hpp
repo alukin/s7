@@ -98,7 +98,7 @@ private:
     QVector<Sample> memory_;
     std::vector<std::deque<std::pair<std::uint64_t, Sample>>> tails_;
     mutable std::unique_ptr<QIODevice> file_;
-    mutable SourceStatus status_;
+    SourceStatus status_;
     QJsonObject provenance_;
     bool provenanceSet_ = false;
 };

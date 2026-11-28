@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -242,11 +243,38 @@ void ScopeViewWindow::analyzeInterval()
             std::map<std::int64_t, AnalysisRow> rows;
             bool truncated = false;
             QString error;
-            std::uint64_t cursor = 0;
-            while (cursor < status.samples && !stop.stop_requested()) {
+            // Records arrive in logical-step order, so model time does not
+            // decrease: start at the first record at or after `lower`
+            // (bisection) and stop after `upper`, instead of reading the
+            // whole run. A decrease seen while scanning falls back to a full
+            // scan from the start.
+            const auto timeAt = [&journal](std::uint64_t index) -> std::optional<double> {
+                const auto page = journal->read(index, 1);
+                if (!page.error.isEmpty() || page.samples.isEmpty()) return std::nullopt;
+                return page.samples.front().timeSeconds;
+            };
+            std::uint64_t first = 0, last = status.samples;
+            while (first < last && !stop.stop_requested()) {
+                const auto middle = first + (last - first) / 2;
+                const auto time = timeAt(middle);
+                if (!time) { first = 0; break; }
+                if (*time < lower) first = middle + 1; else last = middle;
+            }
+            std::uint64_t cursor = first;
+            bool ordered = true;
+            double previousTime = -std::numeric_limits<double>::infinity();
+            bool pastUpper = false;
+            while (cursor < status.samples && !pastUpper && !stop.stop_requested()) {
                 const auto page = journal->read(cursor, static_cast<qsizetype>(std::min<std::uint64_t>(4096, status.samples-cursor)));
                 if (!page.error.isEmpty() || page.next <= cursor) { error = page.error.isEmpty() ? QStringLiteral("Run read stalled") : page.error; break; }
+                bool restart = false;
                 for (const auto& sample : page.samples) {
+                    if (ordered && sample.timeSeconds < previousTime) {
+                        ordered = false;
+                        if (first != 0) { restart = true; break; }
+                    }
+                    previousTime = sample.timeSeconds;
+                    if (ordered && sample.timeSeconds > upper) { pastUpper = true; break; }
                     const auto index = indices.constFind(sample.channel);
                     if (index == indices.cend() || sample.timeSeconds < lower || sample.timeSeconds > upper) continue;
                     auto [it, inserted] = rows.try_emplace(sample.step);
@@ -265,6 +293,10 @@ void ScopeViewWindow::analyzeInterval()
                     while (rows.size() > static_cast<std::size_t>(limit)) { rows.erase(rows.begin()); truncated = true; }
                 }
                 if (!error.isEmpty()) break;
+                if (restart) {
+                    rows.clear(); truncated = false; first = 0; cursor = 0; pastUpper = false;
+                    continue;
+                }
                 cursor = page.next;
             }
             if (stop.stop_requested()) return;

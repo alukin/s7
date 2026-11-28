@@ -73,6 +73,33 @@ private slots:
         QVERIFY(!source.finish()); QVERIFY(source.status().finished && source.status().incomplete());
         QVERIFY(source.status().storageError.contains("flush device exception"));
     }
+    void failedReadDoesNotStopRecording() {
+        // A storage device whose reads fail while *failReads is set.
+        class FlakyReads final : public QBuffer {
+        public:
+            explicit FlakyReads(const bool* fail) : fail_(fail) {}
+        protected:
+            qint64 readData(char* data, qint64 size) override { return *fail_ ? -1 : QBuffer::readData(data, size); }
+        private:
+            const bool* fail_;
+        };
+        bool failReads = false;
+        observation::StorageOptions options; options.memoryLimit = 1;
+        options.createStorage = [&failReads]() -> std::unique_ptr<QIODevice> {
+            auto buffer = std::make_unique<FlakyReads>(&failReads); buffer->open(QIODevice::ReadWrite); return buffer;
+        };
+        observation::ObservationSource source(6, options);
+        const auto id = source.channel("a");
+        QVERIFY(source.append({id, 1, .1, 1})); QVERIFY(source.append({id, 2, .2, 2}));
+        failReads = true;
+        const auto failed = source.read(0);
+        QVERIFY(!failed.error.isEmpty()); QVERIFY(failed.samples.isEmpty());
+        QVERIFY2(source.status().storageError.isEmpty(), "a reader's failure marked the recording broken");
+        QVERIFY(source.append({id, 3, .3, 3}));
+        failReads = false;
+        QCOMPARE(source.read(0).samples.size(), 3);
+        QVERIFY(source.finish()); QVERIFY(!source.status().incomplete());
+    }
     void sessionsRetainOldHandlesAndRejectRetiredBatches() {
         observation::ObservationSession session;
         ScopeSampleBatch first{{{"s/a", 1, .01, 12, 8}}, 3, 8};

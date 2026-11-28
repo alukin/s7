@@ -5,8 +5,12 @@
 
 #include <s7/schema_library.hpp>
 
+#include "diagram/element_ports.hpp"
+
+#include <limits>
 #include <stdexcept>
 #include <cmath>
+#include <string>
 #include <set>
 
 namespace s7studio::diagram {
@@ -26,6 +30,25 @@ void validateExposedPorts(const boost::json::object& schema)
 }
 } // namespace
 
+namespace {
+// A whole number in [0, maximum] from an untrusted document field (a plain
+// cast of 2.7 or 1e20 would be silently wrong or undefined behaviour).
+int wholeNumber(const boost::json::value& value, const std::string& what, const int maximum)
+{
+    const double number = value.to_number<double>();
+    if (!(number >= 0 && number <= maximum) || number != std::floor(number))
+        throw std::invalid_argument(what + " must be a whole number from 0 to " + std::to_string(maximum));
+    return static_cast<int>(number);
+}
+
+double pageExtentMm(const boost::json::value& value, const std::string& what)
+{
+    const double number = value.to_number<double>();
+    if (!(number > 0 && number <= 10'000)) throw std::invalid_argument(what + " must be a positive size of at most 10000 mm");
+    return number;
+}
+} // namespace
+
 auto DiagramPageLayout::fromJson(const boost::json::object& obj) -> DiagramPageLayout {
     DiagramPageLayout layout;
     
@@ -36,16 +59,12 @@ auto DiagramPageLayout::fromJson(const boost::json::object& obj) -> DiagramPageL
         }
     }
     
-    if (auto it = obj.find("width_mm"); it != obj.end() && it->value().is_double()) {
-        layout.widthMm = it->value().as_double();
-    } else if (auto it = obj.find("width_mm"); it != obj.end() && it->value().is_int64()) {
-        layout.widthMm = static_cast<double>(it->value().as_int64());
+    if (auto it = obj.find("width_mm"); it != obj.end() && it->value().is_number()) {
+        layout.widthMm = pageExtentMm(it->value(), "sheet.width_mm");
     }
-    
-    if (auto it = obj.find("height_mm"); it != obj.end() && it->value().is_double()) {
-        layout.heightMm = it->value().as_double();
-    } else if (auto it = obj.find("height_mm"); it != obj.end() && it->value().is_int64()) {
-        layout.heightMm = static_cast<double>(it->value().as_int64());
+
+    if (auto it = obj.find("height_mm"); it != obj.end() && it->value().is_number()) {
+        layout.heightMm = pageExtentMm(it->value(), "sheet.height_mm");
     }
     
     return layout;
@@ -105,7 +124,7 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
     }
     
     if (auto it = root.find("diagram_version"); it != root.end() && it->value().is_number()) {
-        doc.diagramVersion = static_cast<int>(it->value().to_number<double>());
+        doc.diagramVersion = wholeNumber(it->value(), "diagram_version", std::numeric_limits<int>::max());
     }
 
     if (auto it = root.find("diagram"); it != root.end() && it->value().is_object()) {
@@ -129,7 +148,7 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
                 probe.point.element = element->as_string().c_str();
             }
             if (const auto* port = object.if_contains("port"); port && port->is_number()) {
-                probe.point.port = static_cast<int>(port->to_number<double>());
+                probe.point.port = wholeNumber(*port, "probe port", diagram::kMaxElementPorts - 1);
             }
             if (const auto* name = object.if_contains("name"); name && name->is_string()) {
                 probe.name = QString::fromStdString(name->as_string().c_str());

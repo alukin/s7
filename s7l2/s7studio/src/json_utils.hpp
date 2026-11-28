@@ -11,6 +11,7 @@
 #include <boost/system/error_code.hpp>
 
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -52,10 +53,17 @@ inline auto numberValue(const boost::json::value& value, const double fallback =
     return fallback;
 }
 
+// A number outside int's range (or NaN) yields the fallback: converting it
+// would be undefined behaviour.
 inline auto intValue(const boost::json::object& object, const char* key, const int fallback = 0) -> int
 {
     if (const auto* value = findObjectValue(object, key)) {
-        return static_cast<int>(numberValue(*value, fallback));
+        const double number = numberValue(*value, fallback);
+        if (!(number >= static_cast<double>(std::numeric_limits<int>::min()) &&
+              number <= static_cast<double>(std::numeric_limits<int>::max()))) {
+            return fallback;
+        }
+        return static_cast<int>(number);
     }
 
     return fallback;

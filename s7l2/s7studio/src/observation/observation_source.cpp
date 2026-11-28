@@ -170,8 +170,11 @@ Page ObservationSource::read(std::uint64_t cursor, qsizetype limit) const
         const auto bytes = count * static_cast<qint64>(sizeof(Sample));
         if (!file_->seek(static_cast<qint64>(page.next) * static_cast<qint64>(sizeof(Sample))) ||
             file_->read(reinterpret_cast<char*>(page.samples.data()), bytes) != bytes) {
+            // The failure is this reader's: the recording itself is intact and
+            // still accepting data, so it must not stop the run (observation
+            // is not computation).
             page.samples.clear(); page.error = QStringLiteral("Cannot read observation history: ") + file_->errorString();
-            status_.storageError = page.error; return page;
+            return page;
         }
     } else page.samples = memory_.mid(static_cast<qsizetype>(page.next), count);
     page.next += static_cast<std::uint64_t>(count); return page;

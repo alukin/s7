@@ -737,6 +737,42 @@ int main(int argc, char** argv)
         check(threw, "a wire the schema does not have is a load error");
     }
 
+    // Port indices and numeric fields come from an untrusted file: a hostile
+    // value is a load error, never millions of ports or undefined behaviour.
+    {
+        const std::vector<boost::json::value> hostilePorts{5000000, -1, 1e12, 2147483647, 1.5, "1"};
+        for (const auto& port : hostilePorts) {
+            auto document = DiagramDocument::fromJson(saved.toJson());
+            document.runtimeSchema.as_object()["connections"].as_array().front().as_object()["to_port"] = port;
+            DiagramScene refused;
+            bool threw = false;
+            try {
+                SceneSerializer{}.deserialize(document, refused);
+            } catch (const std::runtime_error&) {
+                threw = true;
+            }
+            check(threw, ("a connection port of " + boost::json::serialize(port) + " is a load error").c_str());
+        }
+        const auto refusedField = [&saved](const char* key, boost::json::value value) {
+            auto json = saved.toJson().as_object();
+            if (std::string_view(key) == "probe_port")
+                json["probes"] = boost::json::array{boost::json::object{{"element", "sum"}, {"port", value}}};
+            else if (std::string_view(key) == "width_mm")
+                json["sheet"] = boost::json::object{{"width_mm", value}};
+            else
+                json[key] = value;
+            try {
+                static_cast<void>(DiagramDocument::fromJson(json));
+            } catch (const std::invalid_argument&) {
+                return true;
+            }
+            return false;
+        };
+        check(refusedField("diagram_version", 2.7) && refusedField("diagram_version", 1e20), "a fractional or huge diagram_version is refused");
+        check(refusedField("probe_port", 1e20) && refusedField("probe_port", -1), "an invalid probe port is refused");
+        check(refusedField("width_mm", 0) && refusedField("width_mm", 1e300), "an invalid page size is refused");
+    }
+
     // A plain schema is laid out and wired automatically, fan-out as branches.
     {
         DiagramScene laidOut;
