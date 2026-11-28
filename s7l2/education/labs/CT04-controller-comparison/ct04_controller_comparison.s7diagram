@@ -9,7 +9,7 @@
   "sheet": {
     "orientation": "landscape",
     "width_mm": 530,
-    "height_mm": 500
+    "height_mm": 470.0
   },
   "schema": {
     "name": "CT04 \u2014 Does integral action remove the load error?",
@@ -1080,160 +1080,160 @@
       {
         "id": "reference_step",
         "position": [
-          3.0,
-          23.75
+          3,
+          27
         ],
         "title": "Reference starts at source time 1 s"
       },
       {
         "id": "load",
         "position": [
-          3.0,
-          34.25
+          44,
+          54
         ],
         "title": "Opposing load: 0 \u2192 0.2 at 8 s"
       },
       {
         "id": "kp",
         "position": [
-          3.0,
-          44.75
+          17,
+          36
         ],
         "title": "Kp (control/error)"
       },
       {
         "id": "ki",
         "position": [
-          3.0,
-          55.25
+          17,
+          55
         ],
         "title": "Ki (control/error/s)"
       },
       {
         "id": "kd",
         "position": [
-          3.0,
-          65.75
+          17,
+          71
         ],
         "title": "Kd = 0.15 s; edit to 0"
       },
       {
         "id": "filter_tau",
         "position": [
-          3.0,
-          76.25
+          17,
+          78
         ],
         "title": "Derivative filter: 0.1 s"
       },
       {
         "id": "p_error",
         "position": [
-          16.5,
-          23.75
+          17,
+          27
         ],
         "title": "Error = reference \u2212 output"
       },
       {
         "id": "p",
         "position": [
-          30.0,
-          23.75
+          31,
+          27
         ],
         "title": "P: Kp \u00d7 error"
       },
       {
         "id": "p_limit",
         "position": [
-          40.5,
-          23.75
+          44,
+          27
         ],
         "title": "Actuator: \u22121\u20261"
       },
       {
         "id": "p_rate",
         "position": [
-          51.75,
-          23.75
+          58,
+          27
         ],
         "title": "Plant derivative (1/s)"
       },
       {
         "id": "p_y",
         "position": [
-          63.0,
-          23.75
+          71,
+          27
         ],
         "title": "Plant state: initial output 0"
       },
       {
         "id": "pi_error",
         "position": [
-          16.5,
-          44.75
+          17,
+          45
         ],
         "title": "Error = reference \u2212 output"
       },
       {
         "id": "pi",
         "position": [
-          30.0,
-          44.75
+          31,
+          45
         ],
         "title": "pi: PIController; double-click to inspect"
       },
       {
         "id": "pi_rate",
         "position": [
-          51.75,
-          44.75
+          58,
+          45
         ],
         "title": "Plant derivative (1/s)"
       },
       {
         "id": "pi_y",
         "position": [
-          63.0,
-          44.75
+          71,
+          45
         ],
         "title": "Plant state: initial output 0"
       },
       {
         "id": "pid_error",
         "position": [
-          16.5,
-          65.75
+          17,
+          64
         ],
         "title": "Error = reference \u2212 output"
       },
       {
         "id": "pid",
         "position": [
-          30.0,
-          65.75
+          31,
+          64
         ],
         "title": "pid: PIDController; double-click to inspect"
       },
       {
         "id": "pid_rate",
         "position": [
-          51.75,
-          65.75
+          58,
+          64
         ],
         "title": "Plant derivative (1/s)"
       },
       {
         "id": "pid_y",
         "position": [
-          63.0,
-          65.75
+          71,
+          64
         ],
         "title": "Plant state: initial output 0"
       },
       {
         "id": "scope",
         "position": [
-          78.0,
-          23.75
+          85,
+          27
         ],
         "observer": true,
         "type": "Scope",
@@ -1257,8 +1257,8 @@
       {
         "id": "actuator_scope",
         "position": [
-          78.0,
-          44.75
+          85,
+          45
         ],
         "observer": true,
         "type": "Scope",
@@ -1280,8 +1280,8 @@
       {
         "id": "error_scope",
         "position": [
-          78.0,
-          65.75
+          3,
+          64
         ],
         "observer": true,
         "type": "Scope",
@@ -1462,16 +1462,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            72,
-            31
-          ],
-          [
-            14,
-            31
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w9",
@@ -1633,16 +1624,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            72,
-            52
-          ],
-          [
-            14,
-            52
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w18",
@@ -1858,16 +1840,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            72,
-            81
-          ],
-          [
-            14,
-            81
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w30",

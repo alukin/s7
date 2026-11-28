@@ -4,8 +4,17 @@
 """Original CT04/CT05 comparisons; reusable controllers remain schema networks."""
 import copy
 import json
+import math
+import sys
 from pathlib import Path
 from generate_foundations import diagram_path, Drawing
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools'))
+from diagram_layout import content_bounds
+
+
+def sheet_height(d):
+    _, bottom = content_bounds(dict(diagram=dict(nodes=d.nodes, wires=d.wires)))
+    return float(math.ceil((bottom + 4) * 5.291666666666667 / 10) * 10)
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENTS = {e['type_name']: e['schema'] for e in json.loads(
@@ -56,31 +65,34 @@ def controller(d, ident, kind, tracking, x, y):
 
 def make(lab):
     name,slug,seconds=LABS[lab];d=Drawing();comparison=lab=='CT04'
-    d.element('reference_step','StepGenerator',dict(initial_value=0,final_value=.5 if comparison else 1.5,start_time=1),4,25,'Reference starts at source time 1 s')
+    # Placed directly in grid steps (9-step nodes). Shared gains sit between the
+    # rows they feed and the load beside the plant column, so their wires run in
+    # short channels; the router places the feedback returns.
+    d.element('reference_step','StepGenerator',dict(initial_value=0,final_value=.5 if comparison else 1.5,start_time=1),3,27,'Reference starts at source time 1 s')
     if comparison:
         reference='reference_step'
-        d.element('load','StepGenerator',dict(initial_value=0,final_value=.2,start_time=8),4,39,'Opposing load: 0 → 0.2 at 8 s')
+        d.element('load','StepGenerator',dict(initial_value=0,final_value=.2,start_time=8),44,54,'Opposing load: 0 → 0.2 at 8 s')
     else:
-        d.element('release','StepGenerator',dict(initial_value=0,final_value=-1.1,start_time=4),4,39,'Release unreachable command at 4 s')
-        d.element('reference','Adder',dict(weights=[1,1]),22,25,'Reference: 0 → 1.5 → 0.4')
+        d.element('release','StepGenerator',dict(initial_value=0,final_value=-1.1,start_time=4),3,35,'Release unreachable command at 4 s')
+        d.element('reference','Adder',dict(weights=[1,1]),17,27,'Reference: 0 → 1.5 → 0.4')
         wire(d,'reference_step','reference');wire(d,'release','reference',1);reference='reference'
-    for ident,value,y,title in [('kp',2 if comparison else 1.5,53,'Kp (control/error)'),('ki',1.5 if comparison else 2,67,'Ki (control/error/s)')]:
-        d.element(ident,'Constant',dict(value=value),4,y,title)
+    for ident,value,y,title in [('kp',2 if comparison else 1.5,36,'Kp (control/error)'),('ki',1.5 if comparison else 2,55,'Ki (control/error/s)')]:
+        d.element(ident,'Constant',dict(value=value),17,y,title)
     if comparison:
-        d.element('kd','Constant',dict(value=.15),4,81,'Kd = 0.15 s; edit to 0')
-        d.element('filter_tau','Constant',dict(value=.1),4,95,'Derivative filter: 0.1 s')
+        d.element('kd','Constant',dict(value=.15),17,71,'Kd = 0.15 s; edit to 0')
+        d.element('filter_tau','Constant',dict(value=.1),17,78,'Derivative filter: 0.1 s')
     modes=['p','pi','pid'] if comparison else ['aw','free']
-    rows=[25,53,81] if comparison else [53,81]
+    rows=[27,45,64] if comparison else [45,64]
     for mode,y in zip(modes,rows):
-        d.element(mode+'_error','Adder',dict(weights=[1,-1]),22,y if comparison else y,'Error = reference − output')
+        d.element(mode+'_error','Adder',dict(weights=[1,-1]),17,y,'Error = reference − output')
         wire(d,reference,mode+'_error')
         if mode=='p':
-            d.element(mode,'Multiply',{},40,y,'P: Kp × error')
+            d.element(mode,'Multiply',{},31,y,'P: Kp × error')
             wire(d,mode+'_error',mode);wire(d,'kp',mode,1)
-            d.element('p_limit','Saturation',dict(lower_limit=-1,upper_limit=1),54,y,'Actuator: −1…1')
+            d.element('p_limit','Saturation',dict(lower_limit=-1,upper_limit=1),44,y,'Actuator: −1…1')
             wire(d,'p','p_limit');applied='p_limit'
         else:
-            controller(d,mode,'PIDController' if mode=='pid' else 'PIController',6 if mode=='aw' else 0,40,y)
+            controller(d,mode,'PIDController' if mode=='pid' else 'PIController',6 if mode=='aw' else 0,31,y)
             if mode=='pid':
                 wire(d,reference,mode);wire(d,mode+'_y',mode,1)
                 for port,ident in enumerate(['kp','ki','kd','filter_tau'],2): wire(d,ident,mode,port)
@@ -88,32 +100,27 @@ def make(lab):
                 for port,ident in enumerate([mode+'_error','kp','ki']): wire(d,ident,mode,port)
             applied=mode
         weights=[1,-1,-1] if comparison else [1/.8,-1/.8]
-        d.element(mode+'_rate','Adder',dict(weights=weights),69,y,'Plant derivative (1/s)')
-        d.element(mode+'_y','EulerIntegrator',dict(initial_value=0),84,y,'Plant state: initial output 0')
+        d.element(mode+'_rate','Adder',dict(weights=weights),58,y,'Plant derivative (1/s)')
+        d.element(mode+'_y','EulerIntegrator',dict(initial_value=0),71,y,'Plant state: initial output 0')
         wire(d,applied,mode+'_rate');wire(d,mode+'_y',mode+'_rate',1)
         if comparison: wire(d,'load',mode+'_rate',2)
         wire(d,mode+'_rate',mode+'_y')
-        wire(d,mode+'_y',mode+'_error',1,bends=([96,y+20 if mode=="pid" else y+10],[19,y+20 if mode=="pid" else y+10],[19,y+4]))
-    scope(d,'scope',[('reference',reference,0)]+[(m+'_output',m+'_y',0) for m in modes],104,25,'Tracking: reference and plant outputs')
-    scope(d,'actuator_scope',[(m+'_control','p_limit' if m=='p' else m,0) for m in modes],104,53,'Applied actuator commands: all bounded ±1')
+        wire(d,mode+'_y',mode+'_error',1)
+    scope(d,'scope',[('reference',reference,0)]+[(m+'_output',m+'_y',0) for m in modes],85,27,'Tracking: reference and plant outputs')
+    scope(d,'actuator_scope',[(m+'_control','p_limit' if m=='p' else m,0) for m in modes],85,45,'Applied actuator commands: all bounded ±1')
     if comparison:
-        scope(d,'error_scope',[(m+'_error',m+'_error',0) for m in modes],104,81,'Tracking errors; P keeps an offset')
+        scope(d,'error_scope',[(m+'_error',m+'_error',0) for m in modes],3,64,'Tracking errors; P keeps an offset')
         title='Does integral action remove the load error?'
         question='Run 16 s at 100 Hz. Reference 0 → 0.5 at 1 s; opposing load 0 → 0.2 at 8 s.'
         prediction='Predict P equilibrium 1/3 before load and 4/15 after it. PI/PID return toward 0.5. All units are normalized (1).'
         edit='Open the three Scopes. Select kd, F4: value 0.15 → 0; save/reopen/rerun. PID should become PI, not a better controller by definition.'
     else:
-        scope(d,'raw_scope',[(m+'_unlimited',m,1) for m in modes],104,81,'Unlimited demand: not bounded by the actuator')
-        scope(d,'state_scope',[(m+'_integral',m,2) for m in modes],69,103,'Integral states: windup and recovery')
+        scope(d,'raw_scope',[(m+'_unlimited',m,1) for m in modes],85,64,'Unlimited demand: not bounded by the actuator')
+        scope(d,'state_scope',[(m+'_integral',m,2) for m in modes],85,76,'Integral states: windup and recovery')
         title='Why does a clipped actuator keep pushing after release?'
         question='Run 12 s at 100 Hz. Reference 0 → 1.5 at 1 s → 0.4 at 4 s; actuator limited to ±1.'
         prediction='The 1.5 command is unreachable. Compare actual control, unlimited demand and integral state; free has no anti-windup, aw uses 6/s back-calculation.'
         edit='Double-click aw; select i_rate, F4: weights [1,6] → [1,0]. Return to the root tab, save/reopen/rerun. Both paths should now match.'
-    # Compact the worksheet while keeping default node bodies and port rows clear.
-    for node in d.nodes: node['position']=[.75*node['position'][0],.75*node['position'][1]+5]
-    # Bends stay on the grid; the last one is dropped so the router enters the
-    # target port on its own row (a scaled last bend made it loop around).
-    for w in d.wires: w['bends']=[[round(.75*x),round(.75*y+5)] for x,y in w['bends'][:-1]]
     notes=(f'**{lab} — {title}**  \n**Predict → Run → Inspect → Change one thing.** {question}  \n'
            f'{prediction}  \n{edit}  \n'
            'Source/state index n is observed at Scope time (n+1)/100 s. States update afterward; no extra feedback delay is needed.  \n'
@@ -121,7 +128,7 @@ def make(lab):
            f' · [MIT PID lecture]({MIT_PID}) · [MIT windup notes]({MIT_WINDUP})')
     return dict(id=name,document_kind='s7.diagram',dt=.01,
                 studio_run=dict(runtime_seconds=seconds,clear_scope_traces=True),
-                sheet=dict(orientation='landscape',width_mm=530,height_mm=500),
+                sheet=dict(orientation='landscape',width_mm=530,height_mm=sheet_height(d)),
                 schema=dict(name=f'{lab} — {title}',dt=.01,elements=d.elements,connections=d.connections),probes=[],
                 diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,
                              text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1800,height=400,font_size=20))]))

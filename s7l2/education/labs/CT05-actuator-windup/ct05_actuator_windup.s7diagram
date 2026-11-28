@@ -9,7 +9,7 @@
   "sheet": {
     "orientation": "landscape",
     "width_mm": 530,
-    "height_mm": 500
+    "height_mm": 470.0
   },
   "schema": {
     "name": "CT05 \u2014 Why does a clipped actuator keep pushing after release?",
@@ -1127,112 +1127,112 @@
       {
         "id": "reference_step",
         "position": [
-          3.0,
-          23.75
+          3,
+          27
         ],
         "title": "Reference starts at source time 1 s"
       },
       {
         "id": "release",
         "position": [
-          3.0,
-          34.25
+          3,
+          35
         ],
         "title": "Release unreachable command at 4 s"
       },
       {
         "id": "reference",
         "position": [
-          16.5,
-          23.75
+          17,
+          27
         ],
         "title": "Reference: 0 \u2192 1.5 \u2192 0.4"
       },
       {
         "id": "kp",
         "position": [
-          3.0,
-          44.75
+          17,
+          36
         ],
         "title": "Kp (control/error)"
       },
       {
         "id": "ki",
         "position": [
-          3.0,
-          55.25
+          17,
+          55
         ],
         "title": "Ki (control/error/s)"
       },
       {
         "id": "aw_error",
         "position": [
-          16.5,
-          44.75
+          17,
+          45
         ],
         "title": "Error = reference \u2212 output"
       },
       {
         "id": "aw",
         "position": [
-          30.0,
-          44.75
+          31,
+          45
         ],
         "title": "aw: PIController; double-click to inspect"
       },
       {
         "id": "aw_rate",
         "position": [
-          51.75,
-          44.75
+          58,
+          45
         ],
         "title": "Plant derivative (1/s)"
       },
       {
         "id": "aw_y",
         "position": [
-          63.0,
-          44.75
+          71,
+          45
         ],
         "title": "Plant state: initial output 0"
       },
       {
         "id": "free_error",
         "position": [
-          16.5,
-          65.75
+          17,
+          64
         ],
         "title": "Error = reference \u2212 output"
       },
       {
         "id": "free",
         "position": [
-          30.0,
-          65.75
+          31,
+          64
         ],
         "title": "free: PIController; double-click to inspect"
       },
       {
         "id": "free_rate",
         "position": [
-          51.75,
-          65.75
+          58,
+          64
         ],
         "title": "Plant derivative (1/s)"
       },
       {
         "id": "free_y",
         "position": [
-          63.0,
-          65.75
+          71,
+          64
         ],
         "title": "Plant state: initial output 0"
       },
       {
         "id": "scope",
         "position": [
-          78.0,
-          23.75
+          85,
+          27
         ],
         "observer": true,
         "type": "Scope",
@@ -1254,8 +1254,8 @@
       {
         "id": "actuator_scope",
         "position": [
-          78.0,
-          44.75
+          85,
+          45
         ],
         "observer": true,
         "type": "Scope",
@@ -1275,8 +1275,8 @@
       {
         "id": "raw_scope",
         "position": [
-          78.0,
-          65.75
+          85,
+          64
         ],
         "observer": true,
         "type": "Scope",
@@ -1296,8 +1296,8 @@
       {
         "id": "state_scope",
         "position": [
-          51.75,
-          82.25
+          85,
+          76
         ],
         "observer": true,
         "type": "Scope",
@@ -1494,16 +1494,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            72,
-            52
-          ],
-          [
-            14,
-            52
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w10",
@@ -1647,16 +1638,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            72,
-            73
-          ],
-          [
-            14,
-            73
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w18",

@@ -9,7 +9,7 @@
   "sheet": {
     "orientation": "landscape",
     "width_mm": 470,
-    "height_mm": 485
+    "height_mm": 470.0
   },
   "schema": {
     "name": "CT08 \u2014 Lead/lag compensation and control effort",
@@ -1550,152 +1550,152 @@
       {
         "id": "reference",
         "position": [
-          2.6,
-          24.5
+          3,
+          27
         ],
         "title": "Reference 0 \u2192 0.5 at source time 1 s"
       },
       {
         "id": "pulse",
         "position": [
-          2.6,
-          63.5
+          3,
+          75
         ],
         "title": "One unit-height pulse at n=8"
       },
       {
         "id": "base_gain",
         "position": [
-          2.6,
-          77.15
+          3,
+          35
         ],
         "title": "Baseline P gain = 4"
       },
       {
         "id": "scale",
         "position": [
-          13.0,
-          77.15
+          17,
+          55
         ],
         "title": "Controller scale K = 16"
       },
       {
         "id": "zero",
         "position": [
-          23.400000000000002,
-          77.15
+          17,
+          62
         ],
         "title": "Zero a: edit 0.8 \u2192 0.2"
       },
       {
         "id": "pole",
         "position": [
-          33.800000000000004,
-          77.15
+          17,
+          69
         ],
         "title": "Pole b = 0.2"
       },
       {
         "id": "tau",
         "position": [
-          44.2,
-          77.15
+          31,
+          62
         ],
         "title": "Both plant time constants = 1 s"
       },
       {
         "id": "base_error",
         "position": [
-          14.3,
-          24.5
+          17,
+          27
         ],
         "title": "Reference minus this output"
       },
       {
         "id": "base",
         "position": [
-          26.0,
-          24.5
+          31,
+          27
         ],
         "title": "Ideal P command: 4 \u00d7 error"
       },
       {
         "id": "base_x",
         "position": [
-          39.0,
-          24.5
+          46,
+          27
         ],
         "title": "First lag: old state x"
       },
       {
         "id": "base_y",
         "position": [
-          52.0,
-          24.5
+          60,
+          27
         ],
         "title": "Second lag: output y"
       },
       {
         "id": "lead_error",
         "position": [
-          14.3,
-          44.0
+          17,
+          44
         ],
         "title": "Reference minus this output"
       },
       {
         "id": "lead",
         "position": [
-          26.0,
-          44.0
+          31,
+          44
         ],
         "title": "Lead/lag controller: inspect inside"
       },
       {
         "id": "lead_x",
         "position": [
-          39.0,
-          44.0
+          46,
+          44
         ],
         "title": "First lag: old state x"
       },
       {
         "id": "lead_y",
         "position": [
-          52.0,
-          44.0
+          60,
+          44
         ],
         "title": "Second lag: output y"
       },
       {
         "id": "open",
         "position": [
-          26.0,
-          63.5
+          31,
+          75
         ],
         "title": "Lead/lag controller: inspect inside"
       },
       {
         "id": "open_x",
         "position": [
-          39.0,
-          63.5
+          46,
+          75
         ],
         "title": "First lag: old state x"
       },
       {
         "id": "open_y",
         "position": [
-          52.0,
-          63.5
+          60,
+          75
         ],
         "title": "Second lag: output y"
       },
       {
         "id": "scope",
         "position": [
-          65.0,
-          24.5
+          74,
+          27
         ],
         "observer": true,
         "type": "Scope",
@@ -1717,8 +1717,8 @@
       {
         "id": "command_scope",
         "position": [
-          65.0,
-          44.0
+          74,
+          44
         ],
         "observer": true,
         "type": "Scope",
@@ -1736,10 +1736,26 @@
         }
       },
       {
+        "id": "response",
+        "position": [
+          74,
+          62
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Lead open-loop Bode / Nyquist",
+        "params": {
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
         "id": "pulse_scope",
         "position": [
-          65.0,
-          77.15
+          74,
+          75
         ],
         "observer": true,
         "type": "Scope",
@@ -1750,22 +1766,6 @@
             "pulse",
             "open_output"
           ],
-          "channel_units": [
-            "1",
-            "1"
-          ]
-        }
-      },
-      {
-        "id": "response",
-        "position": [
-          65.0,
-          63.5
-        ],
-        "observer": true,
-        "type": "FrequencyResponse",
-        "title": "Lead open-loop Bode / Nyquist",
-        "params": {
           "channel_units": [
             "1",
             "1"
@@ -1808,16 +1808,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            61,
-            34
-          ],
-          [
-            12,
-            34
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w2",
@@ -1961,16 +1952,7 @@
             1
           ]
         },
-        "bends": [
-          [
-            61,
-            54
-          ],
-          [
-            12,
-            54
-          ]
-        ]
+        "bends": []
       },
       {
         "id": "w10",
@@ -2361,7 +2343,7 @@
         },
         "to": {
           "port": [
-            "pulse_scope",
+            "response",
             "in",
             0
           ]
@@ -2379,7 +2361,7 @@
         },
         "to": {
           "port": [
-            "pulse_scope",
+            "response",
             "in",
             1
           ]
@@ -2397,7 +2379,7 @@
         },
         "to": {
           "port": [
-            "response",
+            "pulse_scope",
             "in",
             0
           ]
@@ -2415,7 +2397,7 @@
         },
         "to": {
           "port": [
-            "response",
+            "pulse_scope",
             "in",
             1
           ]
