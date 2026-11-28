@@ -7,6 +7,10 @@
     "width_mm": 1100,
     "height_mm": 430
   },
+  "studio_run": {
+    "runtime_seconds": 1,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "pwm_pid_rlc",
     "elements": [

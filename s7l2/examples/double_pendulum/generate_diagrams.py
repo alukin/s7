@@ -6,6 +6,10 @@
 import json
 import math
 from pathlib import Path
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
+from example_runs import with_run
 
 ROOT = Path(__file__).resolve().parent
 
@@ -36,15 +40,15 @@ def make(method, mode):
         if method == 'symplectic':
             ident = f'state{i}'
             element(ident, 'SymplecticIntegrator',
-                    {'dt': 0.001, 'initial_position': q0, 'initial_velocity': 0.0},
+                    {'initial_position': q0, 'initial_velocity': 0.0},
                     62, row, f'Pendulum {i}: position / velocity')
             state.extend([(ident, 0), (ident, 1)])
             feedback.append((ident, 0))
         else:
             kind = 'EulerIntegrator' if method == 'euler' else 'TrapezoidIntegrator'
-            element(f'omega{i}', kind, {'dt': 0.001, 'initial_value': 0.0},
+            element(f'omega{i}', kind, {'initial_value': 0.0},
                     48, row, f'Angular velocity {i}')
-            element(f'theta{i}', kind, {'dt': 0.001, 'initial_value': q0},
+            element(f'theta{i}', kind, {'initial_value': q0},
                     76, row, f'Angle {i}')
             state.extend([(f'theta{i}', 0), (f'omega{i}', 0)])
             wire(f'omega{i}', f'theta{i}')
@@ -101,5 +105,5 @@ if __name__ == '__main__':
     for method in ('euler', 'symplectic', 'trapezoid'):
         for mode in ('slow', 'fast', 'mixed'):
             diagram = make(method, mode)
-            (ROOT / (diagram['id'] + '.s7diagram')).write_text(
-                json.dumps(diagram, indent=2, ensure_ascii=False) + '\n')
+            path = ROOT / (diagram['id'] + '.s7diagram')
+            path.write_text(json.dumps(with_run(diagram, path), indent=2, ensure_ascii=False) + '\n')

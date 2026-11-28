@@ -7,6 +7,10 @@
     "width_mm": 420.0,
     "height_mm": 210.0
   },
+  "studio_run": {
+    "runtime_seconds": 100,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "nonlinear_pendulum_euler",
     "elements": [

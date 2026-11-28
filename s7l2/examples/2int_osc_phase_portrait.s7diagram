@@ -7,6 +7,10 @@
     "width_mm": 297.0,
     "height_mm": 210.0
   },
+  "studio_run": {
+    "runtime_seconds": 10,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "2int_osc_phase_portrait",
     "elements": [

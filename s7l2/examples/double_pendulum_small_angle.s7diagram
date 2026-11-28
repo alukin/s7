@@ -7,6 +7,10 @@
     "width_mm": 490.0,
     "height_mm": 210.0
   },
+  "studio_run": {
+    "runtime_seconds": 20,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "double_pendulum_small_angle",
     "elements": [

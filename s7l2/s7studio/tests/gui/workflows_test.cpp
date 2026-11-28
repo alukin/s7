@@ -4304,21 +4304,11 @@ private slots:
     }
     // The run each bundled example's article documents; the rate is the
     // diagram's own 1/dt. Live-only demonstrations use a short run.
+    // The documented run of a bundled example or lab: its saved studio_run.
     static double documentedSeconds(const QString& path) {
-        if (path.startsWith("../education/labs/")) {
-            QFile file(QDir(QString(S7_GUI_EXAMPLES_DIR)).filePath(path));
-            if (!file.open(QIODevice::ReadOnly)) return 0;
-            return QJsonDocument::fromJson(file.readAll()).object()["studio_run"].toObject()["runtime_seconds"].toDouble();
-        }
-        static const QList<std::pair<QString, double>> table{
-            {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
-            {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
-            {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
-            {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},
-            {"pll/", 6}, {"signal_measurement/iq_correlation", 8}, {"signal_measurement/", 2}, {"spectrum/", 4},
-            {"2int_osc", 10}, {"3int_helix", 10}, {"symplectic_osc_live", 10}, {"demo", 10}, {"video/", 0.24}};
-        for (const auto& [prefix, seconds] : table) if (path.startsWith(prefix)) return seconds;
-        return 0;
+        QFile file(QDir(QString(S7_GUI_EXAMPLES_DIR)).filePath(path));
+        if (!file.open(QIODevice::ReadOnly)) return 0;
+        return QJsonDocument::fromJson(file.readAll()).object()["studio_run"].toObject()["runtime_seconds"].toDouble();
     }
     // Empty when the plot's ranges show its data sensibly: finite, every
     // drawn point inside the axes, and the data not squeezed into a sliver.
@@ -4370,7 +4360,7 @@ private slots:
         const bool publication = qEnvironmentVariableIsSet("S7_README_SCREENSHOTS");
         const bool lorenzOverview = publication && diagram == "lorenz/lorenz_attractor.s7diagram";
         const double seconds = documentedSeconds(diagram);
-        QVERIFY2(seconds > 0, "every bundled example needs a documented run in documentedSeconds()");
+        QVERIFY2(seconds > 0, "every bundled example needs studio_run.runtime_seconds (tools/example_runs.py for generated ones)");
         const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
         QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
         const auto json = QJsonDocument::fromJson(file.readAll()).object();

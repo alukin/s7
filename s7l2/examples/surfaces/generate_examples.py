@@ -6,7 +6,16 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root/'examples'))
 from refine_analysis_examples import refine
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
+from example_runs import with_run
 library_path=root/'s7core/resources/schema_elements.s7library'
+def upsert(elements,entry):
+    # Replace in place so the library keeps its order (palette order).
+    for i,e in enumerate(elements):
+        if e['type_name']==entry['type_name']: elements[i]=entry; return
+    elements.append(entry)
 library=json.loads(library_path.read_text())
 class Graph:
  def __init__(self): self.e=[]; self.c=[]; self.inputs=[]
@@ -51,8 +60,7 @@ def graph(name):
 settings=[('plane',2,65,49,'x + 2y'),('bowl',2,65,65,'x² + y²'),('saddle',2,65,65,'x² − y²'),('gaussian',3,65,65,'exp(−x²−y²)'),('wave',math.pi,65,65,'sin(x) cos(y)'),('sinc',10,65,65,'sin(r)/r; analytic extension f(0,0)=1'),('identity',2,65,65,'f(z)=z'),('square',2,65,65,'f(z)=z²'),('inverse',2,64,64,'f(z)=1/z; grid excludes pole'),('rational',2,64,64,'f(z)=(z−1)/(z+1); grid excludes pole')]
 for name,extent,nx,ny,formula in settings:
  complex_=name in ('identity','square','inverse','rational'); type_name='Surface'+name.title(); schema=graph(name)
- library['elements']=[e for e in library['elements'] if e['type_name']!=type_name]
- library['elements'].append(dict(type_name=type_name,display_name='Surface: '+name.title(),description=formula+'; editable stateless F64 schema, inputs x/y. '+('Requires nonzero denominator; use a pole-avoiding domain.' if name in ('inverse','rational') else ''),category='schema_elements',version='1.0.0',schema=schema))
+ upsert(library['elements'],dict(type_name=type_name,display_name='Surface: '+name.title(),description=formula+'; editable stateless F64 schema, inputs x/y. '+('Requires nonzero denominator; use a pole-avoiding domain.' if name in ('inverse','rational') else ''),category='math',version='1.0.0',schema=schema))
  folder=root/'examples'/('complex_functions' if complex_ else 'surfaces'); folder.mkdir(exist_ok=True)
  elements=[dict(id='grid',type='GridScan',params=dict(x_min=-extent,x_max=extent,y_min=-extent,y_max=extent,columns=nx,rows=ny)),dict(id='function',type=type_name,params={})]
  connections=[dict(from_element='grid',from_port=i,to_element='function',to_port=i) for i in (0,1)]
@@ -65,6 +73,6 @@ for name,extent,nx,ny,formula in settings:
  if complex_:wire('function',1,'surface',7)
  note=f'{formula}\nRun at 1 kHz for {math.ceil((nx*ny+1)/1000)} s; open surface. {nx} × {ny} samples, X fastest.\nCoordinates are dimensionless. Gray cells are missing; complex gray also marks undefined phase at zero.\nSchema definition is editable in the standard schema library. See this folder README.'
  doc=dict(id='surface_'+name,dt=.001,document_kind='s7.diagram',sheet=dict(orientation='landscape',width_mm=560,height_mm=220),schema=dict(name='surface_'+name,elements=elements,connections=connections),probes=[],diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=nodes,wires=wires,text_frames=[dict(id='notes',position=[2,2],params=dict(text=note,width=1900,height=190,font_size=10))]))
- (folder/(name+'.s7diagram')).write_text(json.dumps(doc,indent=2,ensure_ascii=False)+'\n')
+ (folder/(name+'.s7diagram')).write_text(json.dumps(with_run(doc,folder/(name+'.s7diagram')),indent=2,ensure_ascii=False)+'\n')
  refine(folder/(name+'.s7diagram'))
 library_path.write_text(json.dumps(library,indent=2,ensure_ascii=False)+'\n')

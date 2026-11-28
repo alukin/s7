@@ -5,6 +5,7 @@
 """Reproduce explicit Van der Pol, Lorenz and Lotka–Volterra teaching graphs."""
 import json
 from pathlib import Path
+from example_runs import with_run
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,7 +52,8 @@ class Diagram:
                                          text=self.notes, width=3000, height=200, font_size=10))]))
         folder = ROOT / 'examples' / self.folder
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / f'{self.name}.s7diagram').write_text(json.dumps(document, indent=2)+'\n')
+        path = folder / f'{self.name}.s7diagram'
+        path.write_text(json.dumps(with_run(document, path), indent=2)+'\n')
 
 
 def van_der_pol(mu, method):

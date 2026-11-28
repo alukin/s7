@@ -7,6 +7,10 @@
     "width_mm": 1000,
     "height_mm": 450
   },
+  "studio_run": {
+    "runtime_seconds": 6,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "pll_out_of_range",
     "dt": 0.001,
@@ -17,7 +21,7 @@
         "params": {
           "initial_value": 20,
           "final_value": 35,
-          "start_time": 2.0
+          "start_time": 2
         }
       },
       {
@@ -40,7 +44,7 @@
         "params": {
           "initial_value": 0,
           "final_value": 0,
-          "start_time": 2.0
+          "start_time": 2
         }
       },
       {

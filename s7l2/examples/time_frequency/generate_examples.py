@@ -6,6 +6,10 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root/'examples'))
 from refine_analysis_examples import refine
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
+from example_runs import with_run
 p=root/'s7core/resources/schema_elements.s7library';library=json.loads(p.read_text())
 nodes=[];connections=[]
 def node(id,type,params=None):nodes.append(dict(id=id,type=type,params=params or {}));return id
@@ -16,8 +20,12 @@ node('loss_factor','Multiply');wire('omega','loss_factor');wire('damping','loss_
 node('loss','Multiply');wire('loss_factor','loss');node('velocity','EulerIntegrator',{'initial_value':0});node('position','EulerIntegrator',{'initial_value':0});wire('velocity','loss',1)
 node('acceleration','Adder',{'weights':[1,-1]});wire('drive','acceleration');wire('loss','acceleration',1);wire('acceleration','velocity');wire('velocity','position');wire('position','difference',1)
 schema=dict(name='SecondOrderLowPass',elements=nodes,connections=connections,exposed_inputs=[dict(name=n,type='F64',element=e,port=0) for n,e in [('input','difference'),('omega0','omega'),('damping_ratio','damping')]],exposed_outputs=[dict(name='output',type='F64',element='position',port=0)])
-library['elements']=[e for e in library['elements'] if e['type_name']!='SecondOrderLowPass']
-library['elements'].append(dict(type_name='SecondOrderLowPass',display_name='Second-order Low-pass Plant',description='Editable zero-state analog-computer graph: x double-prime = omega0²(input-x)-2*zeta*omega0*x prime. F64 input, omega0 (rad/s), damping ratio, output. Two explicit Euler integrators; resolve fastest dynamics at the run rate.',category='schema_elements',version='1.0.0',schema=schema));p.write_text(json.dumps(library,indent=2)+'\n')
+def upsert(elements,entry):
+    # Replace in place so the library keeps its order (palette order).
+    for i,e in enumerate(elements):
+        if e['type_name']==entry['type_name']: elements[i]=entry; return
+    elements.append(entry)
+upsert(library['elements'],dict(type_name='SecondOrderLowPass',display_name='Second-order Low-pass Plant',description='Editable zero-state analog-computer graph: x double-prime = omega0²(input-x)-2*zeta*omega0*x prime. F64 input, omega0 (rad/s), damping ratio, output. Two explicit Euler integrators; resolve fastest dynamics at the run rate.',category='control',version='1.0.0',schema=schema));p.write_text(json.dumps(library,indent=2)+'\n')
 folder=root/'examples/time_frequency';folder.mkdir(exist_ok=True)
 for name in ['tone','tone_bursts','overlapping_tones','chirp','impulse','ring_down','resonant_chirp']:
  es=[];cs=[]
@@ -37,7 +45,7 @@ for name in ['tone','tone_bursts','overlapping_tones','chirp','impulse','ring_do
  wires=[]
  for c in cs+[dict(from_element=out,from_port=0,to_element='map',to_port=0)]:wires.append(dict(id='w'+str(len(wires)),**{'from':dict(port=[c['from_element'],'out',c['from_port']]),'to':dict(port=[c['to_element'],'in',c['to_port']])},bends=[]))
  doc['diagram']['nodes']=dn;doc['diagram']['wires']=wires;doc['diagram']['text_frames'][0]['params']['text']=f'{name}: time–frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2–100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.';doc['dt']=1/1024
- (folder/(name+'.s7diagram')).write_text(json.dumps(doc,indent=2)+'\n')
+ (folder/(name+'.s7diagram')).write_text(json.dumps(with_run(doc,folder/(name+'.s7diagram')),indent=2)+'\n')
  refine(folder/(name+'.s7diagram'))
 # Add a time-frequency observer to the existing, causal PLL experiment.
 base=json.loads((root/'examples/pll/pll_frequency_step.s7diagram').read_text())
@@ -45,5 +53,5 @@ probe=next((v for v in base.get('probes',[]) if 'error' in v['name']),base.get('
 if probe:
  base['id']='pll_acquisition_time_frequency';base['diagram']['nodes'].append(dict(id='wavelet_map',position=[100,60],observer=True,type='TimeFrequency',params={}))
  base['diagram']['wires'].append(dict(id='wavelet_observation',**{'from':dict(port=[probe['element'],'out',probe.get('port',0)]),'to':dict(port=['wavelet_map','in',0])},bends=[]))
- (folder/'pll_acquisition.s7diagram').write_text(json.dumps(base,indent=2)+'\n')
+ (folder/'pll_acquisition.s7diagram').write_text(json.dumps(with_run(base,folder/'pll_acquisition.s7diagram'),indent=2)+'\n')
  refine(folder/'pll_acquisition.s7diagram')

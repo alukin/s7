@@ -7,6 +7,10 @@
     "width_mm": 1000,
     "height_mm": 450
   },
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "am_coherent_detection",
     "dt": 0.0001,

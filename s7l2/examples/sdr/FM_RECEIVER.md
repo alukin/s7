@@ -2,9 +2,9 @@
 
 Open the [FM stereo receiver](fm_receiver.s7diagram) in Studio. It is tuned to
 **88.7 MHz**, Українське Радіо — Чернігівська хвиля,
-on RX channel 0 of the LibreSDR at `ip:analog.local`. The AD93xx project's
-`FM_TEST_NOTES.md` records a strong signal and stable 19 kHz stereo pilot at
-this frequency. Its second tested station, Армія FM at **100.6 MHz**, was weaker.
+on RX channel 0 of the LibreSDR at `ip:analog.local`. Earlier receiver tests
+found a strong signal and stable 19 kHz stereo pilot at this frequency; a
+second tested station, Армія FM at **100.6 MHz**, was weaker.
 
 1. Connect an FM antenna to the receiver's RX input. Build with SoapySDR and
    PipeWire enabled and install the SoapySDR module for your radio.

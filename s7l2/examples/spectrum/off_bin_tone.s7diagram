@@ -7,6 +7,10 @@
     "width_mm": 600,
     "height_mm": 350
   },
+  "studio_run": {
+    "runtime_seconds": 4,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "off_bin_tone",
     "elements": [

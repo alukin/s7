@@ -40,8 +40,9 @@ less than a quarter of the Y axis. Each shard takes several minutes; use
 `-LE examples` to leave them out, or `-L examples -j 4` before a release. Set
 `S7_USABILITY_CAPTURE_DIR` to keep a screenshot of every window and tab, and
 `S7_EXAMPLES_REPORT_ONLY=1` to report plot-range findings without failing.
-A new example needs a duration entry in `documentedSeconds()` in
-`tests/gui/workflows_test.cpp`; the test fails without one.
+Each example runs for its saved `studio_run.runtime_seconds`; a new example
+without one fails the test (generated examples take it from
+`tools/example_runs.py`).
 
 `s7studio_array_persistence_test` can verify an installed prefix instead of the
 build tree: `S7_ARRAY_TEST_EXAMPLES_DIR`, `S7_ARRAY_TEST_SPECTRAL_PLUGIN`,

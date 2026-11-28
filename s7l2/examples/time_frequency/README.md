@@ -24,6 +24,7 @@ accept small values without rounding them to whole millihertz.
 | ring_down | Impulse-driven reusable second-order plant: oscillation near 16 Hz decays |
 | resonant_chirp | A 4–90 Hz chirp crossing the 16 Hz plant resonance |
 | pll_acquisition | Existing causal PLL frequency-step experiment with an added read-only time–frequency observer |
+| [waterfall_psd](waterfall_psd.md) | Vector wire: a complex eight-sample block into `VectorPSD` (optional s7spectral) and the Waterfall viewer; 400 Hz ridge, 0.06 s at 200 Hz |
 
 STFT uses periodic Hann, default FFT size 256 and 50% hop. Its magnitude uses
 peak-tone normalization, including the distinct DC/Nyquist factors. CWT uses a

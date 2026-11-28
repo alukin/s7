@@ -7,6 +7,10 @@
     "width_mm": 1000,
     "height_mm": 450
   },
+  "studio_run": {
+    "runtime_seconds": 12,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "dc_motor_p",
     "dt": 0.001,
@@ -26,7 +30,7 @@
         "params": {
           "initial_value": 0,
           "final_value": 1.4,
-          "start_time": 2.0
+          "start_time": 2
         }
       },
       {
@@ -35,7 +39,7 @@
         "params": {
           "initial_value": 0,
           "final_value": -1.4,
-          "start_time": 4.0
+          "start_time": 4
         }
       },
       {
@@ -55,7 +59,7 @@
         "params": {
           "initial_value": 0,
           "final_value": 0.1,
-          "start_time": 6.0
+          "start_time": 6
         }
       },
       {

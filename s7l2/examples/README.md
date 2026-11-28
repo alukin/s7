@@ -276,13 +276,13 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 | [fourier coefficient](analysis_elements/fourier_coefficient.s7diagram) |
 | [wavelet coefficient](analysis_elements/wavelet_coefficient.s7diagram) |
 
-**Total: 116 diagrams.**
+**Total: 125 diagrams: 101 general examples and 24 teaching labs.**
 
 ## Headless JSON examples
 
-The [runtime example guide](../s7runtime/examples/README.md) covers all nine
+The [runtime example guide](../s7runtime/examples/README.md) covers all twelve
 JSON schemas and libraries, including two-node network pairs, gnuplot output,
-nested schemas and optional in-graph analysis plugins.
+nested schemas, vector wires and optional in-graph analysis plugins.
 
 ## Software-defined radio
 

@@ -17,6 +17,9 @@ material for local experiments.
 | [schema_library_demo.json](schema_library_demo.json) | A reusable schema library passed with `--library`; it supplies element definitions, not a standalone simulation. |
 | [schema_fourier_coefficient.json](schema_fourier_coefficient.json) | A 32 Hz sine analyzed by the optional Fourier coefficient plugin, with a C64-to-real/imaginary adapter. The simulation block runs 1024 steps. |
 | [schema_wavelet_coefficient.json](schema_wavelet_coefficient.json) | The corresponding optional causal wavelet coefficient graph, also split into real and imaginary parts. The simulation block runs 1024 steps. |
+| [schema_vector_adapters.json](schema_vector_adapters.json) | Vector wires: three scalar constants packed into a vector (`PackVector`), scaled by `VectorGain`, passed through and unpacked again (`UnpackVector`), beside a `VectorConstant`. The simulation block runs 10 steps at 100 Hz. |
+| [schema_vector_psd.json](schema_vector_psd.json) | A complex `VectorConstant` block analyzed by the optional s7spectral `VectorPSD` and unpacked into scalar bins. The simulation block runs 10 steps at 100 Hz. |
+| [schema_test_pattern_frames.json](schema_test_pattern_frames.json) | Two `TestPatternFrame` video-frame sources (array outputs) at 25 Hz. The simulation block runs 5 steps. |
 
 For a finite local run:
 

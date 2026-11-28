@@ -152,7 +152,11 @@ Bode, Nyquist, Nichols and 3D views.
 The [time–frequency laboratory](../examples/time_frequency/README.md) has eight
 STFT/Morlet CWT diagrams for tones, transients, resonance and PLL acquisition.
 Open the map observer and analyze a completed capture or follow a bounded live
-window; the family guide gives rates and expected ridges.
+window; the family guide gives rates and expected ridges. Its
+[Waterfall example](../examples/time_frequency/waterfall_psd.md) feeds a vector
+wire into the optional s7spectral `VectorPSD` and shows the spectrum history.
+The [Video Player example](../examples/video/video_patterns.md) plays
+`TestPatternFrame` video-frame vectors.
 
 The [analysis-element examples](../examples/analysis_elements/README.md) exercise
 Fourier and causal wavelet coefficients inside the graph using their optional

@@ -6,6 +6,7 @@
 import copy
 import json
 from pathlib import Path
+from example_runs import with_run
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCE = ROOT / 's7core/resources/schema_elements.s7library'
@@ -63,7 +64,8 @@ class Diagram:
                                          params=dict(text=self.note, width=2600, height=200, font_size=10))]))
         folder = ROOT / 'examples' / self.directory
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / (self.name + '.s7diagram')).write_text(json.dumps(document, indent=2) + '\n')
+        path = folder / (self.name + '.s7diagram')
+        path.write_text(json.dumps(with_run(document, path), indent=2) + '\n')
 
 
 def controller_schema(kind, dt, tracking=10, lower=-1):

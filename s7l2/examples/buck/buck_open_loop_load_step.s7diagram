@@ -7,6 +7,10 @@
     "width_mm": 1000,
     "height_mm": 450
   },
+  "studio_run": {
+    "runtime_seconds": 1,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "buck_open_loop_load_step",
     "dt": 1e-05,
@@ -88,7 +92,7 @@
         "params": {
           "initial_value": 8,
           "final_value": 4,
-          "start_time": 0.5000000000000001
+          "start_time": 0.5
         }
       },
       {

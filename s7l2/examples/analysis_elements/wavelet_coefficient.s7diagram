@@ -7,6 +7,10 @@
     "width_mm": 300,
     "height_mm": 250
   },
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "wavelet_coefficient",
     "dt": 0.0009765625,

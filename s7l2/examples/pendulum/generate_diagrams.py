@@ -5,6 +5,10 @@
 """Generate the three large-amplitude single-pendulum benchmarks."""
 import json
 from pathlib import Path
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
+from example_runs import with_run
 
 ROOT = Path(__file__).resolve().parent
 
@@ -26,14 +30,14 @@ def make(method):
 
     if method == 'symplectic':
         element('state', 'SymplecticIntegrator',
-                {'dt': 0.001, 'initial_position': 1.5, 'initial_velocity': 0.0},
+                {'initial_position': 1.5, 'initial_velocity': 0.0},
                 47, 18, 'Angle / angular velocity')
         theta, omega = ('state', 0), ('state', 1)
         acceleration_target = 'state'
     else:
         kind = 'EulerIntegrator' if method == 'euler' else 'TrapezoidIntegrator'
-        element('omega', kind, {'dt': 0.001, 'initial_value': 0.0}, 33, 18, 'Angular velocity (rad/s)')
-        element('theta', kind, {'dt': 0.001, 'initial_value': 1.5}, 47, 18, 'Angle (rad)')
+        element('omega', kind, {'initial_value': 0.0}, 33, 18, 'Angular velocity (rad/s)')
+        element('theta', kind, {'initial_value': 1.5}, 47, 18, 'Angle (rad)')
         wire('omega', 'theta')
         theta, omega = ('theta', 0), ('omega', 0)
         acceleration_target = 'omega'
@@ -68,4 +72,5 @@ def make(method):
 if __name__ == '__main__':
     for method in ('euler', 'symplectic', 'trapezoid'):
         diagram = make(method)
-        (ROOT/(diagram['id']+'.s7diagram')).write_text(json.dumps(diagram, indent=2) + '\n')
+        path = ROOT/(diagram['id']+'.s7diagram')
+        path.write_text(json.dumps(with_run(diagram, path), indent=2) + '\n')

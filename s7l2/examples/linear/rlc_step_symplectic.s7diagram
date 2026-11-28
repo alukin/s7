@@ -7,6 +7,10 @@
     "width_mm": 490,
     "height_mm": 210
   },
+  "studio_run": {
+    "runtime_seconds": 10,
+    "clear_scope_traces": true
+  },
   "schema": {
     "name": "rlc_step_symplectic",
     "elements": [

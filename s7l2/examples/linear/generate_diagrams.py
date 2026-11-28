@@ -6,6 +6,10 @@
 import json
 import math
 from pathlib import Path
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
+from example_runs import with_run
 
 ROOT = Path(__file__).resolve().parent
 MODELS = ('rc_charge', 'rc_discharge', 'rlc_step', 'rlc_resonance', 'mass_spring_damper')
@@ -104,7 +108,7 @@ if __name__ == '__main__':
     for model in MODELS:
         for method in ('euler', 'symplectic'):
             diagram = make(model, method)
-            (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(diagram, indent=2) + '\n')
+            (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(with_run(diagram, ROOT / f'{diagram["id"]}.s7diagram'), indent=2) + '\n')
     for model in ('rc_charge', 'rc_discharge', 'rlc_step'):
         diagram = make(model, 'gauss')
-        (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(diagram, indent=2) + '\n')
+        (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(with_run(diagram, ROOT / f'{diagram["id"]}.s7diagram'), indent=2) + '\n')
