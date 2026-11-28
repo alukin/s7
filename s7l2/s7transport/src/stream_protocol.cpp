@@ -275,7 +275,12 @@ void StreamProducer::resume(const ConsumerKey& consumer, const std::uint32_t ali
     auto& entry = consumers_[consumer];
     entry.alias = alias;
     entry.next_to_send = start;
-    entry.acknowledged = std::max(entry.acknowledged, start);
+    // A live consumer resumes at or beyond what it acknowledged, so this
+    // advances retention as before. A consumer that lost its state resumes
+    // below its old acknowledgement; retention must then follow the replay
+    // position, or another consumer's ACK could trim packets this one is
+    // about to be sent.
+    entry.acknowledged = start;
     entry.attached = true;
     replayed_ += next_sequence_ - start;
     trim();
@@ -285,6 +290,13 @@ void StreamProducer::detach(const ConsumerKey& consumer)
 {
     if (const auto it = consumers_.find(consumer); it != consumers_.end()) {
         it->second.attached = false; // keeps its retention position
+    }
+}
+
+void StreamProducer::forget(const ConsumerKey& consumer)
+{
+    if (consumers_.erase(consumer) != 0) {
+        trim();
     }
 }
 
@@ -409,6 +421,14 @@ bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     }
     if (packet.sequence > next_expected_) {
         fault(FaultCode::SequenceGap);
+        return false;
+    }
+    if (buffer_.size() >= config_.send_log_max_packets) {
+        // Unconsumed packets are unacknowledged, so a conforming producer
+        // still logs them and cannot have sent more than its send log holds:
+        // this peer ignores the window. Refuse it instead of buffering
+        // without bound.
+        on_malformed();
         return false;
     }
     BufferedPacket buffered;

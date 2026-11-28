@@ -1041,6 +1041,29 @@ void test_chunked_transfer()
     expect_error(studio.send(by_transfer), "TRANSFER_NOT_FOUND", "PREPARE from a failed transfer");
 }
 
+// A configuration accepted in chunks can be larger than one control message:
+// reading it back is answered with RESOURCE_LIMIT, not a dropped connection.
+void test_oversized_configuration_read_back()
+{
+    auto host = std::make_shared<RecordingHost>();
+    s7::ControlPlane node{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+                          s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host, .clock_sync = assumed_clock}};
+    Client studio(node, verified_peer("s7_studio.cert.pem"));
+    const auto diagram = constants_diagram(30000, "wss://a");
+    expect(json::serialize(diagram).size() > 2 * 1024 * 1024, "the diagram is large");
+    const auto deployed = s7::deployment::deploy_diagram(diagram, s7::deployment::infer_output_types(diagram),
+                                                         [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+                                                             return studio.send(message);
+                                                         });
+    expect(deployed.committed, "deployed: " + (deployed.errors.empty() ? std::string() : deployed.errors.front()));
+    const auto read_back = node.handle_request_json(verified_peer("s7_studio.cert.pem"),
+        json::serialize(json::object{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "big"}, {"protocol_version", 1}}));
+    expect(read_back.size() <= s7::transport::kMaxControlMessageBytes, "the response fits one control message");
+    const auto response = s7::parse_json_precise(read_back).as_object();
+    expect_error(response, "RESOURCE_LIMIT", "an oversized read-back");
+    expect(response.at("request_id") == "big", "the error answers the request");
+}
+
 // A configuration of about 2 MB reaches a runtime over mTLS in 1 MiB chunks
 // (larger than a data message may be).
 void test_large_deployment_over_mtls()
@@ -1250,6 +1273,7 @@ try {
     test_deployment_survives_restart();
     test_base64url();
     test_chunked_transfer();
+    test_oversized_configuration_read_back();
     test_runtime_deployment_over_mtls();
     test_plaintext_data_requires_policy();
     test_large_deployment_over_mtls();

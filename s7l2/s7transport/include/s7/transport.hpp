@@ -166,6 +166,9 @@ struct TransportLimits {
     std::size_t max_pending_control_requests{64}; // queued + executing handlers across all peers
     std::size_t max_pending_control_bytes{16 * 1024 * 1024}; // separate request and response budgets
     std::size_t max_inbound_connections{64}; // control + data, accepted by a server
+    // Bounds each connection's TCP connect, TLS and WebSocket handshake, in
+    // both directions; a peer that never completes one is dropped.
+    std::chrono::milliseconds handshake_timeout{10'000};
 };
 
 struct TransportStats {
@@ -175,6 +178,7 @@ struct TransportStats {
     std::uint64_t messages_sent{};
     std::uint64_t messages_received{};
     std::uint64_t malformed_messages{};
+    std::uint64_t unknown_stream_packets{}; // data packets for a stream alias not consumed here (dropped)
 };
 
 class IRuntimeNetEndpoint {
@@ -286,14 +290,14 @@ public:
     auto configure_data_server(std::uint16_t port, const TlsConfig& tls = {}, const std::string& bind_address = {}) -> std::uint16_t;
     // Connects this endpoint's outbound control and data connections (replacing
     // previous ones) and keeps them connected: a dropped connection is
-    // re-established with backoff and its streams resume. Throws if the first
+    // re-established (retried every second) and its streams resume. Throws if the first
     // connection attempt fails. Set connect_data=false for control-only
     // clients and when data uses a separate endpoint. An expected node UUID
     // is checked on every TLS handshake, including automatic reconnections.
     void configure_client(const std::string& url, const TlsConfig& tls = {}, bool connect_data = true, std::string expected_node_uuid = {});
     // Keeps a /data connection to each of these peers (in addition to the
     // client connection), connecting new ones and closing those no longer
-    // listed. A peer that cannot be reached is retried with backoff; this
+    // listed. A peer that cannot be reached is retried every second; this
     // call does not wait for connections.
     // Over TLS, a peer whose certificate is not the expected node is refused
     // (reported through take_transport_errors and retried).

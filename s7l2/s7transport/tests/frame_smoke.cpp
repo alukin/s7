@@ -99,6 +99,22 @@ void transfer(f::Encoding encoding, SignalType type) {
         check(std::ranges::equal(replay.bytes(), sent[index++]), "replay changed sealed bytes");
     }
     sink.acknowledge("b", 2); check(sink.log_depth() == 0, "ACK did not trim log");
+    {
+        // Peer "a" restarts without state (RESUME 0) after consuming both
+        // packets, while "c" still holds the log: c's ACK must not trim a's
+        // replay away.
+        s7::stream::MemorySequenceStore fan_seq; f::FrameSink fan(d, fan_seq, pool()); fan.resume("a", 0); fan.resume("c", 0);
+        check(fan.publish_copy(input.data(), 16, {}).status == f::Status::Ok, "fan-out publish failed");
+        while (fan.next_message("a")) {}
+        fan.acknowledge("a", 2); fan.detach("a"); fan.resume("a", 0);
+        while (fan.next_message("c")) {}
+        fan.acknowledge("c", 2);
+        check(fan.log_depth() == 2, "peer ACK trimmed a restarted peer's replay");
+        std::size_t replayed{};
+        while (fan.next_message("a")) ++replayed;
+        check(replayed == 2, "restarted peer did not replay the whole stream");
+        fan.acknowledge("a", 2); check(fan.log_depth() == 0, "restarted peer ACK did not trim");
+    }
     check(receive->leased_slots() == 1, "external lease uncharged after consumption");
     retained = {}; check(receive->leased_slots() == 0, "lease not released");
     std::stop_source stop; stop.request_stop();

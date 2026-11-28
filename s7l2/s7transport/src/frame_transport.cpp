@@ -500,6 +500,10 @@ void FrameSink::resume(const stream::ConsumerKey& peer, std::uint64_t next) {
     // RESUME means receipt position, not consumption. Keep the consumption
     // ledger across disconnects until a separate ACK explicitly advances it.
     entry.sent = std::max(next, oldest); entry.attached = true;
+    // A consumer that restarted without state resumes below what it had
+    // consumed; its ledger must not keep pinning a position past the replay,
+    // or another peer's ACK could trim packets this one still needs.
+    entry.acknowledged = std::min(entry.acknowledged, entry.sent);
     p.trim();
 }
 void FrameSink::detach(const stream::ConsumerKey& peer) { auto& p = *impl_; std::lock_guard lock(p.mutex); if (auto it = p.peers.find(peer); it != p.peers.end()) it->second.attached = false; }

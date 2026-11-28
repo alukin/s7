@@ -283,6 +283,9 @@ struct StreamEntry {
     std::unique_ptr<stream::StreamConsumer> consumer;
     bool open{true}; // owned by an element; a closed stream keeps its state
     std::uint64_t unauthorized{}; // see StreamStatus::unauthorized
+    // Producer: the peer node of each consumer identity it served, so a
+    // reopen with other consumer_nodes can drop the ones no longer allowed.
+    std::unordered_map<stream::ConsumerKey, std::string> consumer_peers;
     std::deque<RecentFault> recent_faults;
     FaultCode noted{FaultCode::None}; // the stream fault already in recent_faults
     Clock::time_point late_noted{};    // LATE goes to recent_faults at most once a second
@@ -368,6 +371,17 @@ public:
                 existing.config.producer_node = config.producer_node;
                 existing.config.consumer_nodes = config.consumer_nodes;
                 existing.config.max_latency = config.max_latency;
+                if (existing.producer && !config.consumer_nodes.empty()) {
+                    // A consumer the new configuration no longer names must
+                    // neither be served nor keep pinning the send log.
+                    std::erase_if(existing.consumer_peers, [&](const auto& consumer) {
+                        if (std::ranges::find(config.consumer_nodes, consumer.second) != config.consumer_nodes.end()) {
+                            return false;
+                        }
+                        existing.producer->forget(consumer.first);
+                        return true;
+                    });
+                }
                 changed.notify_all();
                 return existing.handle;
             }
@@ -894,6 +908,9 @@ using Bytes = std::vector<std::uint8_t>;
 constexpr std::size_t kMaxQueuedWrites = 64; // per connection, before the producer waits for write completions
 constexpr auto kTick = std::chrono::milliseconds(1);
 constexpr auto kReconnectDelay = std::chrono::seconds(1);
+constexpr auto kAcceptRetryDelay = std::chrono::milliseconds(100);
+// RESUMEs for streams not (yet) produced here, kept per connection.
+constexpr std::size_t kMaxPendingResumes = 1024;
 constexpr const char* kNodeHeader = "S7-Node"; // the sender's node UUID, in both handshake directions
 
 // Data and control messages are small and already batched by the stream protocol
@@ -958,6 +975,18 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             }
         }
 
+        // Beast applies no WebSocket handshake timeout by default, and the
+        // TCP timer is disabled for the WebSocket layer; bound the handshake
+        // here. start() later installs the running-connection timeouts.
+        void bound_handshake()
+        {
+            websocket::stream_base::timeout timeout{};
+            timeout.handshake_timeout = impl.limits.handshake_timeout;
+            timeout.idle_timeout = websocket::stream_base::none();
+            timeout.keep_alive_pings = false;
+            with_ws([&timeout](auto& ws) { ws.set_option(timeout); });
+        }
+
         // Announces this node in the handshake (request or response).
         void decorate()
         {
@@ -1014,6 +1043,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             }
             if (!is_data && (bytes->size() > kMaxControlMessageBytes || writes.size() >= kMaxQueuedWrites ||
                              bytes->size() > impl.limits.max_pending_control_bytes - impl.pending_control_write_bytes)) {
+                impl.record_error("control message of " + std::to_string(bytes->size()) +
+                                  " bytes exceeds the control size or backlog limit; connection closed");
                 close();
                 return;
             }
@@ -1186,6 +1217,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                         entry->frame->source->on_message(message);
                         consumer_sources[entry->handle.value] = connection.weak_from_this();
                         table.changed.notify_all();
+                    } else if (!entry) {
+                        ++unknown_stream_packets; // wire protocol section 7: an unknown alias is rejected
                     }
                 } else on_data_packet(connection, wire::decode_data_packet(message));
             }
@@ -1213,9 +1246,15 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             auto* entry = table.find_producer(message.stream_id);
             if (!entry) {
                 // Not produced here (yet): remember it in case the producer opens later.
+                const auto key = stream_key(message.stream_id);
+                if (!connection.pending_resumes.contains(key) && connection.pending_resumes.size() >= kMaxPendingResumes) {
+                    record_error("refused RESUME of unknown stream " + wire::to_string(message.stream_id) + " from " +
+                                 describe_peer(connection) + ": too many pending RESUMEs");
+                    return;
+                }
                 auto pending = message;
                 pending.next_expected = next;
-                connection.pending_resumes[stream_key(message.stream_id)] = pending;
+                connection.pending_resumes[key] = pending;
                 return;
             }
             if (!attach(connection, *entry, message.stream_alias, next)) {
@@ -1253,7 +1292,10 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             if (alias != entry.frame->alias) throw wire::FormatError("Frame alias does not match stream identity");
             try { entry.frame->sink->resume(connection.consumer_key, next); }
             catch (const std::exception& ex) { throw wire::FormatError(ex.what()); }
-        } else entry.producer->resume(connection.consumer_key, alias, next);
+        } else {
+            entry.producer->resume(connection.consumer_key, alias, next);
+            entry.consumer_peers[connection.consumer_key] = connection.peer_node;
+        }
         connection.producing[alias] = entry.handle.value;
         connection.producing_alias[entry.handle.value] = alias;
         table.changed.notify_all();
@@ -1265,7 +1307,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         std::unique_lock lock(table.mutex);
         auto* entry = table.find_consumer_by_alias(packet.stream_alias);
         if (!entry) {
-            return; // a stream closed meanwhile
+            ++unknown_stream_packets; // never consumed here, or replaced meanwhile; rejected (wire section 7)
+            return;
         }
         if (!connection.resumed.contains(packet.stream_alias)) {
             // Not RESUMEd here: this peer is not the stream's producer.
@@ -1517,11 +1560,20 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 return;
             }
             if (ec) {
+                // Typically EMFILE/ENFILE: accepting again at once would spin
+                // this thread, which also carries all data and ACK traffic.
                 self->record_error("accept failed: " + ec.message());
-                self->accept(listener);
+                auto retry = std::make_shared<boost::asio::steady_timer>(self->io, kAcceptRetryDelay);
+                retry->async_wait([self, listener, retry](const boost::system::error_code& wait_ec) {
+                    if (!wait_ec && !self->stopping) {
+                        self->accept(listener);
+                    }
+                });
                 return;
             }
-            std::size_t inbound = 0;
+            // Handshakes in progress count too: they hold a socket and a
+            // parser before the peer has authenticated anything.
+            std::size_t inbound = self->inbound_handshakes;
             for (const auto& connection : self->connections) {
                 inbound += connection->outbound ? 0 : 1;
             }
@@ -1542,7 +1594,11 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         auto connection = std::make_shared<Connection>(*this);
         auto request = std::make_shared<http::request<http::string_body>>();
         auto buffer = std::make_shared<boost::beast::flat_buffer>();
-        auto finish = [self = shared_from_this(), connection, request, listener](const boost::system::error_code& ec) {
+        // Counts this handshake until its last handler is gone, whichever
+        // stage it ends in (every stage's handler holds a copy of finish).
+        ++inbound_handshakes;
+        auto pending = std::shared_ptr<void>(nullptr, [self = shared_from_this()](void*) { --self->inbound_handshakes; });
+        auto finish = [self = shared_from_this(), connection, request, listener, pending](const boost::system::error_code& ec) {
             if (ec || self->stopping) {
                 return;
             }
@@ -1564,7 +1620,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         };
         if (listener->tls) {
             connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(std::move(socket)), *listener->tls);
-            boost::beast::get_lowest_layer(*connection->tls).expires_after(std::chrono::seconds(10));
+            boost::beast::get_lowest_layer(*connection->tls).expires_after(limits.handshake_timeout);
             connection->tls->next_layer().async_handshake(
                 ssl::stream_base::server, [self = shared_from_this(), connection, request, buffer, finish](const boost::system::error_code& ec) {
                     if (ec) {
@@ -1577,19 +1633,21 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                                              return;
                                          }
                                          boost::beast::get_lowest_layer(*connection->tls).expires_never();
+                                         connection->bound_handshake();
                                          connection->decorate();
                                          connection->tls->async_accept(*request, finish);
                                      });
                 });
         } else {
             connection->plain = std::make_unique<PlainWs>(boost::beast::tcp_stream(std::move(socket)));
-            boost::beast::get_lowest_layer(*connection->plain).expires_after(std::chrono::seconds(10));
+            boost::beast::get_lowest_layer(*connection->plain).expires_after(limits.handshake_timeout);
             http::async_read(connection->plain->next_layer(), *buffer, *request,
                              [connection, request, buffer, finish](const boost::system::error_code& ec, std::size_t) {
                                  if (ec) {
                                      return;
                                  }
                                  boost::beast::get_lowest_layer(*connection->plain).expires_never();
+                                 connection->bound_handshake();
                                  connection->decorate();
                                  connection->plain->async_accept(*request, finish);
                              });
@@ -1742,7 +1800,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             if (link->tls) {
                 connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(self->io), *link->tls);
                 auto& tcp = boost::beast::get_lowest_layer(*connection->tls);
-                tcp.expires_after(std::chrono::seconds(10));
+                tcp.expires_after(self->limits.handshake_timeout);
                 tcp.async_connect(results, [connection, target, host, on_ws, fail, response](const boost::system::error_code& c_ec, const auto&) {
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
@@ -1753,6 +1811,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                             return fail(h_ec, "tls handshake");
                         }
                         boost::beast::get_lowest_layer(*connection->tls).expires_never();
+                        connection->bound_handshake();
                         connection->decorate();
                         connection->tls->async_handshake(*response, host, target, on_ws);
                     });
@@ -1760,13 +1819,14 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             } else {
                 connection->plain = std::make_unique<PlainWs>(boost::beast::tcp_stream(self->io));
                 auto& tcp = boost::beast::get_lowest_layer(*connection->plain);
-                tcp.expires_after(std::chrono::seconds(10));
+                tcp.expires_after(self->limits.handshake_timeout);
                 tcp.async_connect(results, [connection, target, host, on_ws, fail, response](const boost::system::error_code& c_ec, const auto&) {
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
                     }
                     set_no_delay(boost::beast::get_lowest_layer(*connection->plain).socket());
                     boost::beast::get_lowest_layer(*connection->plain).expires_never();
+                    connection->bound_handshake();
                     connection->decorate();
                     connection->plain->async_handshake(*response, host, target, on_ws);
                 });
@@ -1826,6 +1886,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     // I/O thread only:
     std::string node_uuid; // this node, announced in handshakes
     bool stopping{false};
+    std::size_t inbound_handshakes{0}; // io thread only
     std::array<std::shared_ptr<Listener>, 2> listeners;
     std::unordered_map<std::string, LinkPtr> links;
     std::unordered_set<ConnectionPtr> connections;
@@ -1842,6 +1903,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     std::atomic<std::uint64_t> messages_sent{0};
     std::atomic<std::uint64_t> messages_received{0};
     std::atomic<std::uint64_t> malformed_messages{0};
+    std::atomic<std::uint64_t> unknown_stream_packets{0};
 };
 
 BeastRuntimeNetEndpoint::BeastRuntimeNetEndpoint(TransportLimits limits, std::string state_dir)
@@ -1931,8 +1993,10 @@ auto make_client_tls(const ParsedWebSocketUrl& url, const TlsConfig& tls) -> std
     if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
         throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
     }
+    // Trust only the configured S7 CA, never the system store: a peer
+    // without an expected node UUID (s7ctl info/config/...) would otherwise
+    // accept any publicly trusted certificate.
     auto context = std::make_shared<ssl::context>(ssl::context::tls_client);
-    context->set_default_verify_paths();
     context->use_certificate_chain_file(tls.cert_file);
     context->use_private_key_file(tls.key_file, ssl::context::pem);
     context->load_verify_file(tls.ca_file);
@@ -2139,6 +2203,7 @@ auto BeastRuntimeNetEndpoint::stats() const -> TransportStats
     stats.messages_sent = impl_->messages_sent.load();
     stats.messages_received = impl_->messages_received.load();
     stats.malformed_messages = impl_->malformed_messages.load();
+    stats.unknown_stream_packets = impl_->unknown_stream_packets.load();
     return stats;
 }
 

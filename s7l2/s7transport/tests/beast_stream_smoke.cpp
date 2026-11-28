@@ -419,6 +419,55 @@ void test_inbound_limit()
     expect(server.stats().connections_rejected == 1, "rejection counted");
 }
 
+// A peer that accepts TCP but never answers the WebSocket upgrade must not
+// hang configure_client (nor the endpoint's shutdown): the handshake is
+// bounded by TransportLimits::handshake_timeout.
+void test_silent_peer_handshake_times_out()
+{
+    boost::asio::io_context io;
+    tcp::acceptor silent(io, tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
+    const auto port = silent.local_endpoint().port(); // the kernel completes TCP; nobody answers
+    const auto started = std::chrono::steady_clock::now();
+    bool failed = false;
+    {
+        transport::BeastRuntimeNetEndpoint client(transport::TransportLimits{.handshake_timeout = milliseconds(300)});
+        try {
+            client.configure_client("ws://127.0.0.1:" + std::to_string(port));
+        } catch (const std::exception&) {
+            failed = true;
+        }
+    }
+    expect(failed, "an unanswered handshake fails the first connection");
+    expect(std::chrono::steady_clock::now() - started < std::chrono::seconds(5), "the handshake is bounded");
+}
+
+// Inbound handshakes still in progress count against the inbound limit, so
+// silent unauthenticated sockets cannot pile up without bound.
+void test_pending_handshakes_count_against_limit()
+{
+    transport::BeastRuntimeNetEndpoint server(
+        transport::TransportLimits{.max_inbound_connections = 2, .handshake_timeout = std::chrono::seconds(30)});
+    const auto port = server.configure_server(0);
+    boost::asio::io_context io;
+    const tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), port);
+    tcp::socket first(io), second(io), third(io);
+    first.connect(endpoint);
+    second.connect(endpoint);
+    expect(wait_for([&] { return server.stats().connections_rejected == 0; }), "two silent sockets are admitted");
+    third.connect(endpoint);
+    expect(wait_for([&] { return server.stats().connections_rejected == 1; }), "a third pending handshake is refused");
+    first.close();
+    second.close();
+    expect(wait_for([&] {
+        try {
+            RawClient client(port);
+            return true;
+        } catch (const boost::system::system_error&) {
+            return false;
+        }
+    }), "closed pending handshakes free their slots");
+}
+
 // A redeployed graph closes its stream and the new graph opens it again: the
 // stream continues where it was, on both ends.
 void test_reopen_continues_stream()
@@ -459,6 +508,44 @@ void test_reopen_continues_stream()
     expect(client.receive(consumer, rest.data(), rest.size()).received == 150, "the rest received");
     got.insert(got.end(), rest.begin(), rest.end());
     expect(got == values, "values continue across reopening, none lost or repeated");
+}
+
+// A redeploy that moves a stream's consumer to another node drops the old
+// consumer: it is no longer served and its stale position does not pin the
+// producer's send log (which would end in SEND_LOG_OVERFLOW).
+void test_reopen_drops_removed_consumer()
+{
+    constexpr const char* kProducer = "aaaaaaaa-1111-4111-8111-000000000001";
+    constexpr const char* kOld = "bbbbbbbb-2222-4222-8222-000000000002";
+    constexpr const char* kNew = "cccccccc-3333-4333-8333-000000000003";
+    transport::BeastRuntimeNetEndpoint producer_node;
+    producer_node.set_node_uuid(kProducer);
+    const auto url = "ws://127.0.0.1:" + std::to_string(producer_node.configure_server(0));
+    auto c = config("8d3f4a5b-6c7d-4e8f-9a01-b2c3d4e5f607");
+    c.producer_node = kProducer;
+    c.consumer_nodes = {kOld};
+    auto producer = producer_node.open_producer(c);
+    {
+        transport::BeastRuntimeNetEndpoint old_node;
+        old_node.set_node_uuid(kOld);
+        old_node.set_data_peers({{url, kProducer}});
+        static_cast<void>(old_node.open_consumer(c));
+        expect(wait_for([&] { return producer_node.stats().data_connections == 1; }), "old consumer connected");
+        std::this_thread::sleep_for(milliseconds(100)); // its RESUME arrives
+    } // the old node goes away without acknowledging anything more
+    const std::vector<double> values{1.0, 2.0, 3.0};
+    expect(producer_node.publish(producer, values.data(), values.size()).fault == stream::FaultCode::None, "published");
+    producer_node.close_stream(producer);
+    c.consumer_nodes = {kNew};
+    producer = producer_node.open_producer(c);
+    transport::BeastRuntimeNetEndpoint new_node;
+    new_node.set_node_uuid(kNew);
+    new_node.set_data_peers({{url, kProducer}});
+    const auto consumer = new_node.open_consumer(c);
+    std::vector<double> got(values.size());
+    expect(new_node.receive(consumer, got.data(), got.size()).received == got.size() && got == values, "new consumer receives");
+    expect(wait_for([&] { return producer_node.stream_statuses().front().send_log_depth == 0; }),
+           "the removed consumer no longer pins the send log");
 }
 
 // Two nodes consuming from each other have two connections (each one's
@@ -1085,7 +1172,10 @@ try {
     test_two_mtls_consumers();
     test_malformed_message_closes_connection();
     test_inbound_limit();
+    test_silent_peer_handshake_times_out();
+    test_pending_handshakes_count_against_limit();
     test_reopen_continues_stream();
+    test_reopen_drops_removed_consumer();
     test_mutual_streams_over_two_connections();
     test_data_peer_retried();
     test_node_identity();

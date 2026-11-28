@@ -251,6 +251,64 @@ void test_retention_and_two_consumers()
     expect(producer.stats().send_log_depth == 0, "log trimmed once both acknowledged");
 }
 
+// A consumer that restarts without state resumes from 0 while another
+// consumer still holds the log from 0: the replay is lossless (wire protocol
+// 12.1 item 2) and the other consumer's ACKs must not trim it away.
+void test_fresh_restart_on_fan_out()
+{
+    stream::MemorySequenceStore sequences;
+    stream::StreamProducer producer(config(SignalType::F64, 1, 64), sequences);
+    stream::StreamConsumer fast(config(SignalType::F64, 1, 64), 1);
+    stream::StreamConsumer slow(config(SignalType::F64, 1, 64), 2);
+    Link a{producer, fast, "fast"};
+    Link b{producer, slow, "slow"};
+    a.connect();
+    b.connect();
+    const auto now = stream::Clock::now();
+    for (int i = 0; i < 10; ++i) {
+        const double v = i;
+        producer.append(&v, 1, now);
+    }
+    a.pump(now);
+    take_all(fast);
+    a.acknowledge(now + milliseconds(50));
+
+    a.reset();
+    stream::StreamConsumer restarted(config(SignalType::F64, 1, 64), 1);
+    Link fresh{producer, restarted, "fast"};
+    fresh.connect(); // RESUME from 0
+    b.pump(now);
+    take_all(slow);
+    b.acknowledge(now + milliseconds(50));
+    expect(producer.stats().send_log_depth == 10, "retention follows the restarted consumer's replay position");
+    fresh.pump(now);
+    const auto replayed = take_all(restarted);
+    expect(replayed.size() == 10 && replayed.front() == 0.0 && replayed.back() == 9.0, "restarted consumer replays the whole stream");
+    expect(restarted.fault_code() == stream::FaultCode::None, "lossless replay does not fault");
+    fresh.acknowledge(now + milliseconds(100));
+    expect(producer.stats().send_log_depth == 0, "log trimmed once the restarted consumer acknowledged");
+}
+
+// A producer that sends more unacknowledged packets than the stream's send
+// log allows ignores the window: the consumer refuses it rather than
+// buffering without bound.
+void test_consumer_refuses_window_violation()
+{
+    stream::MemorySequenceStore sequences;
+    stream::StreamProducer producer(config(SignalType::F64, 1, 8), sequences); // a peer with a larger window
+    stream::StreamConsumer consumer(config(SignalType::F64, 1, 2), 1);
+    Link link{producer, consumer};
+    link.connect();
+    const auto now = stream::Clock::now();
+    for (int i = 0; i < 3; ++i) {
+        const double v = i;
+        producer.append(&v, 1, now);
+    }
+    link.pump(now);
+    expect(consumer.fault_code() == stream::FaultCode::MalformedPacket, "a packet beyond the window faults the consumer");
+    expect(consumer.available() == 2, "only the window was buffered");
+}
+
 void test_producer_restart_is_a_gap()
 {
     const auto dir = std::filesystem::temp_directory_path() / ("s7-seq-test-" + std::to_string(std::random_device{}()));
@@ -518,6 +576,8 @@ try {
     test_reconnect_replays_without_loss();
     test_backpressure_and_acks();
     test_retention_and_two_consumers();
+    test_fresh_restart_on_fan_out();
+    test_consumer_refuses_window_violation();
     test_producer_restart_is_a_gap();
     test_soak_i12();
     test_explicit_timestamps();

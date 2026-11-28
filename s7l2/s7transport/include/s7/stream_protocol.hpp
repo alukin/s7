@@ -201,6 +201,10 @@ public:
     // (StreamStateLost).
     void resume(const ConsumerKey& consumer, std::uint32_t alias, std::uint64_t next_expected);
     void detach(const ConsumerKey& consumer);
+    // Drops a consumer that is no longer configured (a redeploy moved the
+    // stream elsewhere): its position stops holding the send log and it is
+    // sent nothing more. A later RESUME from it starts a new position.
+    void forget(const ConsumerKey& consumer);
     void acknowledge(const ConsumerKey& consumer, std::uint64_t next_expected);
 
     // The next encoded packet for the consumer, or nothing if it is up to date.

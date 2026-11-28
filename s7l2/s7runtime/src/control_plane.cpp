@@ -304,7 +304,17 @@ auto ControlPlane::handle_request_json(const transport::ControlPeer& peer, const
         if (!parsed.is_object()) {
             return boost::json::serialize(make_error_response({}, "INVALID_REQUEST", "Request must be a JSON object."));
         }
-        return boost::json::serialize(handle_request_object(peer, parsed.as_object()));
+        const auto& request = parsed.as_object();
+        auto response = boost::json::serialize(handle_request_object(peer, request));
+        if (response.size() > transport::kMaxControlMessageBytes) {
+            // The transport cannot send it and would close the connection
+            // without saying why (e.g. GET_NETWORK_CONFIGURATION of a large
+            // diagram, which transfers in may accept up to 64 MiB).
+            return boost::json::serialize(make_error_response(as_string(request, "request_id").value_or(""), "RESOURCE_LIMIT",
+                "Response of " + std::to_string(response.size()) + " bytes exceeds the " +
+                std::to_string(transport::kMaxControlMessageBytes) + "-byte control message limit."));
+        }
+        return response;
     } catch (const std::exception& ex) {
         return boost::json::serialize(make_error_response({}, "INVALID_REQUEST", ex.what()));
     }
@@ -1670,10 +1680,11 @@ void ControlPlane::persist_peers_to_disk() const
         out.emplace_back(std::move(item));
     }
 
-    const auto path = options_.storage_dir / "peers.json";
-    std::ofstream stream(path, std::ios::trunc);
-    if (stream) {
-        stream << boost::json::serialize(out);
+    // The directory is a cache: a failed write keeps the in-memory peers.
+    // Writing atomically keeps a crash or a full disk from truncating it.
+    try {
+        platform::write_file_atomically(options_.storage_dir / "peers.json", boost::json::serialize(out));
+    } catch (const std::exception&) {
     }
 }
 
