@@ -4,7 +4,10 @@
 
 namespace s7::hardware {
 Request request_from_context(const ElementCreationContext& c, Direction direction) {
-    Request r; r.direction=direction; r.type=c.type();
+    return request_from_context(c,direction,c.type());
+}
+Request request_from_context(const ElementCreationContext& c, Direction direction, SignalType type) {
+    Request r; r.direction=direction; r.type=type;
     r.backend=c.get_string("backend"); r.device=c.get_string("device");
     r.block_frames=c.get_int("block_frames"); r.queue_frames=c.get_int("queue_frames");
     r.channels.clear();

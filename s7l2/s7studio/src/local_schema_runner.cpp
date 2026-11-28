@@ -163,7 +163,8 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     if (!hardwarePaced_) {
         if (std::ranges::any_of(graph.elements, [](const auto& entry) {
             const auto type = entry.second->type_name();
-            return type == "AudioSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrSink";
+            return type == "AudioSource" || type == "AudioSink" || type == "SdrSource" ||
+                   type == "SdrSink" || type == "SdrBlockSource";
         })) throw std::runtime_error("Studio hardware execution requires the matching S7 hardware plugins.");
         runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
         runtime_->set_model_time_rate(rate);

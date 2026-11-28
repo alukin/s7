@@ -50,15 +50,12 @@ private:
 }
 
 extern "C" s7::hardware::LiveRun* s7_create_live_run_v1(s7::ExecutableGraph& graph, s7::Rate rate) {
-    const bool has_hardware = std::ranges::any_of(graph.elements, [](const auto& entry) {
-        return dynamic_cast<const Boundary*>(entry.second.get()) != nullptr;
-    });
-    if (!has_hardware) return nullptr;
-    const auto& boundary = validate_graph(graph);
-    if (boundary.request().direction == Direction::Playback && boundary.type_name() != "AudioSink")
+    if (!has_hardware_boundary(graph)) return nullptr;
+    const auto config = graph_profile(graph);
+    if (config.request.direction == Direction::Playback && config.boundary_type != "AudioSink")
         throw std::invalid_argument("Use s7hw for explicit SDR transmission.");
-    if (boundary.request().rate != rate)
-        throw std::invalid_argument("Set the model step rate to the hardware rate of " + boundary.request().rate.to_string() + ".");
+    if (config.graph_rate != rate)
+        throw std::invalid_argument("Set the model step rate to " + config.graph_rate.to_string() + " for this hardware run.");
     return new PublicLiveRun(std::move(graph));
 }
 
