@@ -205,9 +205,11 @@ host B, with no devices, runs an equalizer (biquad bands) and records the
 result. Qualification compares the recording with an independently computed
 equalizer response (samples, per-band gain, ordering, gaps) and records
 throughput, lag, CPU, RSS and queue occupancy; the recorded input and output
-are played back afterwards for listening. Measure the sustained per-step rate
-of the chain before fixing the audio sample rate (48 kHz pacing of headless
-nodes is unqualified).
+are played back afterwards for listening. The sustained per-step rate was
+measured on one host (two local nodes): 8–192 kHz held in real time with exact
+equalizer output, and 48 kHz still held with each node limited to 20 % of one
+CPU. The recommendation is 48 kHz, to be confirmed on the two G2 hosts with
+`tools/measure_g2_audio_rate.py`; see [G2 audio chain](G2_AUDIO_CHAIN.md).
 
 A live round trip (microphone on host A → equalizer on host B → speakers on
 host A) is a 0.3.0 target. It is not possible in 0.2.0: headless nodes cannot

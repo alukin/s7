@@ -99,7 +99,8 @@ AV17a/b covers **P08/P09 integration** and package assets. **P01–P07 remain a 
 5. **Package/platform:** exercise in installed/relocated Linux
    Studio, and targeted supported Windows/Wine build checks.
    Attribute tests honestly: Wine rendering is not native Windows
-   or actual printer hardware evidence.
+   or actual printer hardware evidence. Windows printing is not a
+   0.2.0 gate (see the Windows note under the test matrix).
 6. **Physical printer:** opt-in manual verification on a named real
    device and platform, with printed-page inspection (geometry,
    labels, contrast and scaling). No physical printer required
@@ -193,10 +194,38 @@ release candidate.
 | P07 | preview in both modes, cancelled file dialog, unwritable path, 300 dpi device refusal, printer path | `ctest -R "s7studio_(diagram\|plot)_print"` | — |
 | P08/P09 | Waterfall and Video PDFs through the print button, cancel, appendix pagination, printer path | `ctest -R s7studio_array_persistence` | — |
 
-Not yet covered: physical printer output, Windows/Wine runs and installed
+Not yet covered: physical printer output, Windows runs and installed
 package checks (acceptance items 5 and 6), and printing of the Surface,
 Response and Time–Frequency 3D tabs beyond the shared capture path exercised
 by the trajectory.
+
+**Windows (maintainer decision, 2026-11-28):** Windows builds use the same
+printing code and must keep building and working, but Windows printing is
+**not a 0.2.0 release gate**: the maintainer has no Windows host. Report it
+as untested on Windows unless someone runs the checklist below on a real
+Windows machine (teren_ukr may). Wine results do not count as Windows
+evidence.
+
+Windows checklist (installed or relocated Studio, record Windows version,
+printer driver and Studio revision):
+
+1. Open `examples/double_pendulum_full.s7diagram` (or any saved diagram
+   with subsystems). File ▸ Print… shows the preview; switch Fit/Tile,
+   Selection and Include subsystems and check that the page count and
+   detail line change. Print to "Microsoft Print to PDF" and to one real
+   printer if available.
+2. File ▸ Export as PDF…: the file opens in a PDF reader with the diagram
+   sheet's size and orientation, readable Greek/maths labels and the footer
+   ("S7 Studio <version> … printed …, Page n of m").
+3. Run a model, open Scope, Phase Portrait, 3D Phase Trajectory and Live
+   Oscilloscope; freeze each, use its printer button (preview, then Print)
+   and its arrow menu (Save as PDF…, Page Setup…). Page Setup choices must
+   be remembered for the next viewer print.
+4. Cancel each dialog once (preview Close, file dialog Cancel): nothing is
+   written and the status bar says it was cancelled. Save to a read-only
+   folder: a clear error, no file.
+5. Check high-DPI scaling (125 % / 150 % display scale): text and line
+   widths on the PDF page match the 100 % result.
 
 ## Release decision and exclusions
 
