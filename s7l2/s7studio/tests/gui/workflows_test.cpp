@@ -4364,7 +4364,7 @@ private slots:
         // Hardware examples run continuously on a real device: never here.
         for (const auto& element : json["schema"].toObject()["elements"].toArray()) {
             const auto type = element.toObject()["type"].toString();
-            if (type == "AudioSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrSink")
+            if (type == "AudioSource" || type == "AudioBlockSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrBlockSource" || type == "SdrSink")
                 QSKIP("Hardware examples open a real sound device or radio");
         }
         const double seconds = documentedSeconds(diagram);

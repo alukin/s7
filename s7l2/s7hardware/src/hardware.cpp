@@ -134,7 +134,14 @@ namespace {
 struct Profile {
     Boundary* primary{};
     Boundary* audio{};
+    CaptureBlockSource* block_source{};
     std::uint64_t audio_divisor{};
+
+    GraphProfile graph_profile() const {
+        if (block_source) return {block_source->request(), *block_source->declared_rate(),
+                                  block_source->request().block_frames, block_source->type_name()};
+        return {primary->request(), primary->request().rate, 1, primary->type_name()};
+    }
 };
 
 Profile profile(const ExecutableGraph& g) {
@@ -145,7 +152,16 @@ Profile profile(const ExecutableGraph& g) {
             auto*& slot = b->request().direction == Direction::Capture ? result.primary : playback;
             if (slot) throw std::invalid_argument("hardware run supports at most one capture and one playback boundary");
             slot=b;
+        } else if (auto* source = dynamic_cast<CaptureBlockSource*>(e.get())) {
+            if (result.block_source) throw std::invalid_argument("hardware run supports only one block source");
+            result.block_source=source;
         }
+    }
+    if (result.block_source) {
+        if (result.primary || playback || g.domains.size()!=1 ||
+            g.domains.front().rate!=*result.block_source->declared_rate())
+            throw std::invalid_argument("Block capture requires one hardware boundary and one block-rate domain");
+        return result;
     }
     if (!result.primary) {
         if (!playback) throw std::invalid_argument("hardware run has no boundary");
@@ -196,17 +212,36 @@ std::unique_ptr<Stream> prepare_stream(Provider* provider, const Request& r) {
 }
 }
 
-Boundary& validate_graph(const ExecutableGraph& g) { return *profile(g).primary; }
+bool has_hardware_boundary(const ExecutableGraph& g) {
+    return std::ranges::any_of(g.elements, [](const auto& entry) {
+        return dynamic_cast<const Boundary*>(entry.second.get()) ||
+               dynamic_cast<const CaptureBlockSource*>(entry.second.get());
+    });
+}
+
+GraphProfile graph_profile(const ExecutableGraph& g) { return profile(g).graph_profile(); }
+
+Boundary& validate_graph(const ExecutableGraph& g) {
+    const auto config=profile(g);
+    if (!config.primary) throw std::invalid_argument("graph does not have a scalar hardware boundary");
+    return *config.primary;
+}
+
+const Request& Run::request() const noexcept {
+    if (auto* source=dynamic_cast<const CaptureBlockSource*>(boundary_)) return source->request();
+    return static_cast<const Boundary&>(*boundary_).request();
+}
 
 Run::Run(ExecutableGraph g) : block_(0) {
     const auto config=profile(g);
-    boundary_=config.primary;
+    boundary_=config.block_source ? static_cast<Element*>(config.block_source) : config.primary;
     audio_sink_=config.audio;
     audio_divisor_=config.audio_divisor;
-    const auto& r=boundary_->request();
+    const auto& r=request();
+    const auto graph_rate=config.graph_profile().graph_rate;
     runtime_=std::make_unique<NodeRuntime>(std::move(g));
-    runtime_->set_model_time_rate(r.rate);
-    block_=Buffer(r.block_frames*r.frame_bytes());
+    runtime_->set_model_time_rate(graph_rate);
+    if (!config.block_source || r.channels.size()>1) block_=Buffer(r.block_frames*r.frame_bytes());
     if (audio_sink_) {
         const auto& audio=audio_sink_->request();
         audio_block_=Buffer(audio.block_frames*audio.frame_bytes());
@@ -224,7 +259,7 @@ void Run::prepare(Resolve resolve) {
         audio_provider=resolve(audio.backend);
         audio_stream=prepare_stream(audio_provider.get(), audio);
     }
-    const auto& r=boundary_->request();
+    const auto& r=request();
     auto provider=resolve(r.backend);
     stream_=prepare_stream(provider.get(), r);
     provider_=std::move(provider);
@@ -253,11 +288,12 @@ void Run::step_to(RunStats& stats, std::uint64_t end, const StepObserver& observ
 RunStats Run::execute_capture(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token st,
                               const StepObserver& observe) {
     RunStats stats;
+    auto& boundary=static_cast<Boundary&>(*boundary_);
     std::stop_callback cancel_capture(st, [this] { cancel(); });
     const auto interrupted=[&] { return stream_->cancelled(); };
     const auto finish=[&] {
-        boundary_->on_step_failure();
-        boundary_->unstage();
+        boundary.on_step_failure();
+        boundary.unstage();
         stream_->stop();
         if (audio_sink_) {
             audio_sink_->on_step_failure();
@@ -273,7 +309,7 @@ RunStats Run::execute_capture(std::uint64_t frames, std::chrono::milliseconds ti
     };
     const auto prefill=audio_stream_ ? audio_stream_->descriptor().startup_prefill_frames : 0;
     const auto audio_stride=audio_sink_ ? audio_sink_->request().frame_bytes() : 0;
-    auto block_limit=boundary_->request().block_frames;
+    auto block_limit=boundary.request().block_frames;
     if (audio_sink_ && (block_limit-1)/audio_divisor_+1 > audio_sink_->request().block_frames)
         block_limit=audio_sink_->request().block_frames*audio_divisor_;
 
@@ -287,9 +323,9 @@ RunStats Run::execute_capture(std::uint64_t frames, std::chrono::milliseconds ti
                 const auto end=stats.graph_frames+input.frames;
                 const auto count=audio_sink_ ? audio_frames_through(end)-audio_frames_through(stats.graph_frames) : 0;
                 if (count) audio_sink_->stage(audio_block_.bytes(),count);
-                boundary_->stage(block_.bytes(),input.frames);
+                boundary.stage(block_.bytes(),input.frames);
                 step_to(stats,end,observe);
-                boundary_->unstage();
+                boundary.unstage();
                 if (count) {
                     audio_sink_->unstage();
                     const auto deadline=std::chrono::steady_clock::now()+timeout;
@@ -331,8 +367,10 @@ RunStats Run::execute(std::uint64_t frames, std::chrono::milliseconds timeout, s
     if (!stream_) throw std::logic_error("hardware run is not prepared");
     if (executed_ || !frames || timeout.count()<=0) throw std::invalid_argument("hardware run is single-use and needs positive frames/timeout");
     executed_=true;
+    if (dynamic_cast<CaptureBlockSource*>(boundary_)) return execute_block_capture(frames,timeout,st,observe);
+    auto& boundary=static_cast<Boundary&>(*boundary_);
     RunStats stats;
-    const auto& r=boundary_->request();
+    const auto& r=request();
     if (r.direction==Direction::Capture) return execute_capture(frames,timeout,st,observe);
     bool started=false;
     std::size_t prefilled=0;
@@ -342,9 +380,9 @@ RunStats Run::execute(std::uint64_t frames, std::chrono::milliseconds timeout, s
             if (!started)
                 count=std::min(count,stream_->descriptor().startup_prefill_frames-prefilled);
             if (count) {
-                boundary_->stage(block_.bytes(),count);
+                boundary.stage(block_.bytes(),count);
                 step_to(stats,stats.graph_frames+count,observe);
-                boundary_->unstage();
+                boundary.unstage();
             }
             std::size_t sent=0;
             const auto deadline=std::chrono::steady_clock::now()+timeout;
@@ -362,9 +400,9 @@ RunStats Run::execute(std::uint64_t frames, std::chrono::milliseconds timeout, s
         }
         if (st.stop_requested() || stream_->cancelled()) stats.status=Status::Cancelled;
     } catch (...) {
-        boundary_->on_step_failure(); boundary_->unstage(); stream_->stop(); throw;
+        boundary.on_step_failure(); boundary.unstage(); stream_->stop(); throw;
     }
-    boundary_->on_step_failure(); boundary_->unstage(); stream_->stop();
+    boundary.on_step_failure(); boundary.unstage(); stream_->stop();
     stats.emergency_output_frames=stream_->emergency_output_frames();
     return stats;
 }

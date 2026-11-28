@@ -2035,6 +2035,75 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     }
     auto* form = new QFormLayout();
 
+    const auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    std::shared_ptr<diagram::ElementNode> audioSource;
+    if (scene) {
+        for (const auto& node : scene->elementNodes()) {
+            if (node->element().type == "AudioBlockSource") {
+                audioSource = node;
+                break;
+            }
+        }
+    }
+    QComboBox* audioInput = nullptr;
+    QComboBox* audioChannels = nullptr;
+    std::vector<s7::hardware::AudioInputDevice> audioInputs;
+    if (audioSource) {
+        audioInput = new QComboBox(&dialog);
+        audioChannels = new QComboBox(&dialog);
+        audioInput->setObjectName(QStringLiteral("run.audioInput"));
+        audioInput->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        audioInput->setMinimumContentsLength(32);
+        audioChannels->setObjectName(QStringLiteral("run.audioChannels"));
+        if (pluginLoader_) {
+            const auto discover = reinterpret_cast<s7::hardware::ListAudioInputs>(
+                pluginLoader_->loaded_symbol("s7audio", s7::hardware::audio_inputs_symbol));
+            if (discover) discover(audioInputs);
+        }
+
+        audioInput->addItem(QStringLiteral("Choose an audio input"));
+        const auto& params = audioSource->element().params;
+        const auto backend = params.if_contains("backend");
+        const auto device = params.if_contains("device");
+        const auto channels = params.if_contains("channels");
+        const auto options = params.if_contains("options");
+        const bool monitor = options && options->is_string() && [options] {
+                boost::system::error_code error;
+                const auto value = boost::json::parse(options->as_string(), error);
+                const auto* capture = value.is_object() ? value.as_object().if_contains("capture_sink") : nullptr;
+                return capture && *capture == "true";
+            }();
+        int current = 0;
+        for (const auto& entry : audioInputs) {
+            auto label = QStringLiteral("%1 · %2").arg(QString::fromStdString(entry.backend), QString::fromStdString(entry.label));
+            if (entry.channels) label += QStringLiteral(" (%1 channels)").arg(entry.channels);
+            audioInput->addItem(label);
+            if (backend && backend->is_string() && backend->as_string() == entry.backend.c_str() &&
+                device && device->is_string() && device->as_string() == entry.selector.c_str() && monitor == entry.monitor)
+                current = audioInput->count() - 1;
+        }
+        const auto selectChannels = [audioChannels, &audioInputs](int index) {
+            const auto previous = audioChannels->currentData().toInt();
+            audioChannels->clear();
+            if (index <= 0) return;
+            audioChannels->addItem(QStringLiteral("Mono"), 1);
+            const auto count = audioInputs.at(static_cast<std::size_t>(index - 1)).channels;
+            if (count != 1) audioChannels->addItem(QStringLiteral("Stereo"), 2);
+            const auto selected = audioChannels->findData(previous ? previous : (count >= 2 ? 2 : 1));
+            if (selected >= 0) audioChannels->setCurrentIndex(selected);
+        };
+        // Build the channel choices before applying the saved selection.
+        audioInput->setCurrentIndex(current);
+        selectChannels(current);
+        if (channels && channels->is_array()) {
+            const auto selected = audioChannels->findData(static_cast<int>(channels->as_array().size()));
+            if (selected >= 0) audioChannels->setCurrentIndex(selected);
+        }
+        connect(audioInput, &QComboBox::currentIndexChanged, &dialog, selectChannels);
+        form->addRow(QStringLiteral("Audio input"), audioInput);
+        form->addRow(QStringLiteral("Capture channels"), audioChannels);
+    }
+
     auto* runtimeSecondsSpin = new QDoubleSpinBox(&dialog);
     runtimeSecondsSpin->setObjectName(QStringLiteral("run.duration"));
     runtimeSecondsSpin->setDecimals(9);
@@ -2060,8 +2129,11 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     const auto captureProbes = currentRunProbes();
     const auto recordingChannels = std::ranges::count_if(captureProbes, [](const auto& probe) { return probe.record; });
     const auto liveChannels = std::ranges::count_if(captureProbes, [](const auto& probe) { return !probe.liveGroup.empty(); });
-    auto* captureSummary = new QLabel(QStringLiteral("Live acquisition: %1 channels, bounded RAM. Full-run recording: %2 channels (Scope, phase viewers and named probes). Recording retains the entire run and grows on disk.")
-        .arg(liveChannels).arg(recordingChannels), &dialog);
+    const auto captureText = audioSource
+        ? QStringLiteral("The audio input publishes one block per model step. Full-run scalar recording: %1 channels.").arg(recordingChannels)
+        : QStringLiteral("Live acquisition: %1 channels, bounded RAM. Full-run recording: %2 channels (Scope, phase viewers and named probes). Recording retains the entire run and grows on disk.")
+              .arg(liveChannels).arg(recordingChannels);
+    auto* captureSummary = new QLabel(captureText, &dialog);
     captureSummary->setWordWrap(true);
     captureSummary->setObjectName(QStringLiteral("run.captureSummary"));
     form->addRow(captureSummary);
@@ -2114,10 +2186,10 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     durationNotice->setObjectName(QStringLiteral("run.durationNotice"));
     durationNotice->setWordWrap(true);
     layout->addWidget(durationNotice);
-    const auto validateDuration = [runtimeSecondsSpin, frequencySpin, durationNotice, buttons] {
+    const auto validateDuration = [runtimeSecondsSpin, frequencySpin, durationNotice, buttons, audioInput] {
         try {
             const auto steps = ui::ModelRunController::computeTicks(runtimeSecondsSpin->value(), 1.0 / frequencySpin->value());
-            buttons->button(QDialogButtonBox::Ok)->setEnabled(true);
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(!audioInput || audioInput->currentIndex() > 0);
             durationNotice->setText(steps >= 0 && steps < 100
                 ? QStringLiteral("Warning: this simulation runs for %1 steps, fewer than 100. Increase the duration or model step rate for more samples.").arg(steps)
                 : QString{});
@@ -2130,6 +2202,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     };
     connect(runtimeSecondsSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, validateDuration);
     connect(frequencySpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, validateDuration);
+    if (audioInput) connect(audioInput, &QComboBox::currentIndexChanged, &dialog, validateDuration);
     validateDuration();
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -2137,6 +2210,39 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 
     if (dialog.exec() != QDialog::Accepted) {
         return false;
+    }
+
+    if (audioSource && audioInput && audioInput->currentIndex() > 0) {
+        const auto& input = audioInputs.at(static_cast<std::size_t>(audioInput->currentIndex() - 1));
+        const auto channelCount = audioChannels->currentData().toInt();
+        auto element = audioSource->element();
+        const auto sourceId = element.id;
+        element.params["backend"] = input.backend;
+        element.params["device"] = input.selector;
+        element.params["channels"] = channelCount == 2 ? boost::json::array{"0", "1"} : boost::json::array{"0"};
+        const auto* options = element.params.if_contains("options");
+        boost::system::error_code optionsError;
+        auto settings = options && options->is_string() ? boost::json::parse(options->as_string(), optionsError)
+                                                        : boost::json::value(boost::json::object{});
+        if (optionsError || !settings.is_object()) {
+            QMessageBox::warning(this, QStringLiteral("Audio input"), QStringLiteral("Audio source options must be a JSON object."));
+            return false;
+        }
+        if (input.monitor) settings.as_object()["capture_sink"] = "true";
+        else settings.as_object().erase("capture_sink");
+        element.params["options"] = boost::json::serialize(settings);
+        audioSource->setElement(std::move(element));
+
+        const diagram::NetModel net(*scene);
+        for (const auto& wire : net.connections()) {
+            if (wire.from.element != sourceId) continue;
+            auto target = scene->elementNode(wire.to.element);
+            if (!target || target->element().type != "AudioBlockPSD") continue;
+            auto psd = target->element();
+            psd.params["channels"] = channelCount;
+            target->setElement(std::move(psd));
+        }
+        static_cast<void>(syncSchemaFromScene());
     }
 
     // Merely accepting the dialog must preserve the saved values, including

@@ -121,6 +121,7 @@ add_test(NAME s7spectral_sdk_smoke
 )
 set_tests_properties(s7spectral_sdk_smoke PROPERTIES
     SKIP_RETURN_CODE 77
+    FIXTURES_SETUP s7spectral_plugin
     ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER};${S7_SCRIPT_TEST_ENV}"
 )
 

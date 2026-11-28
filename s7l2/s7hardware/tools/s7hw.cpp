@@ -57,6 +57,7 @@ int main(int argc,char** argv) {
         s7::radio::register_elements(registry);
 #endif
         std::optional<s7::ExecutableGraph> graph;
+        std::uint64_t steps=frames;
         if (mode!="--devices") {
             std::ifstream input(file,std::ios::binary); if (!input) throw std::invalid_argument("cannot read schema: "+file);
             std::string json(4*1024*1024+1,'\0');
@@ -70,7 +71,10 @@ int main(int argc,char** argv) {
             const auto& payload = kind && *kind == "s7.diagram" ? document.as_object().at("schema") : document;
             auto schema = s7::SchemaLibraryLoader::build_schema(payload, registry);
             graph=s7::Compiler::compile(schema);
-            s7::hardware::validate_graph(*graph);
+            const auto config=s7::hardware::graph_profile(*graph);
+            if (frames % config.frames_per_step)
+                throw std::invalid_argument("--frames must be a whole number of capture blocks");
+            steps=frames/config.frames_per_step;
             if (mode=="--check") { std::cout<<"Graph and hardware execution profile valid; no hardware activated.\n"; return 0; }
         }
         std::vector<s7::hardware::ProviderModule> modules;
@@ -106,7 +110,7 @@ int main(int argc,char** argv) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
         });
-        const auto result=run.execute(frames,std::chrono::milliseconds(1000),stop.get_token());
+        const auto result=run.execute(steps,std::chrono::milliseconds(1000),stop.get_token());
         controller.request_stop();
         std::cout<<"status="<<s7::hardware::to_string(result.status)<<" graph_frames="<<result.graph_frames
                  <<" transferred_frames="<<result.transferred_frames<<" playback_frames="<<result.playback_frames

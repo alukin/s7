@@ -13,7 +13,9 @@
 #include "viewers/waterfall_history.hpp"
 #include "wire_type_labels.hpp"
 
+#include <s7/audio.hpp>
 #include <s7/builtin_element_registry.hpp>
+#include <s7/compiler.hpp>
 #include <s7/plugin_loader.hpp>
 #include <s7/schema_library.hpp>
 
@@ -38,6 +40,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
+#include <numbers>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -478,9 +482,15 @@ void check_saved_views(const QString& fileName, bool spectral)
         if (spectral) {
             require(sample->value.spectrum && sample->value.spectrum->sample_rate == s7::Rate{1600, 1},
                     "saved PSD graph lost the independent physical frequency axis");
+            // The example's complex tone e^{j*pi*n/2} sits in bin 2 (400 Hz) of
+            // 8. A periodic Hann window spreads it to bins 1..3 with DFT
+            // magnitudes 2, 4, 2; sum(w^2) = 3, so PSD = |X|^2 / (3 * 1600 Hz).
             const auto power = sample->value.lease.values<s7::SignalType::F32>();
-            require(std::abs(power[0] - 1.0 / 300.0) < 1e-8 && power[4] == 0,
-                    "saved PSD graph did not reproduce the Hann-window DC and Nyquist oracle");
+            constexpr std::array<double, 8> expected{0, 1.0 / 1200, 1.0 / 300, 1.0 / 1200, 0, 0, 0, 0};
+            require(power.size() == expected.size(), "saved PSD graph has the wrong bin count");
+            for (std::size_t bin = 0; bin < expected.size(); ++bin)
+                require(std::abs(power[bin] - expected[bin]) < 1e-8,
+                        "saved PSD graph did not reproduce the Hann-window tone oracle");
         } else {
             const auto frame = viewers::makeVideoFrame(*sample);
             auto incompatible = *sample;
@@ -562,6 +572,103 @@ void checkSavedReplay(const QString& diagramPath)
     saveViewerPdf(viewer->widget(), QStringLiteral("video-replay.pdf"));
 }
 
+class TestAudioStream final : public s7::hardware::Stream {
+public:
+    explicit TestAudioStream(const s7::hardware::Request& request) : Stream(describe(request)) {}
+
+private:
+    static s7::hardware::Descriptor describe(const s7::hardware::Request& request)
+    {
+        s7::hardware::Descriptor descriptor;
+        descriptor.actual = request;
+        return descriptor;
+    }
+
+    void do_start() override {}
+    void do_stop() noexcept override {}
+
+    s7::hardware::Transfer do_read(std::span<std::byte> output, std::size_t frames,
+                                   s7::hardware::Deadline, std::stop_token) override
+    {
+        const auto channels = descriptor().actual.channels.size();
+        // Exercise deinterleaving across multiple reads per committed block.
+        frames = std::min<std::size_t>(frames, 311);
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            for (std::size_t channel = 0; channel < channels; ++channel) {
+                const auto signal = static_cast<float>(std::sin(2 * std::numbers::pi *
+                    static_cast<double>((position_ + frame) % 48) * (channel == 0 ? 1 : 3) / 48));
+                std::memcpy(output.data() + (frame * channels + channel) * sizeof(float), &signal, sizeof(float));
+            }
+        }
+        position_ += frames;
+        return {frames, s7::hardware::Status::Ok, 0, {}};
+    }
+    std::size_t position_{};
+};
+
+class TestAudioProvider final : public s7::hardware::Provider {
+public:
+    std::string_view id() const noexcept override { return "audio-test"; }
+    std::vector<s7::hardware::DeviceInfo> devices() override { return {}; }
+    std::unique_ptr<s7::hardware::Stream> prepare(const s7::hardware::Request& request) override
+    {
+        return std::make_unique<TestAudioStream>(request);
+    }
+};
+
+// AudioBlockSource -> AudioBlockPSD through the hardware runner: mono and
+// stereo blocks keep a common first sample, and each channel's PSD peaks at
+// its own test tone (1 kHz left, 3 kHz right, 48 kHz, 2048-point blocks).
+void checkAudioBlockPsd()
+{
+    auto& registry = s7::ElementRegistry::instance();
+    s7::audio::register_elements(registry);
+    for (const int count : {2, 1}) {
+        auto schemaJson = boost::json::parse(R"({"name":"audio_psd","elements":[
+            {"id":"capture","type":"AudioBlockSource","params":{"backend":"audio-test","device":"default",
+             "channels":["0"],"frame_rate":[48000,1],"block_frames":2048,"queue_frames":8192}},
+            {"id":"psd","type":"AudioBlockPSD","params":{"components":2048,"channels":1}}],
+            "connections":[{"from_element":"capture","from_port":0,"to_element":"psd","to_port":0}]})").as_object();
+        auto& elements = schemaJson.at("elements").as_array();
+        elements[0].as_object().at("params").as_object()["channels"] = count == 2 ? array{"0", "1"} : array{"0"};
+        elements[1].as_object().at("params").as_object()["channels"] = count;
+        auto schema = s7::SchemaLibraryLoader::build_schema(schemaJson);
+        s7::hardware::Run run(s7::Compiler::compile(schema), [](std::string_view) {
+            return std::make_unique<TestAudioProvider>();
+        });
+
+        s7::ArrayPool::Retention reader;
+        auto& runtime = run.runtime();
+        std::vector<double> peaks;
+        const auto stats = run.execute(2, std::chrono::milliseconds(100), {}, [&](std::uint64_t step) {
+            const auto* descriptor = runtime.array_output_descriptor("psd", 0);
+            require(descriptor && runtime.admit_array_output("psd", 0, reader, 1, descriptor->byte_size()),
+                    "audio PSD admission failed");
+            auto sample = runtime.try_retain_array_output("psd", 0, reader);
+            require(sample && sample->value.sample_window && sample->value.sample_window->first_sample == (step - 1) * 2048,
+                    "audio PSD lost its common sample position");
+            require(sample->value.spectrum && sample->value.spectrum->units == s7::SpectrumUnits::PowerPerHz &&
+                    sample->value.spectrum->sample_rate && sample->value.spectrum->sample_rate->to_hz() == 48000,
+                    "audio PSD lost its spectrum metadata");
+            const auto shape = descriptor->extents();
+            require(shape.size() == 2 && shape[0] == count && shape[1] == 1025, "audio PSD has the wrong shape");
+            const auto powers = sample->value.lease.values<s7::SignalType::F32>();
+            peaks.clear();
+            for (int channel = 0; channel < count; ++channel) {
+                const auto row = powers.subspan(static_cast<std::size_t>(channel) * 1025, 1025);
+                const auto bin = std::ranges::max_element(row) - row.begin();
+                peaks.push_back(48000.0 / 2048.0 * static_cast<double>(bin));
+            }
+        });
+        require(stats.status == s7::hardware::Status::Ok && stats.transferred_frames == 4096 &&
+                stats.graph_frames == 2 && peaks.size() == static_cast<std::size_t>(count),
+                "audio block run did not commit two blocks");
+        for (int channel = 0; channel < count; ++channel)
+            require(std::abs(peaks[static_cast<std::size_t>(channel)] - (channel == 0 ? 1000 : 3000)) < 12,
+                    "audio PSD peak differs from the channel's test tone");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) try {
@@ -574,9 +681,16 @@ int main(int argc, char** argv) try {
     checkPdfError();
     check_saved_views(QStringLiteral("video/video_patterns.s7diagram"), false);
     if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_SPECTRAL_PLUGIN"); !plugin.isEmpty()) {
+        // The plugin comes from the s7spectral_sdk_smoke build, which skips
+        // when no installed SDK is available.
+        if (!QFileInfo::exists(plugin)) {
+            std::cout << "spectral test plugin not built: " << plugin.toStdString() << '\n';
+            return 77;
+        }
         s7::PluginLoader loader;
         require(loader.load_plugin(plugin.toStdString(), s7::ElementRegistry::instance()), "cannot load spectral test plugin");
         check_saved_views(QStringLiteral("time_frequency/waterfall_psd.s7diagram"), true);
+        checkAudioBlockPsd();
     }
     if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_VIDEO_PLUGIN"); !plugin.isEmpty()) {
         s7::PluginLoader loader;

@@ -366,6 +366,84 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "AudioBlockPSD",
+      "stateless": true,
+      "display_name": "Audio Block PSD",
+      "description": "One-sided power spectral density of a mono or stereo audio block.",
+      "category": "signal_processing",
+      "version": "1.0.0",
+      "tags": [
+        "audio",
+        "psd",
+        "vector"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Planar audio [channels, samples]",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            1,
+            2048
+          ]
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Linear one-sided PSD [channels, bins]",
+          "type": "F32",
+          "optional": false,
+          "type_rule": "",
+          "shape": [
+            1,
+            1025
+          ]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "components",
+          "type": "int",
+          "description": "Power-of-two samples per channel",
+          "default": 2048,
+          "min": 2,
+          "max": 16384,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "channels",
+          "type": "int",
+          "description": "Mono or stereo channel count",
+          "default": 1,
+          "min": 1,
+          "max": 2,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 120,
+        "max_height": 60,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "C32",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

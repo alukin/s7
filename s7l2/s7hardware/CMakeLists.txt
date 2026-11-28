@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: LGPL-3.0-or-later
-add_library(s7hardware SHARED src/hardware.cpp src/registry.cpp src/provider_module.cpp src/backend_call.cpp)
+add_library(s7hardware SHARED src/hardware.cpp src/block_capture.cpp src/registry.cpp src/provider_module.cpp src/backend_call.cpp)
 # A hardware boundary moves one frame per graph tick, even in Debug builds.
 set_property(SOURCE src/hardware.cpp APPEND PROPERTY COMPILE_OPTIONS "${S7_REALTIME_COMPILE_OPTIONS}")
 target_link_libraries(s7hardware PUBLIC s7core Threads::Threads)

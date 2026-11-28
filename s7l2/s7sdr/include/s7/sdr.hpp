@@ -9,6 +9,11 @@ void register_elements(ElementRegistry&);
 class Source final : public hardware::Source {
 public: explicit Source(hardware::Request r) : hardware::Source(std::move(r),"SdrSource") {}
 };
+class BlockSource final : public hardware::CaptureBlockSource {
+public:
+    explicit BlockSource(hardware::Request request, std::uint64_t source_id = 1)
+        : hardware::CaptureBlockSource("SdrBlockSource", std::move(request), source_id) {}
+};
 class Sink final : public hardware::Sink {
 public: explicit Sink(hardware::Request r) : hardware::Sink(std::move(r),"SdrSink") {}
 };

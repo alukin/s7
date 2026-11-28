@@ -400,9 +400,15 @@ s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_t
 target_sources(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp)
 target_include_directories(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
 target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
-target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers)
+target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers s7audio)
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
 set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# Waterfall PSD and audio block PSD need the s7spectral plugin, which
+# s7spectral_sdk_smoke builds against the installed SDK.
+add_test(NAME s7studio_array_persistence_spectral COMMAND s7studio_array_persistence_test)
+set_tests_properties(s7studio_array_persistence_spectral PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77
+    FIXTURES_REQUIRED s7spectral_plugin
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;S7_ARRAY_TEST_SPECTRAL_PLUGIN=${PROJECT_BINARY_DIR}/s7runtime/plugin_sdk_test/build/libs7spectral${CMAKE_SHARED_MODULE_SUFFIX}")
 
 s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)
 target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)

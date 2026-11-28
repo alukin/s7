@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 
+#include <s7/array_port.hpp>
 #include <s7/element.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/runtime.hpp>
@@ -147,12 +148,41 @@ public:
     explicit Sink(Request, std::string_view name = "HardwareSink");
 };
 
+// One complete capture block per step. C32 IQ is rank one. F32 audio uses [channels, samples].
+class CaptureBlockSource : public ArrayElement {
+public:
+    CaptureBlockSource(std::string_view name, Request, std::uint64_t source_id);
+    const Request& request() const noexcept { return request_; }
+    std::optional<Rate> declared_rate() const override { return graph_rate_; }
+    void step() override;
+
+private:
+    friend class Run;
+    const Request request_;
+    const std::uint64_t source_id_;
+    const Rate graph_rate_;
+    const ArrayDescriptor shape_;
+    ArrayPool pool_;
+    ArrayOutputSlot& output_;
+    ArrayValue pending_;
+};
+
+struct GraphProfile {
+    const Request& request;
+    Rate graph_rate;
+    std::size_t frames_per_step;
+    std::string_view boundary_type;
+};
+bool has_hardware_boundary(const ExecutableGraph&);
+
 struct RunStats {
     std::uint64_t graph_frames{}, transferred_frames{}, playback_frames{}, emergency_output_frames{};
     Status status{Status::Ok};
     int native_error{};
 };
 // Offline profile validation; does not resolve providers or open devices.
+GraphProfile graph_profile(const ExecutableGraph&);
+// The scalar hardware boundary of a scalar hardware graph.
 Boundary& validate_graph(const ExecutableGraph&);
 // A capture-driven run may also feed one lower-rate AudioSink. The audio
 // provider buffers complete frames and reports underruns/other device faults.
@@ -166,7 +196,8 @@ public:
     Run(ExecutableGraph, Resolve);
     ~Run();
     void prepare(Resolve);
-    RunStats execute(std::uint64_t frames, std::chrono::milliseconds transfer_timeout,
+    // Steps count committed graph evaluations. Transfer counts use hardware frames.
+    RunStats execute(std::uint64_t steps, std::chrono::milliseconds transfer_timeout,
                      std::stop_token = {}, const StepObserver& = {});
     const Descriptor& descriptor() const;
     NodeRuntime& runtime() noexcept { return *runtime_; }
@@ -177,10 +208,14 @@ public:
 private:
     RunStats execute_capture(std::uint64_t frames, std::chrono::milliseconds timeout, std::stop_token,
                              const StepObserver&);
+    RunStats execute_block_capture(std::uint64_t steps, std::chrono::milliseconds timeout, std::stop_token,
+                                   const StepObserver&);
+    const Request& request() const noexcept;
     void step_to(RunStats&, std::uint64_t end, const StepObserver&);
     std::unique_ptr<Provider> provider_, audio_provider_;
     std::unique_ptr<Stream> stream_, audio_stream_;
-    Boundary* boundary_{}, *audio_sink_{};
+    Element* boundary_{};
+    Boundary* audio_sink_{};
     std::unique_ptr<NodeRuntime> runtime_;
     Buffer block_, audio_block_{0};
     std::uint64_t audio_divisor_{};
@@ -196,4 +231,5 @@ void register_elements(ElementRegistry&, std::string_view library, std::string_v
                        std::string_view sink_name, std::vector<SignalType> types,
                        std::string_view default_backend, std::string_view category);
 Request request_from_context(const ElementCreationContext&, Direction);
+Request request_from_context(const ElementCreationContext&, Direction, SignalType);
 } // namespace s7::hardware

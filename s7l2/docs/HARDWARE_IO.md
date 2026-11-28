@@ -137,8 +137,8 @@ Frames contain one complete real/complex value per selected channel. I/Q are
 components of a complex channel, not separately scheduled ports. Channel count
 is limited to 64 and a single admitted application queue to 256 MiB; backend/OS
 queues are separate and may be unobservable. Option and selector sizes are also
-bounded. The initial API offers caller-owned **copy transfers** only. It does
-not lend device/callback storage or expose immutable block leases.
+bounded. The provider API transfers into caller-owned storage. Graph-side IQ capture
+can use a bounded array lease as that storage.
 
 Audio supports `F32` normalized application PCM (nominal [-1,1]), signed `I16`
 and signed `I32` full-scale PCM. Channel IDs must initially be contiguous
@@ -191,6 +191,28 @@ Transfer frame positions are software-delivered/accepted positions, never hardwa
 counters. Soapy `HAS_TIME` carries driver-local time with unspecified epoch;
 audio sample timestamps are not exposed by this first implementation. No arrival
 timestamp is labeled as acquisition time or UTC.
+
+### IQ vector capture
+
+`SdrBlockSource` in the SDR element plugin publishes one `C32[block_frames]`
+vector per graph step on `out`. Select one receive channel and set
+`frame_rate` to the nominal RF sampling rate. `block_frames` defaults to 1024
+and must match the consumer's vector length. For example, 2.4 MS/s and 1024
+samples per block give a Studio model step rate of 2343.75 Hz. Connect the
+output directly to `VectorPSD` with `components=1024` and then to Waterfall.
+The physical sample rate can come from the provider readback.
+
+The hardware runner fills a bounded writable lease across short device reads,
+then seals and publishes the complete block. The sample window carries
+software-delivered sample position and the physical rate when reported.
+A capture fault or incomplete block ends the run and preserves the last
+committed vector. Start a new run after changing the input device or tuning.
+
+Use a single hardware boundary and a single block-rate domain for this profile.
+Studio uses its existing device-paced hardware runner. With `s7hw --run`,
+`--frames` counts RF samples and must be a multiple of `block_frames`.
+In the result, `graph_frames` counts committed vector steps and
+`transferred_frames` counts received RF samples, including any incomplete tail.
 
 ## C++ ownership and private extensions
 
