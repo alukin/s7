@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <s7/json_parse.hpp>
 
 namespace s7studio::json_utils {
 
@@ -95,7 +96,7 @@ inline auto parseFile(const QString& filePath) -> boost::json::value
 
     const QByteArray bytes = file.readAll();
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(
+    const auto parsed = s7::parse_json(
         std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size())), ec);
     if (ec) {
         throw std::runtime_error(

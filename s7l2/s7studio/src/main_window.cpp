@@ -101,6 +101,7 @@
 #include <QSettings>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <s7/json_parse.hpp>
 
 
 #include <algorithm>
@@ -1385,7 +1386,7 @@ void MainWindow::storeTriggerPreset(const QString& observerId)
     if (!node || node->element().type != "LiveOscilloscope") return;
     const auto json = QJsonDocument(observation::triggerSettingsToJson(live->triggerSettings())).toJson(QJsonDocument::Compact);
     auto element = node->element();
-    auto preset = boost::json::parse(json.toStdString());
+    auto preset = s7::parse_json(json.toStdString());
     if (const auto* old = element.params.if_contains("trigger"); old && *old == preset) return;
     element.params["trigger"] = std::move(preset);
     // Trigger settings act on the running acquisition at once, unlike other edits.
@@ -2178,7 +2179,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
         const auto options = params.if_contains("options");
         const bool monitor = options && options->is_string() && [options] {
                 boost::system::error_code error;
-                const auto value = boost::json::parse(options->as_string(), error);
+                const auto value = s7::parse_json(options->as_string(), error);
                 const auto* capture = value.is_object() ? value.as_object().if_contains("capture_sink") : nullptr;
                 return capture && *capture == "true";
             }();
@@ -2344,7 +2345,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
         element.params["channels"] = channelCount == 2 ? boost::json::array{"0", "1"} : boost::json::array{"0"};
         const auto* options = element.params.if_contains("options");
         boost::system::error_code optionsError;
-        auto settings = options && options->is_string() ? boost::json::parse(options->as_string(), optionsError)
+        auto settings = options && options->is_string() ? s7::parse_json(options->as_string(), optionsError)
                                                         : boost::json::value(boost::json::object{});
         if (optionsError || !settings.is_object()) {
             QMessageBox::warning(this, QStringLiteral("Audio input"), QStringLiteral("Audio source options must be a JSON object."));

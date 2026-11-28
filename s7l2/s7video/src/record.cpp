@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <s7/json_parse.hpp>
 
 namespace fs = std::filesystem;
 
@@ -77,7 +78,7 @@ int main(int argc, char** argv) try {
 
     std::ifstream input(fs::path(argv[2]), std::ios::binary);
     if (!input) throw std::runtime_error("Cannot open the recording schema.");
-    const auto model = boost::json::parse(std::string(std::istreambuf_iterator<char>(input), {}));
+    const auto model = s7::parse_json(std::string(std::istreambuf_iterator<char>(input), {}));
     auto schema = s7::SchemaLibraryLoader::build_schema(model.as_object());
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include <s7/core.hpp>
+#include <s7/json_parse.hpp>
 #include <array>
 #include <cmath>
 #include <complex>
@@ -302,6 +303,25 @@ void audio_equalizer() {
         require(!s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(json)).ok(),"AudioEqualizer without gain inputs is rejected");
     }
 }
+
+// Numbers in documents mean what their text says: Boost.JSON's default parser
+// reads this decimal as the neighbouring double (found by the G2 audio chain).
+void precise_numbers() {
+    constexpr double exact=0.11512925464970229;
+    require(s7::parse_json("0.11512925464970229").as_double()==exact,"parse_json rounds correctly");
+    require(s7::parse_json("1.1512925464970229E-1").as_double()==exact,"a Boost.JSON-serialized number parses back to itself");
+    const auto path=std::filesystem::temp_directory_path()/("s7-precise-library-"+
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".s7library");
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::filesystem::remove(path); } } cleanup{path};
+    std::ofstream(path)<<R"({"document_kind":"s7.element_library","name":"precise","elements":[{"type_name":"PreciseGain",
+        "display_name":"Precise gain","description":"","category":"test","version":"1.0.0","schema":{"name":"g",
+        "elements":[{"id":"g","type":"Gain","params":{"factor":0.11512925464970229}}],"connections":[],
+        "exposed_inputs":[{"name":"in","type":"F64","element":"g","port":0}],
+        "exposed_outputs":[{"name":"out","type":"F64","element":"g","port":0}]}}]})";
+    const auto library=s7::SchemaLibraryLoader::load_from_file(path);
+    require(library.elements.at(0).schema.at("elements").at(0).at("params").at("factor").as_double()==exact,
+            "An element library file keeps its numbers exactly");
+}
 }
 int main() {
     try {
@@ -309,7 +329,7 @@ int main() {
         const auto count=registry.element_count();s7::register_builtin_elements(registry);
         require(registry.element_count()==count,"Core and bundled resource registration is idempotent");
         corrupt_gzip_library();
-        references();controller_transients();independence_and_limits();lead_lag();audio_equalizer();
+        references();controller_transients();independence_and_limits();lead_lag();audio_equalizer();precise_numbers();
         std::cout<<"Schema resource: PI/PID, lead/lag, plant lag, RMS, phase difference, independent instances, nested rates and the audio equalizer passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

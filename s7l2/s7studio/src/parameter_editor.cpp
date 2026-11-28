@@ -23,12 +23,13 @@
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
+#include <s7/json_parse.hpp>
 
 namespace s7studio::ui {
 namespace {
 bool parseObject(const QString& text, boost::json::object& result, QString& error) {
     try {
-        const auto parsed = boost::json::parse(text.toStdString());
+        const auto parsed = s7::parse_json(text.toStdString());
         if (!parsed.is_object()) throw std::invalid_argument("Parameters must be a JSON object.");
         result = parsed.as_object(); return true;
     } catch (const std::exception& e) { error = QString::fromUtf8(e.what()); return false; }
@@ -51,7 +52,7 @@ QDial* tuningDial(QLineEdit* input, QCheckBox* enabled, const s7::ParameterSpec&
     const auto readNumber = [input, enabled]() -> std::optional<double> {
         if (enabled && !enabled->isChecked()) return std::nullopt;
         boost::system::error_code error;
-        const auto value = boost::json::parse(input->text().toStdString(), error);
+        const auto value = s7::parse_json(input->text().toStdString(), error);
         if (error || !value.is_number()) return std::nullopt;
         constexpr std::int64_t exactLimit = std::int64_t{1} << 53;
         if (value.is_int64() && (value.as_int64() > exactLimit || value.as_int64() < -exactLimit)) return std::nullopt;
@@ -219,7 +220,7 @@ bool ParameterEditor::readTab(int index, boost::json::object& result, QString& e
         const auto* line = qobject_cast<QLineEdit*>(field.editor);
         const auto text = line ? line->text() : qobject_cast<QComboBox*>(field.editor)->currentText();
         if (field.spec.type == "string" || field.spec.type == "type" || field.spec.type == "enum") result[field.spec.name] = text.toStdString();
-        else try { result[field.spec.name] = boost::json::parse(text.toStdString()); }
+        else try { result[field.spec.name] = s7::parse_json(text.toStdString()); }
         catch (const std::exception& e) { error = QStringLiteral("%1: %2").arg(QString::fromStdString(field.spec.name), QString::fromUtf8(e.what())); return false; }
     }
     return true;

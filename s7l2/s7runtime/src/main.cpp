@@ -26,6 +26,7 @@
 #include <s7/net.hpp>
 #include <s7/platform.hpp>
 #include <s7/schema_library.hpp>
+#include <s7/json_parse.hpp>
 
 #ifndef S7RUNTIME_DEFAULT_SCHEMA_PATH
 #define S7RUNTIME_DEFAULT_SCHEMA_PATH "s7runtime/examples/schema_minimal.json"
@@ -198,7 +199,7 @@ int main(int argc, char** argv) {
                 std::cout.flush();
             }
             if (definition.data_server.enabled) {
-                const auto info = boost::json::parse(service.handle_control_request_json({},
+                const auto info = s7::parse_json(service.handle_control_request_json({},
                     R"({"type":"GET_NODE_INFO","request_id":"startup","protocol_version":1})")).as_object();
                 const auto& network = info.at("network").as_object();
                 std::cout << "websocket.data_server.listening at " << network.at("data_listen_url").as_string()

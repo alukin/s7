@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <s7/json_parse.hpp>
 
 namespace s7studio {
 namespace {
@@ -145,7 +146,7 @@ RunConfiguration configurationFromProvenance(const QJsonObject& p) {
             static_cast<int>(port), probe.value("unit").toString().toStdString(), probe.value("record").toBool(true),
             probe.value("live_group").toString().toStdString(), arrayKind});
     }
-    auto schema = json::parse(model.toStdString());
+    auto schema = s7::parse_json(model.toStdString());
     if (!schema.is_object()) throw std::invalid_argument("Recorded model is not an object.");
     const auto overflow = p.value("recording_overflow").toString();
     if (overflow != QStringLiteral("lossless") && overflow != QStringLiteral("drop"))

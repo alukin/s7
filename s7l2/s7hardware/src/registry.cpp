@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include <s7/hardware.hpp>
+#include <s7/json_parse.hpp>
 
 namespace s7::hardware {
 Request request_from_context(const ElementCreationContext& c, Direction direction) {
@@ -23,7 +24,7 @@ Request request_from_context(const ElementCreationContext& c, Direction directio
     };
     if (rate.size()!=2) throw std::invalid_argument("frame_rate must be [numerator, denominator]");
     r.rate=Rate::reduced(positive(rate[0]),positive(rate[1]));
-    const auto opts=boost::json::parse(c.get_string("options"));
+    const auto opts=s7::parse_json(c.get_string("options"));
     if (!opts.is_object()) throw std::invalid_argument("hardware options must encode a JSON object of strings");
     for (const auto& kv:opts.as_object()) {
         if (!kv.value().is_string()) throw std::invalid_argument("hardware option values must be strings");

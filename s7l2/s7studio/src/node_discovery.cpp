@@ -11,6 +11,7 @@
 #include <exception>
 #include <string>
 #include <utility>
+#include <s7/json_parse.hpp>
 
 namespace s7studio::ui {
 namespace {
@@ -144,7 +145,7 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
         node.reachability = QStringLiteral("online");
         {
             boost::system::error_code ec;
-            const auto parsed = boost::json::parse(hello.text.toStdString(), ec);
+            const auto parsed = s7::parse_json(hello.text.toStdString(), ec);
             if (!ec && parsed.is_object()) {
                 const auto& obj = parsed.as_object();
                 node.nodeUuid = jsonString(obj, "node_uuid");
@@ -164,7 +165,7 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
         const bool infoSamePeer = nodeInfo.text.isEmpty() || sameCertificate(hello, nodeInfo);
         if (!nodeInfo.text.isEmpty() && infoSamePeer) {
             boost::system::error_code ec;
-            const auto parsed = boost::json::parse(nodeInfo.text.toStdString(), ec);
+            const auto parsed = s7::parse_json(nodeInfo.text.toStdString(), ec);
             if (!ec && parsed.is_object()) {
                 const auto& object = parsed.as_object();
                 if (const auto nodeIt = object.find("node"); nodeIt != object.end() && nodeIt->value().is_object()) {
@@ -235,7 +236,7 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
             continue;
         }
         boost::system::error_code ec;
-        const auto parsed = boost::json::parse(peers.text.toStdString(), ec);
+        const auto parsed = s7::parse_json(peers.text.toStdString(), ec);
         if (ec || !parsed.is_object()) {
             continue;
         }

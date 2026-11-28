@@ -18,6 +18,7 @@
 #include "s7/canonical_json.hpp"
 #include "s7/diagram_deployment.hpp"
 #include "s7/platform.hpp"
+#include <s7/json_parse.hpp>
 
 namespace s7 {
 namespace {
@@ -1627,7 +1628,7 @@ void ControlPlane::load_peers_from_disk()
     std::stringstream buffer;
     buffer << in.rdbuf();
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(buffer.str(), ec);
+    const auto parsed = s7::parse_json(buffer.str(), ec);
     if (ec || !parsed.is_array()) {
         return;
     }

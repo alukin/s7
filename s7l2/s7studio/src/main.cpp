@@ -71,6 +71,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <utility>
+#include <s7/json_parse.hpp>
 
 #if defined(__linux__)
 #include <sys/prctl.h>
@@ -213,7 +214,7 @@ int runSmoke()
             ]
         })json";
         boost::system::error_code ec;
-        const auto schemaJson = boost::json::parse(smokeSchema, ec);
+        const auto schemaJson = s7::parse_json(smokeSchema, ec);
         if (ec) {
             throw std::runtime_error("Failed to parse smoke schema: " + ec.message());
         }
@@ -250,7 +251,7 @@ int runSmoke()
             ],
             "connections": []
         })json";
-        const auto netSchemaJson = boost::json::parse(netSchema, ec);
+        const auto netSchemaJson = s7::parse_json(netSchema, ec);
         if (ec) {
             throw std::runtime_error("Failed to parse studio net smoke schema: " + ec.message());
         }
@@ -265,7 +266,7 @@ int runSmoke()
         {
             // A run whose UI never reacts to its notifications still records
             // every sample.
-            const auto scopeSchema = boost::json::parse(R"json({
+            const auto scopeSchema = s7::parse_json(R"json({
                 "name": "scope_backlog",
                 "dt": 0.001,
                 "elements": [
@@ -304,7 +305,7 @@ auto readJson(const char* path) -> boost::json::value
         throw std::runtime_error(std::string("cannot read ") + path);
     }
     const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return boost::json::parse(text);
+    return s7::parse_json(text);
 }
 
 void registerElements()

@@ -17,6 +17,7 @@
 #include <sstream>
 #include <utility>
 #include <system_error>
+#include <s7/json_parse.hpp>
 
 namespace fs = std::filesystem;
 
@@ -37,7 +38,7 @@ auto path_key(const fs::path& path) -> std::string
 auto read_manifest_info(const std::string& manifest_json, const fs::path& plugin_path) -> PluginLoader::LoadedPluginInfo
 {
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(manifest_json, ec);
+    const auto parsed = s7::parse_json(manifest_json, ec);
     if (ec) {
         throw std::runtime_error("Plugin manifest parsing failed for '" + plugin_path.string() + "': " + ec.message());
     }

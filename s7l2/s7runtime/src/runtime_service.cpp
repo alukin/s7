@@ -37,6 +37,7 @@
 #include "s7/net.hpp"
 #include "s7/element_registry.hpp"
 #include "s7/platform.hpp"
+#include <s7/json_parse.hpp>
 
 namespace s7 {
 namespace {
@@ -832,7 +833,7 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
     buffer << in.rdbuf();
 
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(buffer.str(), ec);
+    const auto parsed = s7::parse_json(buffer.str(), ec);
     if (ec) {
         throw std::runtime_error("JSON parsing failed for '" + file_path + "': " + ec.message());
     }

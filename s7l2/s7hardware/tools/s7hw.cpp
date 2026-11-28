@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include <s7/audio.hpp>
 #include <s7/io.hpp>
+#include <s7/json_parse.hpp>
 #if defined(S7_WITH_SDR)
 #include <s7/sdr.hpp>
 #include "radio.hpp"
@@ -78,7 +79,7 @@ int main(int argc,char** argv) {
             if (input.bad()) throw std::runtime_error("schema read failed");
             if (size>4*1024*1024) throw std::invalid_argument("hardware schema exceeds 4 MiB");
             json.resize(size);
-            const auto document = boost::json::parse(json);
+            const auto document = s7::parse_json(json);
             const auto* kind = document.is_object() ? document.as_object().if_contains("document_kind") : nullptr;
             const auto& payload = kind && *kind == "s7.diagram" ? document.as_object().at("schema") : document;
             auto schema = s7::SchemaLibraryLoader::build_schema(payload, registry);

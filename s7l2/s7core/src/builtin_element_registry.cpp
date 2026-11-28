@@ -15,6 +15,7 @@
 
 #include <stdexcept>
 #include <utility>
+#include "s7/json_parse.hpp"
 
 namespace s7 {
 namespace detail {
@@ -616,7 +617,7 @@ void register_builtin_elements(ElementRegistry& registry)
         metadata.at("Convert")));
     detail::register_builtin_array_elements(registry, metadata);
     SchemaLibraryLoader::register_library(SchemaLibraryLoader::load_from_json(
-        boost::json::parse(detail::builtin_schema_resource)), registry);
+        s7::parse_json(detail::builtin_schema_resource)), registry);
 
 }
 

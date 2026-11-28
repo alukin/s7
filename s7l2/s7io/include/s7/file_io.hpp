@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "s7/json_parse.hpp"
 
 namespace s7::io {
 namespace detail {
@@ -49,7 +50,7 @@ inline std::string recording_description(const std::string& text) {
     if (text.size()>1024) throw std::invalid_argument("Recording description must be at most 1024 UTF-8 bytes.");
     // Parsing validates UTF-8; JSON escaping also makes text-header descriptions
     // single-line even when they contain quotes or line breaks.
-    const auto value=boost::json::parse(boost::json::serialize(boost::json::value(text)));
+    const auto value=s7::parse_json(boost::json::serialize(boost::json::value(text)));
     return std::string(value.as_string());
 }
 
@@ -223,7 +224,7 @@ public:
         if (!detail::read_text_line(in,line) || !detail::trim_left(line).starts_with("# rate=")) detail::throw_bad_format("missing recording rate");
         this->rate_=detail::parse_recording_rate(detail::trim_left(line).substr(7));
         if (!detail::read_text_line(in,line) || !detail::trim_left(line).starts_with("# description=")) detail::throw_bad_format("missing recording description");
-        const auto description=boost::json::parse(detail::trim_left(line).substr(14));
+        const auto description=s7::parse_json(detail::trim_left(line).substr(14));
         if (!description.is_string()) detail::throw_bad_format("recording description must be a JSON string");
         this->description_=detail::recording_description(std::string(description.as_string()));
         const std::string columns=std::is_same_v<T,RealValue> ? "sample_index value" : "sample_index real imag";

@@ -10,6 +10,7 @@
 #include <map>
 #include <cmath>
 #include <set>
+#include <s7/json_parse.hpp>
 
 namespace s7studio::diagram {
 namespace {
@@ -81,7 +82,7 @@ bool DiagramScene::pasteSelection(QPointF position)
     }
     try {
         DiagramScene staging;
-        SceneSerializer{}.deserialize(DiagramDocument::fromJson(boost::json::parse(bytes.toStdString())), staging);
+        SceneSerializer{}.deserialize(DiagramDocument::fromJson(s7::parse_json(bytes.toStdString())), staging);
         DiagramChange change;
         std::set<std::string> used;
         for (const auto& node : elementNodes()) used.insert(node->id());

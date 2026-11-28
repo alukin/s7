@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/canonical_json.hpp"
+#include "s7/json_parse.hpp"
 
 #include <algorithm>
 #include <array>
@@ -212,9 +213,7 @@ auto canonical_json(const boost::json::value& value) -> std::string
 
 auto parse_json_precise(const std::string_view text) -> boost::json::value
 {
-    boost::json::parse_options options;
-    options.numbers = boost::json::number_precision::precise;
-    return boost::json::parse(text, {}, options);
+    return parse_json(text);
 }
 
 auto sha256_hex(const std::string_view bytes) -> std::string

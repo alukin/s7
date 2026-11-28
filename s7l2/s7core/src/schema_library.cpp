@@ -19,6 +19,7 @@
 #include <string_view>
 
 #include <zlib.h>
+#include "s7/json_parse.hpp"
 
 namespace s7 {
 namespace {
@@ -433,7 +434,7 @@ auto SchemaLibraryLoader::load_from_file(const std::filesystem::path& file_path)
 {
     const auto contents = read_file_contents(file_path);
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(contents, ec);
+    const auto parsed = s7::parse_json(contents, ec);
     if (ec) {
         throw std::runtime_error("JSON parsing failed for element library '" + file_path.string() + "': " + ec.message());
     }
