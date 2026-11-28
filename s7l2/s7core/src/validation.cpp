@@ -543,6 +543,25 @@ static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve
                 if (link.input == order[next] && --pending[link.output] == 0) order.push_back(link.output);
             }
         }
+        // A run has one model-time rate, and every other domain must be joined
+        // to the domain at that rate through Resamplers (section 8.3). Two
+        // domains no Resampler chain connects can never both be scheduled.
+        std::vector<std::size_t> group(rates.size());
+        for (std::size_t i = 0; i < group.size(); ++i) group[i] = i;
+        const auto root = [&group](std::size_t i) { while (group[i] != i) i = group[i] = group[group[i]]; return i; };
+        for (const auto& link : links) group[root(link.input)] = root(link.output);
+        for (std::size_t i = 1; i < rates.size(); ++i) {
+            if (root(i) == root(0)) continue;
+            const auto element_at = [&](const Rate& rate) {
+                for (const auto& spec : schema.elements()) if (checked.rates.at(spec.id) == rate) return spec.id;
+                return std::string{};
+            };
+            checked.errors.push_back("Element '" + element_at(rates[0]) + "' runs at " + rates[0].to_string() + " and element '" +
+                                     element_at(rates[i]) + "' at " + rates[i].to_string() +
+                                     ", but no Resampler joins their rate domains; a run has one model-time rate. "
+                                     "Add a Resampler where the rates meet, or give them the same rate.");
+            break;
+        }
         if (order.size() != rates.size()) {
             std::string resamplers;
             for (const auto& link : links) {

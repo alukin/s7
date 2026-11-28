@@ -83,18 +83,13 @@ and queue occupancy over a longer run to expose RF/audio clock drift. See the
 - No targeted concurrency audit or deterministic stress suite covers graph
   replacement, stream ownership, endpoint shutdown and the Studio worker/UI
   handoff; existing tests are smoke-level.
+- `s7studio_window_lifecycle` (`closeAndDestruct(destruct-paused)`) fails under heavy host load (load average 30+ on 16 cores) and passes in isolation; diagnose the paused-worker shutdown timing before treating it as flaky.
 - Two-node integration (`s7_two_node_deployment`) covers deployment, a restart
   gap and recovery; clean standalone shutdown and multi-cycle restart remain
   untested.
 
 ## Simulation and rate domains
 
-- **Multi-rate graphs without a model time (decision needed).** Unlinked rate
-  domains are stepped one sample each per run step (`s7core/src/runtime.cpp`),
-  so a 1 kHz and a 10 Hz component advance the same number of samples, while
-  [the sample rate model §8.3](../../doc/S7_Sample_Rate_Model.md) says such a
-  graph needs a model time; `set_model_time_rate` also refuses it. Either
-  reject such graphs or document the behavior.
 - **Feedback across rate domains** is rejected. Allowing a loop through two
   resamplers needs analysis of causal memory at the rate boundary, of the
   latency the interpolation and anti-aliasing filters add inside the loop, and

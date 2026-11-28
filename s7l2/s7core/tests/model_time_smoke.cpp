@@ -94,15 +94,16 @@ void resolved_rates_bind_model_time() {
             "Seeded rate conflict not reported with the element and a Resampler hint");
     require(!seeded.model_time_ns(), "Rejected rate became the time base");
     seeded.set_model_time_rate(s7::Rate{2000, 2}); // reduced before comparing
-    // Two unconnected parts at different rates have no single model time.
+    // Two unconnected parts at different rates have no single model time, so
+    // validation refuses them (sample rate model section 8.3).
     auto mixed = schema(s7::Rate::from_hz(1000));
     mixed.add_element("slow", [] { return std::make_unique<s7::EulerIntegrator>(.01); });
     mixed.add_element("zero", [] { return std::make_unique<s7::Constant>(0); });
     mixed.connect("zero", 0, "slow", 0);
-    s7::NodeRuntime runtime{s7::Compiler::compile(mixed)};
-    require(!runtime.graph_rate(), "Mixed rates reported as one");
-    rejects<std::invalid_argument>([&] { runtime.set_model_time_rate(s7::Rate::from_hz(1000)); });
-    rejects<std::invalid_argument>([&] { runtime.set_model_time_rate(s7::Rate::from_hz(100)); });
+    std::string refused;
+    try { static_cast<void>(s7::Compiler::compile(mixed)); } catch (const std::exception& e) { refused = e.what(); }
+    require(refused.find("no Resampler joins their rate domains") != std::string::npos,
+            ("Unjoined rate domains were not refused: " + refused).c_str());
 }
 // Step times are rounded once, at absolute time, for model time and pacing alike.
 void step_times() {

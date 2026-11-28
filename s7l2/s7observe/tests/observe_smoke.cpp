@@ -16,6 +16,8 @@
 
 #include "s7/observe.hpp"
 #include "s7/array_port.hpp"
+#include "s7/elements.hpp"
+#include "s7/resampler.hpp"
 
 namespace {
 constexpr std::array<std::int64_t, 1> extent{2};
@@ -128,12 +130,19 @@ void check_array_snapshot()
     s7::Schema schema("array_snapshot");
     schema.add_element("fast", [&] { return std::make_unique<MixedSource>(fast); });
     schema.add_element("slow", [&] { return std::make_unique<MixedSource>(slow, &fail); });
+    // A run has one model-time rate; the 100 Hz domain is joined to the
+    // 50 Hz one through a Resampler (doc/S7_Sample_Rate_Model.md section 8.3).
+    schema.add_element("down", [] { return std::make_unique<s7::Resampler>(0); });
+    schema.add_element("slow_sink", [] { return std::make_unique<s7::EulerIntegrator>(0.02); });
+    schema.connect("fast", 1, "down", 0);
+    schema.connect("down", 0, "slow_sink", 0);
     auto graph = s7::Compiler::compile_experimental_arrays(schema);
     std::array admissions{
         static_cast<MixedSource&>(*graph.elements.at("fast")).admit_reader(),
         static_cast<MixedSource&>(*graph.elements.at("slow")).admit_reader()
     };
     s7::NodeRuntime runtime(std::move(graph));
+    runtime.set_model_time_rate(slow); // each run step: one 50 Hz sample, every 100 Hz sample up to it
     const s7::ObservationService observation(runtime);
     const std::array probes{s7::ArrayProbePoint{{"fast", 0}, admissions},
                             s7::ArrayProbePoint{{"slow", 0}, admissions}};
@@ -148,7 +157,8 @@ void check_array_snapshot()
     {
         const auto snapshot = observation.array_snapshot(probes).value();
         assert(snapshot.outer_step == 1 && snapshot.samples.size() == 2);
-        assert(snapshot.samples[0].rate == fast && snapshot.samples[0].domain_step == 2);
+        // The 100 Hz domain committed samples 2 and 3 before the 50 Hz one failed.
+        assert(snapshot.samples[0].rate == fast && snapshot.samples[0].domain_step == 3);
         assert(snapshot.samples[1].rate == slow && snapshot.samples[1].domain_step == 1);
 
         fail = false;
@@ -157,14 +167,14 @@ void check_array_snapshot()
         const auto skipped = observation.array_snapshot(probes);
         assert(!skipped && skipped.error() == s7::ArrayPoolError::Exhausted);
         assert(runtime.step_count() == 14);
-        assert(snapshot.samples[0].value.lease.values<s7::SignalType::F32>().front() == 2.0f);
+        assert(snapshot.samples[0].value.lease.values<s7::SignalType::F32>().front() == 3.0f);
         assert(snapshot.samples[1].value.lease.values<s7::SignalType::F32>().front() == 1.0f);
     }
     admissions[1].close();
     const auto cancelled = observation.array_snapshot(probes);
     assert(!cancelled && cancelled.error() == s7::ArrayPoolError::Closed);
     const auto still_available = observation.try_retain_array_output(probes[0]);
-    assert(still_available && still_available->domain_step == 14);
+    assert(still_available && still_available->domain_step == 27); // 2*13 + 1 at run step 13
 }
 } // namespace
 

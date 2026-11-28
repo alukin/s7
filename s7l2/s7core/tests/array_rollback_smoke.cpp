@@ -315,7 +315,6 @@ void check_capture_fault()
 
 int main() try {
     check_direct();
-    check_prefix(false);
     check_prefix(true);
     check_capture_fault();
     return 0;

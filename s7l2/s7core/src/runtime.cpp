@@ -535,17 +535,14 @@ void NodeRuntime::step() {
     stepping_thread_.store(std::this_thread::get_id());
     if (domains_.size() == 1) {
         step_domain(domains_.front());
-    } else if (!model_time_rate_ && graph_.domain_links.empty()) {
-        // Independent domains take one sample per outer step. A retry
-        // skips the domains that already committed that sample.
-        for (auto& domain : domains_) {
-            if (domain.steps <= step_count_) step_domain(domain);
-        }
     } else {
         if (delivery_fault_) std::rethrow_exception(delivery_fault_);
+        // Several rate domains are scheduled only against a model time
+        // (doc/S7_Sample_Rate_Model.md section 8.3); validation already
+        // refuses domains that no Resampler joins.
         if (!model_time_rate_) {
-            throw std::logic_error("This graph has several rate domains joined by Resamplers; set the model-time "
-                                   "rate (the run's dt) to schedule them.");
+            throw std::logic_error("This graph has several rate domains; set the model-time rate (the run's dt) "
+                                   "to schedule them.");
         }
         // Each domain takes every sample at or before this step's model time,
         // input domains first. On a retry, each domain resumes from its
