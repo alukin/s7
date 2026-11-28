@@ -26,6 +26,8 @@ namespace s7studio::viewers {
 
 class LinePlotView;
 class DensityProvider;
+struct PlotSnapshot;
+[[nodiscard]] PlotSnapshot snapshotPlot(const LinePlotView& view);
 
 // A range of `divisions` equal divisions holding [low, high] with a small
 // margin, each division 1, 2, 2.5 or 5 times a power of ten and the range edges
@@ -229,6 +231,7 @@ protected:
 
 private:
     friend class LinePlotBridge;
+    friend PlotSnapshot snapshotPlot(const LinePlotView& view);  // printing (plot_print.hpp)
     void ensureQuickScene();
     void emitLegendChanged();
     void retire(QXYSeries* series);

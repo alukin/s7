@@ -13,9 +13,13 @@ find_package(Qt6 6.9 REQUIRED COMPONENTS Qml Quick QuickWidgets Graphs Quick3D)
 add_library(s7studio_print STATIC
     src/printing/print_document.cpp src/printing/print_document.hpp
     src/printing/print_actions.cpp src/printing/print_actions.hpp
+    src/printing/preview_dialog.cpp src/printing/preview_dialog.hpp
 )
 target_include_directories(s7studio_print PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_print PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::PrintSupport)
+set_target_properties(s7studio_print PROPERTIES AUTOMOC ON)
+add_dependencies(s7studio_print s7studio_build_identity)
+target_include_directories(s7studio_print PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 s7_enable_project_warnings(s7studio_print)
 
 add_library(s7studio_diagram STATIC
@@ -163,6 +167,8 @@ add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.cpp
     src/viewers/array_viewer.cpp
     src/viewers/array_print.cpp
+    src/viewers/plot_print.cpp src/viewers/plot_print.hpp
+    src/viewers/viewer_print.cpp src/viewers/viewer_print.hpp
     src/viewers/video_frame.cpp
     src/viewers/waterfall_history.cpp
     src/viewers/waterfall_view.cpp
@@ -207,6 +213,7 @@ target_link_libraries(s7studio_viewers PUBLIC
     Qt6::Gui
     Qt6::Widgets
     Qt6::PrintSupport
+    s7studio_print
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickWidgets
@@ -422,6 +429,11 @@ target_link_libraries(s7studio_diagram_print_test PRIVATE s7studio_diagram s7stu
 s7_enable_project_warnings(s7studio_diagram_print_test)
 add_test(NAME s7studio_diagram_print COMMAND s7studio_diagram_print_test)
 set_tests_properties(s7studio_diagram_print PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+s7_add_test_executable(s7studio_plot_print_test tests/plot_print_test.cpp)
+target_link_libraries(s7studio_plot_print_test PRIVATE s7studio_viewers s7studio_print)
+s7_enable_project_warnings(s7studio_plot_print_test)
+add_test(NAME s7studio_plot_print COMMAND s7studio_plot_print_test)
+set_tests_properties(s7studio_plot_print PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
 set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

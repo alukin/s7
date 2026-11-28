@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #pragma once
+#include "viewers/viewer_print.hpp"
 
 #include "scope_recording.hpp"
 #include "viewers/observation_viewer.hpp"
@@ -15,6 +16,7 @@
 #include <optional>
 #include <Qt>
 
+class QAction;
 class QIODevice;
 class QCheckBox;
 class QLabel;
@@ -123,6 +125,7 @@ private:
     bool comparisonScheduled_ = false;
     QHash<QString, QLineSeries*> lines_;
     bool dirty_ = false;
+    [[nodiscard]] auto printSnapshot() const -> std::optional<viewers::ViewerPrintSnapshot>;
     bool updatingTimeScrollBar_ = false;
     bool hasTimeRange_ = false;
     qsizetype lastPlotPixelColumns_ = 0;
@@ -134,6 +137,8 @@ private:
     QCheckBox* fitAllTimeCheck_ = nullptr;
     QScrollBar* timeScrollBar_ = nullptr;
     QPushButton* clearButton_ = nullptr;
+    QToolButton* freezeButton_ = nullptr;
+    QAction* printWholeRun_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* hoverReadout_ = nullptr;
     QToolButton* warningButton_ = nullptr;

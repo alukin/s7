@@ -39,6 +39,11 @@ void paintPage(QPainter& painter, const QRectF& printable, const PrintPage& page
     font.setPointSizeF(10);
     font.setBold(true);
     painter.setFont(font);
+    // Qt's print preview records pages as QPictures and replays them with the
+    // preview's own pen (light grey in a dark theme). QPainter records no
+    // change when the pen already equals its black default, so change it
+    // first: the black pen is then recorded and replayed.
+    painter.setPen(Qt::NoPen);
     painter.setPen(Qt::black);
     const double width = printable.width();
     QRectF line(0, 0, width, kTitleLine);

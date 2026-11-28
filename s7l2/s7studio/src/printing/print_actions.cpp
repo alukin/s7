@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "printing/print_actions.hpp"
 
+#include "s7studio_build_identity.hpp"
+
+#include <QDateTime>
 #include <QFileDialog>
 #include <QLocale>
 #include <QPageSetupDialog>
-#include <QPrintDialog>
-#include <QPrintPreviewDialog>
 #include <QPrinter>
 #include <QPrinterInfo>
 
@@ -16,12 +17,6 @@ namespace s7studio::printing {
 namespace {
 
 const QMarginsF kMarginsMm(10, 10, 10, 10);
-
-void prepare(QPrinter& printer, const QPageLayout& layout)
-{
-    printer.setPageLayout(layout);
-    printer.setResolution(kPrintDpi);
-}
 
 } // namespace
 
@@ -35,34 +30,6 @@ PrintResult exportPdf(QWidget* parent, const DocumentBuilder& build, const QPage
     return {PrintResult::Outcome::Done, path};
 }
 
-PrintResult printWithDialog(QWidget* parent, const DocumentBuilder& build, const QPageLayout& layout)
-{
-    QPrinter printer(QPrinter::HighResolution);
-    prepare(printer, layout);
-    QPrintDialog dialog(&printer, parent);
-    dialog.setOption(QAbstractPrintDialog::PrintSelection, false);
-    dialog.setOption(QAbstractPrintDialog::PrintPageRange, false);
-    if (dialog.exec() != QDialog::Accepted) return {};
-    if (const auto error = print(build, printer); !error.isEmpty()) return {PrintResult::Outcome::Failed, error};
-    return {PrintResult::Outcome::Done, printer.outputFileName().isEmpty() ? printer.printerName() : printer.outputFileName()};
-}
-
-PrintResult preview(QWidget* parent, const DocumentBuilder& build, const QPageLayout& layout)
-{
-    QPrinter printer(QPrinter::HighResolution);
-    prepare(printer, layout);
-    QPrintPreviewDialog dialog(&printer, parent);
-    dialog.setObjectName(QStringLiteral("print.preview"));
-    QString error;
-    QObject::connect(&dialog, &QPrintPreviewDialog::paintRequested, &dialog, [&](QPrinter* target) {
-        error = print(build, *target);
-    });
-    const bool printed = dialog.exec() == QDialog::Accepted;
-    if (!error.isEmpty()) return {PrintResult::Outcome::Failed, error};
-    if (!printed) return {};
-    return {PrintResult::Outcome::Done, printer.outputFileName().isEmpty() ? printer.printerName() : printer.outputFileName()};
-}
-
 std::optional<QPageLayout> pageSetup(QWidget* parent, const QPageLayout& layout)
 {
     QPrinter printer(QPrinter::HighResolution);
@@ -70,6 +37,14 @@ std::optional<QPageLayout> pageSetup(QWidget* parent, const QPageLayout& layout)
     QPageSetupDialog dialog(&printer, parent);
     if (dialog.exec() != QDialog::Accepted) return std::nullopt;
     return printer.pageLayout();
+}
+
+QString standardFooter()
+{
+    return QStringLiteral("S7 Studio %1 (%2%3) \u00B7 printed %4")
+        .arg(QString::fromLatin1(S7_BUILD_VERSION), QString::fromLatin1(S7_BUILD_REVISION).left(10),
+             S7_BUILD_DIRTY ? QStringLiteral(", modified") : QString(),
+             QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")));
 }
 
 QString describe(const QPageLayout& layout)

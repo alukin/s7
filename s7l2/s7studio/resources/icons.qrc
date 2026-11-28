@@ -23,6 +23,7 @@
         <file alias="paint.svg">icons/tabler/paint.svg</file>
         <file alias="palette.svg">icons/tabler/palette.svg</file>
         <file alias="player-pause.svg">icons/tabler/player-pause.svg</file>
+        <file alias="printer.svg">icons/tabler/printer.svg</file>
         <file alias="player-play.svg">icons/tabler/player-play.svg</file>
         <file alias="player-stop.svg">icons/tabler/player-stop.svg</file>
         <file alias="player-track-next.svg">icons/tabler/player-track-next.svg</file>

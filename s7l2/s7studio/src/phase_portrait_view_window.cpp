@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "phase_portrait_view_window.hpp"
+#include "viewers/viewer_print.hpp"
 #include "instrument_controls.hpp"
 
 #include "viewers/line_plot_view.hpp"
@@ -18,6 +19,7 @@
 #include <QStringList>
 #include <QTextStream>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QtGraphs/QLineSeries>
 #include <QtGraphs/QScatterSeries>
@@ -117,6 +119,25 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
     controls->addStretch(1);
+    // Freeze holds the curve while pairs keep arriving; print previews the
+    // curve as shown (P03).
+    freezeButton_ = viewers::makeFreezeButton(this, QStringLiteral("phase"));
+    controls->addWidget(freezeButton_);
+    connect(freezeButton_, &QToolButton::toggled, this, [this](bool frozen) {
+        if (!frozen) {
+            dirty_ = true;
+            refreshPlot();
+        }
+    });
+    controls->addWidget(viewers::makePrintButton(this, QStringLiteral("phase"), [this]() -> std::optional<viewers::ViewerPrintSnapshot> {
+        viewers::ViewerPrintSnapshot snapshot;
+        snapshot.title = windowTitle().isEmpty() ? QStringLiteral("Phase portrait \u00B7 %1 vs %2").arg(yProbeName_, xProbeName_) : windowTitle();
+        if (!statusLabel_->text().trimmed().isEmpty()) snapshot.notes << statusLabel_->text().simplified();
+        if (freezeButton_->isChecked()) snapshot.notes << QStringLiteral("The display was frozen; pairs kept arriving.");
+        snapshot.plots.push_back(viewers::snapshotPlot(*plot_));
+        if (snapshot.plots.front().pointCount() == 0) return std::nullopt;
+        return snapshot;
+    }, [this] { return QStringLiteral("phase-portrait-%1-%2").arg(xProbeName_, yProbeName_); }));
     statusLabel_ = new QLabel(this);
     statusLabel_->setObjectName(QStringLiteral("viewer.status"));
     statusLabel_->setTextFormat(Qt::PlainText);
@@ -262,7 +283,7 @@ void PhasePortraitViewWindow::refreshPlot()
 {
     // Hidden diagram observers keep collecting pairs without rebuilding a
     // potentially large curve until the viewer is opened.
-    if (!dirty_ || !isVisible()) {
+    if (!dirty_ || !isVisible() || (freezeButton_ && freezeButton_->isChecked())) {
         return;
     }
 

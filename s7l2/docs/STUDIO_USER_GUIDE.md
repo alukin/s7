@@ -146,9 +146,12 @@ icons use the palette's disabled text color.
 
 ### Printing and PDF export
 
-**File → Print…** (Ctrl+P), **Print Preview…** and **Export as PDF…** print
-the diagram tab you are looking at: the top level, or the nested subsystem open
-in its tab. A dialog chooses what to print:
+**File → Print…** (Ctrl+P) opens a print preview of the diagram tab you are
+looking at: the top level, or the nested subsystem open in its tab. Choose
+what to print beside the pages; the preview follows every change. **Print…**
+sends the pages to a printer, **Save as PDF…** writes a file and **Close**
+prints nothing. **File → Export as PDF…** offers the same choices without the
+page preview (a PDF wastes no paper).
 
 - **Whole diagram** (the sheet and anything drawn outside it) or
   **Selection** (the selected elements, wires and text frames).
@@ -159,14 +162,27 @@ in its tab. A dialog chooses what to print:
   page(s), titled with its path (for example `Double pendulum ▸ angle_functions`).
 
 The paper is the diagram's own sheet (**Diagram → Page**) unless **Page
-Setup…** chooses another; **Use Diagram Sheet** returns to it. The dialog shows
-the page count. Every page carries the diagram name, file and level, and a
-footer with the S7 Studio version, the print time and the page number.
+Setup…** chooses another; **Use Diagram Sheet** returns to it. Every page
+carries the diagram name, file and level, and a footer with the S7 Studio
+version, the print time and the page number.
 
-Printing works on a copy of the diagram taken when the dialog opens: it never
-changes the diagram, its undo history or a running model. PDF export needs no
-printer. A cancelled dialog writes nothing; an unwritable file or a printer
-failure is reported in the dialog.
+Printing works on a copy of the diagram taken when the window opens: it never
+changes the diagram, its undo history or a running model. A cancelled dialog
+writes nothing; an unwritable file or a printer failure is reported.
+
+**Viewers.** The Scope, Phase Portrait, Live Oscilloscope, Frequency Response
+and Time–Frequency viewers have a small printer button. A click opens the
+print preview of what the viewer shows at that moment; the button's arrow
+offers **Save as PDF…** (no preview) and **Page Setup…** (remembered for
+viewer printouts; the default is your printer's paper in landscape). Viewers
+that update during a run also have a freeze button (two bars): it holds the
+display while acquisition and recording continue, so you can choose the frame
+to print. Printouts are drawn as vectors on white paper; pale trace colours are
+darkened. The header names the viewer and diagram and states the shown range,
+rates and any recording warnings. The Scope prints the visible range, or the
+whole run with **Print the Whole Run** in the arrow menu; it notes when traces
+show the minimum and maximum per print column rather than every sample.
+3D views print in a later step.
 
 ## Running and observing
 

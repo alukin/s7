@@ -21,14 +21,11 @@ struct PrintResult {
 
 // Asks for a file name (suggested: `suggestedPath`) and writes the PDF.
 PrintResult exportPdf(QWidget* parent, const DocumentBuilder& build, const QPageLayout& layout, const QString& suggestedPath);
-// The system print dialog, starting from `layout`; prints with the paper and
-// orientation chosen there.
-PrintResult printWithDialog(QWidget* parent, const DocumentBuilder& build, const QPageLayout& layout);
-// Print preview; the preview's Print button prints with its page setup.
-PrintResult preview(QWidget* parent, const DocumentBuilder& build, const QPageLayout& layout);
 // Page setup dialog; empty when cancelled.
 std::optional<QPageLayout> pageSetup(QWidget* parent, const QPageLayout& layout);
 
+// The standard page footer: S7 Studio version and revision, print time.
+[[nodiscard]] QString standardFooter();
 // A short description, e.g. "A4 landscape".
 [[nodiscard]] QString describe(const QPageLayout& layout);
 // The default paper of the system's default printer (A4 or Letter by locale

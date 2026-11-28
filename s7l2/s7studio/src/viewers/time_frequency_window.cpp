@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+#include "viewers/viewer_print.hpp"
 #include "time_frequency_window.hpp"
 #include "analysis/display_curve.hpp"
 #include "analysis/display_worker.hpp"
@@ -23,6 +24,7 @@
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QThreadPool>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -180,6 +182,16 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     root->addLayout(controls);
     auto *actions = new QHBoxLayout;
     actions->addWidget(analyze_);
+    // Prints the current tab as shown, previewed first (P06).
+    actions->addWidget(makePrintButton(this, QStringLiteral("timeFrequency"), [this]() -> std::optional<ViewerPrintSnapshot> {
+        ViewerPrintSnapshot snapshot;
+        const auto *views = findChild<QTabWidget *>(QStringLiteral("timeFrequency.views"));
+        snapshot.title = QStringLiteral("Time\u2013frequency \u00B7 %1").arg(views ? views->tabText(views->currentIndex()) : QString());
+        if (status_ && !status_->text().trimmed().isEmpty()) snapshot.notes << status_->text().simplified();
+        snapshot.plots = visiblePlots(this);
+        if (snapshot.plots.empty()) return std::nullopt;
+        return snapshot;
+    }, [] { return QStringLiteral("time-frequency"); }));
     follow_ = new QCheckBox("Follow latest retained interval", this);
     actions->addWidget(follow_);
     auto *display = new QHBoxLayout;

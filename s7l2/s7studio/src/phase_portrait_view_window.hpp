@@ -13,6 +13,7 @@
 #include <Qt>
 #include <QWidget>
 
+class QToolButton;
 class QCheckBox;
 class QLabel;
 class QLineSeries;
@@ -80,6 +81,7 @@ private:
     void addCoordinate(std::int64_t step, std::size_t axis, double value);
 
     QString xUnit_, yUnit_, zUnit_;
+    QToolButton* freezeButton_ = nullptr;
     QString xProbeName_;
     QString yProbeName_;
     std::uint64_t droppedSamples_ = 0;

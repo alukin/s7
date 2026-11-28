@@ -6,6 +6,7 @@
 #include "viewers/spectrum_view.hpp"
 #include "viewers/pair_analysis_view.hpp"
 #include "viewers/window_inspection_panel.hpp"
+#include "viewers/viewer_print.hpp"
 #include <QDebug>
 #include <QCloseEvent>
 #include <QJsonArray>
@@ -31,6 +32,7 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSlider>
+#include <QDateTime>
 #include <QStackedWidget>
 #include <QSplitter>
 #include <QTabWidget>
@@ -133,6 +135,21 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         QStringLiteral("Follow live data and fit the current plot."));
     follow->setProperty("compactAction", true);
     buttons->addWidget(follow);
+    // Print what the current tab shows; Freeze first to choose the frame.
+    // Acquisition keeps running while the snapshot prints (P05).
+    buttons->addWidget(viewers::makePrintButton(side, QStringLiteral("live"), [this, id]() -> std::optional<viewers::ViewerPrintSnapshot> {
+        viewers::ViewerPrintSnapshot snapshot;
+        auto* views = findChild<QTabWidget*>(QStringLiteral("live.views"));
+        snapshot.title = QStringLiteral("Live oscilloscope \u00B7 %1 \u00B7 %2").arg(id, views ? views->tabText(views->currentIndex()) : QString());
+        snapshot.notes << QStringLiteral("Live snapshot at %1%2; acquisition continues.")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")),
+                 freeze_->isChecked() ? QStringLiteral(" of the frozen display") : QString());
+        for (const auto* label : {timeRange_, duration_, triggerStatus_, status_})
+            if (label && !label->text().trimmed().isEmpty()) snapshot.notes << label->text().simplified();
+        snapshot.plots = viewers::visiblePlots(this);
+        if (snapshot.plots.empty()) return std::nullopt;
+        return snapshot;
+    }, [id] { return QStringLiteral("live-oscilloscope-%1").arg(id); }));
     buttons->addStretch(1);
     autoY_ = new QCheckBox(QStringLiteral("Auto Y"), side); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); buttons->addWidget(autoY_);
     sideLayout->addLayout(buttons);

@@ -97,8 +97,8 @@ private slots:
     void closeCurrentDiagram();
     void saveDocument();
     void saveDocumentAs();
-    // File > Print / Print Preview / Export as PDF (0 = print, 1 = preview,
-    // 2 = PDF) and File > Page Setup for the active diagram tab.
+    // File > Print (0, previews first) and Export as PDF (2) and File > Page
+    // Setup for the active diagram tab.
     void printDiagram(int action);
     void diagramPageSetup();
     [[nodiscard]] QString documentDisplayName() const;

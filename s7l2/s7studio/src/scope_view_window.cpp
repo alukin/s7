@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "scope_view_window.hpp"
+#include "viewers/viewer_print.hpp"
 #include "observation/run_metadata.hpp"
 #include <QDialog>
 #include <QComboBox>
@@ -31,6 +32,7 @@
 #include <QSignalBlocker>
 #include <QStyle>
 #include <QTimer>
+#include <QMenu>
 #include <QToolButton>
 #include <QVariantMap>
 #include <QVBoxLayout>
@@ -463,6 +465,23 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     ui::compactActionButton(detailsButton, QStyle::SP_MessageBoxInformation, QStringLiteral("Run details"),
         QStringLiteral("Show model and provenance details for recorded runs."));
     for (auto* button : {saveButton, openButton, removeButton, detailsButton}) controls->addWidget(button);
+    // Freeze holds the drawn traces while recording continues; print shows
+    // the visible range or the whole run (P02), previewed first.
+    freezeButton_ = viewers::makeFreezeButton(this, QStringLiteral("scope"));
+    controls->addWidget(freezeButton_);
+    connect(freezeButton_, &QToolButton::toggled, this, [this](bool frozen) {
+        if (!frozen) {
+            dirty_ = true;
+            refreshPlot();
+        }
+    });
+    auto* printButton = viewers::makePrintButton(this, QStringLiteral("scope"), [this] { return printSnapshot(); },
+                                                 [this] { return QStringLiteral("scope-%1").arg(probeName_); });
+    printWholeRun_ = printButton->menu()->addAction(QStringLiteral("Print the Whole Run"));
+    printWholeRun_->setObjectName(QStringLiteral("scope.printWholeRun"));
+    printWholeRun_->setCheckable(true);
+    printWholeRun_->setToolTip(QStringLiteral("Print every recorded sample time instead of the visible range."));
+    controls->addWidget(printButton);
     connect(detailsButton, &QPushButton::clicked, this, &ScopeViewWindow::showRunDetails);
     connect(saveButton, &QPushButton::clicked, this, &ScopeViewWindow::saveRunResults);
     connect(openButton, &QPushButton::clicked, this, &ScopeViewWindow::openRunResultsFile);
@@ -1062,7 +1081,7 @@ void ScopeViewWindow::onXRangeChanged()
 
 void ScopeViewWindow::refreshPlot()
 {
-    if (!dirty_) {
+    if (!dirty_ || (freezeButton_ && freezeButton_->isChecked())) {
         return;
     }
 
@@ -1093,6 +1112,77 @@ void ScopeViewWindow::refreshPlot()
         // Auto Y must preserve the requested time range, including zoom/pan.
         static_cast<void>(plot_->fitYToVisibleData());
     }
+}
+
+auto ScopeViewWindow::printSnapshot() const -> std::optional<viewers::ViewerPrintSnapshot>
+{
+    viewers::ViewerPrintSnapshot snapshot;
+    snapshot.title = QStringLiteral("Scope \u00B7 %1").arg(probeName_);
+    if (tabs_->currentIndex() != 0) {
+        // Analysis tabs print as shown, with their own readouts.
+        snapshot.title += QStringLiteral(" \u00B7 ") + tabs_->tabText(tabs_->currentIndex());
+        snapshot.plots = viewers::visiblePlots(tabs_->currentWidget());
+        if (snapshot.plots.empty()) return std::nullopt;
+        return snapshot;
+    }
+    auto plot = viewers::snapshotPlot(*plot_);
+    const bool wholeRun = printWholeRun_ && printWholeRun_->isChecked() && hasTimeRange_;
+    double lower = plot.xMin, upper = plot.xMax;
+    if (wholeRun) {
+        lower = dataMinTime_;
+        upper = dataMaxTime_ > dataMinTime_ ? dataMaxTime_ : dataMinTime_ + 1;
+    }
+    // Redraw from the recording at print resolution: at most a few points per
+    // print column (min/max per column keeps peaks and gaps).
+    constexpr qsizetype kPrintColumns = 2400;
+    qsizetype retained = 0, printed = 0;
+    double low = std::numeric_limits<double>::infinity(), high = -low;
+    std::vector<viewers::PlotSnapshot::Series> series;
+    for (auto it = lines_.cbegin(); it != lines_.cend(); ++it) {
+        if (!it.value()->isVisible()) continue;
+        const auto points = recording_.visiblePoints(it.key(), lower, upper, wholeRun || fitAllTimeCheck_->isChecked());
+        auto reduced = pointsForPlot(points, lower, upper, kPrintColumns);
+        retained += points.size();
+        printed += reduced.size();
+        for (const auto& point : reduced) {
+            if (std::isfinite(point.y()) && point.x() >= lower && point.x() <= upper) {
+                low = std::min(low, point.y());
+                high = std::max(high, point.y());
+            }
+        }
+        const auto* line = it.value();
+        series.push_back({line->name(), line->color(), line->width(), plot_->isOverlay(line), viewers::PlotSnapshot::Series::Kind::Line,
+                          std::move(reduced)});
+    }
+    if (series.empty() || printed == 0) return std::nullopt;
+    plot.series = std::move(series);
+    plot.xMin = lower;
+    plot.xMax = upper;
+    if (wholeRun && autoScaleYCheck_->isChecked() && std::isfinite(low) && std::isfinite(high)) {
+        const double margin = high > low ? (high - low) * 0.05 : std::max(1e-12, std::abs(high) * 0.05 + 1e-12);
+        plot.yMin = low - margin;
+        plot.yMax = high + margin;
+    }
+    snapshot.notes << QStringLiteral("%1: model time %2 s to %3 s.")
+        .arg(wholeRun ? QStringLiteral("Whole run") : QStringLiteral("Visible range"), QString::number(lower, 'g', 9), QString::number(upper, 'g', 9));
+    const auto provenance = recording_.runMetadata().value(QStringLiteral("provenance")).toObject();
+    if (const double dt = provenance.value(QStringLiteral("dt_seconds")).toDouble(); dt > 0)
+        snapshot.notes << QStringLiteral("Model step %1 s (%2 Hz).").arg(QString::number(dt, 'g', 9), QString::number(1 / dt, 'g', 9));
+    if (printed < retained)
+        snapshot.notes << QStringLiteral("Traces drawn from %1 retained samples as %2 points: minimum and maximum per print column, "
+                                         "so peaks and gaps are kept but not every sample is drawn.").arg(retained).arg(printed);
+    for (const auto& entry : recording_.series()) {
+        if (entry.plotStride > 1 && !entry.spillFile)
+            snapshot.notes << QStringLiteral("%1: only a preview of every %2th sample is retained.").arg(entry.displayName()).arg(entry.plotStride);
+        if (entry.spillFailed)
+            snapshot.notes << QStringLiteral("WARNING %1: writing full-resolution samples to disk failed; older samples survive only as a decimated preview.").arg(entry.displayName());
+        if (!entry.recordingWarning.isEmpty()) snapshot.notes << QStringLiteral("WARNING %1: %2").arg(entry.displayName(), entry.recordingWarning);
+    }
+    if (const auto dropped = recording_.droppedSampleCount())
+        snapshot.notes << QStringLiteral("WARNING: %1 samples were dropped while recording; the recording is incomplete.").arg(dropped);
+    if (freezeButton_->isChecked()) snapshot.notes << QStringLiteral("The display was frozen; recording continued.");
+    snapshot.plots.push_back(std::move(plot));
+    return snapshot;
 }
 
 void ScopeViewWindow::updateTimeScrollBar()

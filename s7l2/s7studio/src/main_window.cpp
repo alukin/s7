@@ -25,6 +25,7 @@
 #include "editor_actions.hpp"
 #include "tool_windows.hpp"
 #include "ui_icons.hpp"
+#include "viewers/viewer_print.hpp"
 #include "scene_serializer.hpp"
 #include "studio_network_service.hpp"
 #include "viewers/quick_support.hpp"
@@ -95,7 +96,6 @@
 #include "diagram_print.hpp"
 #include "diagram_print_dialog.hpp"
 #include "printing/print_actions.hpp"
-#include "s7studio_build_identity.hpp"
 #include <QToolBar>
 #include <QToolButton>
 #include <QSettings>
@@ -319,6 +319,14 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram, std::shared_
     controller_ = std::make_unique<ui::ModelRunController>(runner_);
 
     buildActions();
+    // Viewer print buttons: palette-aware icons and the diagram named in
+    // each printout's header.
+    viewers::setViewerButtonIcons(ui::icon(QStringLiteral("printer")), ui::icon(QStringLiteral("player-pause")));
+    viewers::setPrintContextProvider([this] {
+        const auto path = document_.path();
+        return path.isEmpty() ? QStringLiteral("Diagram: %1").arg(documentDisplayName())
+                              : QStringLiteral("Diagram: %1 \u00B7 %2").arg(documentDisplayName(), QDir::toNativeSeparators(path));
+    });
     buildUi();
     refreshDocumentTitle();
 
@@ -340,6 +348,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram, std::shared_
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    viewers::setPrintContextProvider({});
     networkTask_.requestCancel();
     retireRunForShutdown();
     delete std::exchange(observersPanel_, nullptr);
@@ -651,7 +660,6 @@ void MainWindow::buildUi()
             return action;
         };
         add(QStringLiteral("Page Setup…"), "action.pageSetup", [this] { diagramPageSetup(); });
-        add(QStringLiteral("Print Preview…"), "action.printPreview", [this] { printDiagram(1); });
         add(QStringLiteral("Export as PDF…"), "action.exportPdf", [this] { printDiagram(2); });
         add(QStringLiteral("Print…"), "action.print", [this] { printDiagram(0); })->setShortcut(QKeySequence::Print);
         fileMenu->insertSeparator(libraries->menuAction());
@@ -1986,15 +1994,13 @@ void MainWindow::printDiagram(const int action)
         QMessageBox::warning(this, QStringLiteral("Print Diagram"), QString::fromUtf8(error.what()));
         return;
     }
-    const auto revision = QString::fromLatin1(S7_BUILD_REVISION).left(10);
-    const auto footer = QStringLiteral("S7 Studio %1 (%2%3) · printed %4")
-        .arg(QString::fromLatin1(S7_BUILD_VERSION), revision, S7_BUILD_DIRTY ? QStringLiteral(", modified") : QString(),
-             QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+    const auto footer = printing::standardFooter();
     const auto base = document_.path().isEmpty() ? QDir::home().filePath(documentDisplayName())
                                                  : QFileInfo(document_.path()).absolutePath() + QLatin1Char('/') + QFileInfo(document_.path()).completeBaseName();
     const auto suggested = base + (levelPath.isEmpty() ? QString() : QLatin1Char('_') + QString(levelPath).replace(QLatin1Char('/'), QLatin1Char('_'))) + QStringLiteral(".pdf");
-    const auto preferred = action == 1 ? DiagramPrintDialog::Action::Preview : action == 2 ? DiagramPrintDialog::Action::Pdf : DiagramPrintDialog::Action::Print;
-    DiagramPrintDialog dialog(job, job->sheetLayout(), diagramPrintPaper_, footer, suggested, preferred, this);
+    // Printing previews first; a PDF wastes no paper and skips the page preview.
+    DiagramPrintDialog dialog(job, job->sheetLayout(), diagramPrintPaper_, footer, suggested,
+                              action == 2 ? printing::PreviewDialog::Mode::PdfOnly : printing::PreviewDialog::Mode::Preview, this);
     dialog.exec();
     diagramPrintPaper_ = dialog.paper();
     const auto& result = dialog.result();

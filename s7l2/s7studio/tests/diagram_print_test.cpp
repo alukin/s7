@@ -219,7 +219,13 @@ void checkDiagram(const QString& examples, const QDir& out)
         QObject::connect(&preview, &QPrintPreviewWidget::paintRequested, [&](QPrinter* target) {
             error = printing::print([&](const QPageLayout& used) { return job.build(used, withSubsystems, footer); }, *target);
         });
+        preview.resize(1400, 1000);
+        preview.show();
         preview.updatePreview();
+        preview.fitToWidth();
+        preview.setCurrentPage(1);
+        QApplication::processEvents();
+        if (qEnvironmentVariableIsSet("S7_PRINT_ARTIFACT_DIR")) preview.grab().save(out.filePath(QStringLiteral("preview.png")));
         require(error.isEmpty(), "print preview failed: " + error.toStdString());
         require(preview.pageCount() == 5, "print preview shows " + std::to_string(preview.pageCount()) + " pages, expected 5");
     }

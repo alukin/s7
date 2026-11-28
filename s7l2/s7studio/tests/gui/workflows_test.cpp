@@ -63,6 +63,7 @@
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
 #include <QPlainTextEdit>
+#include <QPrintPreviewWidget>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStatusBar>
@@ -528,12 +529,14 @@ private slots:
         QCOMPARE(boost::json::serialize(window_->currentDocument()), boost::json::serialize(before));
         QVERIFY(!window_->documentModified());
     }
-    // File > Export as PDF (P01/P07): the print dialog offers the nested
-    // subsystems, counts pages, writes the PDF through the file dialog and
-    // leaves the diagram unchanged; a cancelled file dialog writes nothing.
+    // File > Export as PDF (P01/P07): the options offer the nested
+    // subsystems and count pages, Save as PDF writes through the file dialog
+    // and the diagram stays unchanged; a cancelled file dialog writes nothing.
+    // File > Print opens the page preview; closing it prints nothing.
     void printDiagramToPdf() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/double_pendulum_full.s7diagram"));
-        for (const char* name : {"action.print", "action.printPreview", "action.exportPdf", "action.pageSetup"}) QVERIFY2(action(name), name);
+        for (const char* name : {"action.print", "action.exportPdf", "action.pageSetup"}) QVERIFY2(action(name), name);
+        QVERIFY(!action("action.printPreview"));
         QCOMPARE(action("action.print")->shortcut(), QKeySequence(QKeySequence::Print));
         const auto before = window_->currentDocument();
         const auto path = temporary_.filePath("double_pendulum.pdf");
@@ -543,12 +546,13 @@ private slots:
             auto* pages = dialog->findChild<QLabel*>("print.summary");
             auto* paper = dialog->findChild<QLabel*>("print.paper");
             auto* pdf = dialog->findChild<QPushButton*>("print.pdf");
-            if (!subsystems || !pages || !paper || !pdf || !subsystems->isEnabled() || pages->text() != "1 page") return false;
-            if (!paper->text().contains("diagram sheet")) return false;
+            auto* print = dialog->findChild<QPushButton*>("print.print");
+            auto* preview = dialog->findChild<QWidget*>("print.previewPages");
+            if (!subsystems || !pages || !paper || !pdf || !print || !preview || !subsystems->isEnabled()) return false;
+            if (pages->text() != "1 page" || !paper->text().contains("diagram sheet") || print->isVisible() || preview->isVisible()) return false;
             subsystems->setChecked(true);
             summary = pages->text();
-            capture(dialog, "print-diagram");
-            // A cancelled file dialog keeps the print dialog open and writes nothing.
+            capture(dialog, "export-diagram-pdf");
             if (!modalWorkflow([pdf] { pdf->click(); }, [](QDialog* file) { file->reject(); return true; }) || !dialog->isVisible() || QFile::exists(path))
                 return false;
             return modalWorkflow([pdf] { pdf->click(); }, [&path](QDialog* file) { return selectFile(file, path); });
@@ -559,9 +563,27 @@ private slots:
         QVERIFY(file.open(QIODevice::ReadOnly));
         const auto pdf = QString::fromLatin1(file.readAll());
         QCOMPARE(pdf.count(QRegularExpression(QStringLiteral("/Type\\s*/Page(?![s\\w])"))), 5);
+        if (const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR"); !directory.isEmpty())
+            QFile::copy(path, directory + "/double_pendulum.pdf");
         QCOMPARE(window_->currentDocument(), before);
         QVERIFY(!window_->documentModified());
         QVERIFY(window_->statusBar()->currentMessage().contains(path));
+
+        int previewPages = 0;
+        const bool previewed = dialogAction("action.print", [&](QDialog* dialog) {
+            auto* preview = dialog->findChild<QPrintPreviewWidget*>("print.previewPages");
+            auto* subsystems = dialog->findChild<QCheckBox*>("print.subsystems");
+            auto* close = dialog->findChild<QPushButton*>("print.close");
+            if (!preview || !preview->isVisible() || !subsystems || !close) return false;
+            subsystems->setChecked(true);
+            previewPages = preview->pageCount();
+            capture(dialog, "print-diagram-preview");
+            close->click();
+            return true;
+        });
+        QVERIFY(previewed);
+        QCOMPARE(previewPages, 5);
+        QCOMPARE(window_->currentDocument(), before);
     }
     void fractionalRunDuration() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rc_charge_euler.s7diagram"));
@@ -1378,6 +1400,65 @@ private slots:
         while (viewer.refreshSource()) {}
         QCOMPARE(intervalStart->value(), 0.);
         QCOMPARE(intervalEnd->value(), .25);
+    }
+
+    // Viewer printing (P02/P05): Scope saves the visible range or the whole
+    // run as a PDF without a preview; the Live Oscilloscope's print button
+    // opens the preview of the current tab; freeze buttons exist.
+    void printViewers() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/spectrum/two_tone_sum.s7diagram"));
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope", "scope")); QVERIFY(scope);
+        auto* live = dynamic_cast<s7studio::ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "live")); QVERIFY(live);
+        scope->resize(1100, 640); live->resize(1100, 640);
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 4, 1024));
+        QTRY_COMPARE_WITH_TIMEOUT(completed.count(), 1, 15000);
+        QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+        while (scope->refreshSource()) {}
+        QVERIFY(scope->findChild<QToolButton*>("scope.freeze"));
+        scope->show();
+        capture(scope, "scope-with-print-buttons");
+        auto* scopePrint = scope->findChild<QToolButton*>("scope.print"); QVERIFY(scopePrint && scopePrint->text().isEmpty() == !scopePrint->icon().isNull());
+        auto* savePdf = scope->findChild<QAction*>("scope.savePdf"); QVERIFY(savePdf);
+        auto* wholeRun = scope->findChild<QAction*>("scope.printWholeRun"); QVERIFY(wholeRun && wholeRun->isCheckable());
+        const auto pdfText = [](const QString& path) {
+            QProcess process;
+            const auto tool = QStandardPaths::findExecutable("pdftotext");
+            if (tool.isEmpty()) return QString();
+            process.start(tool, {"-enc", "UTF-8", path, "-"});
+            process.waitForFinished(20000);
+            return QString::fromUtf8(process.readAllStandardOutput());
+        };
+        for (const bool whole : {false, true}) {
+            wholeRun->setChecked(whole);
+            const auto path = temporary_.filePath(whole ? "scope-whole.pdf" : "scope-visible.pdf");
+            QVERIFY(modalWorkflow([savePdf] { savePdf->trigger(); }, [&path](QDialog* file) { return selectFile(file, path); }));
+            QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
+            QCOMPARE(QString::fromLatin1(file.readAll()).count(QRegularExpression(QStringLiteral("/Type\\s*/Page(?![s\\w])"))), 1);
+            if (const auto text = pdfText(path); !text.isEmpty()) {
+                QVERIFY2(text.contains("Scope \u00B7 scope"), qPrintable(text.left(400)));
+                QVERIFY(text.contains(whole ? "Whole run: model time" : "Visible range: model time"));
+                QVERIFY(text.contains("model time (s)"));
+            }
+            if (const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR"); !directory.isEmpty())
+                QFile::copy(path, directory + '/' + QFileInfo(path).fileName());
+        }
+        live->show();
+        auto* livePrint = live->findChild<QToolButton*>("live.print"); QVERIFY(livePrint);
+        QVERIFY(live->findChild<QPushButton*>("live.freeze"));
+        int pages = 0;
+        QVERIFY(modalWorkflow([livePrint] { livePrint->click(); }, [&pages](QDialog* dialog) {
+            auto* preview = dialog->findChild<QPrintPreviewWidget*>("print.previewPages");
+            auto* close = dialog->findChild<QPushButton*>("print.close");
+            if (!preview || !close) return false;
+            pages = preview->pageCount();
+            capture(dialog, "print-live-oscilloscope");
+            close->click();
+            return true;
+        }));
+        QCOMPARE(pages, 1);
     }
 
     void spectrumReferenceExamples_data() {

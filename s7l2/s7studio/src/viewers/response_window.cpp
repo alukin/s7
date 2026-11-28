@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+#include "viewers/viewer_print.hpp"
 #include "response_window.hpp"
 #include "analysis/display_curve.hpp"
 #include "analysis/display_worker.hpp"
@@ -21,6 +22,7 @@
 #include <QPushButton>
 #include <QSaveFile>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QTextStream>
 #include <QThreadPool>
 #include <QTimer>
@@ -104,6 +106,16 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     connect(reference_, &QDoubleSpinBox::valueChanged, this, [this] { draw(); });
     auto *save = new QPushButton("Export response CSV", this);
     controls->addWidget(save);
+    // Prints the current tab as shown, previewed first (P06).
+    controls->addWidget(makePrintButton(this, QStringLiteral("response"), [this]() -> std::optional<ViewerPrintSnapshot> {
+        ViewerPrintSnapshot snapshot;
+        const auto *views = findChild<QTabWidget *>(QStringLiteral("response.views"));
+        snapshot.title = QStringLiteral("Frequency response \u00B7 %1").arg(views ? views->tabText(views->currentIndex()) : QString());
+        snapshot.notes << QStringLiteral("Gain reference %1.").arg(reference_->value());
+        snapshot.plots = visiblePlots(this);
+        if (snapshot.plots.empty()) return std::nullopt;
+        return snapshot;
+    }, [] { return QStringLiteral("frequency-response"); }));
     connect(save, &QPushButton::clicked, this, &ResponseWindow::exportResult);
     for (bool save : {true, false}) {
         auto *button = new QPushButton(save ? "Save result…" : "Open result…", this);

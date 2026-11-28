@@ -115,10 +115,26 @@ Implemented in stages; the matrix stays open until every row has evidence.
 
 | ID | Status | Implementation | Automated evidence |
 | --- | --- | --- | --- |
-| **P01** | Implemented (Linux) | `src/diagram_print.*`, `src/diagram_print_dialog.*`; File → Print / Print Preview / Export as PDF / Page Setup | `s7studio_diagram_print`, `s7studio_gui_workflows` (`printDiagramToPdf`) |
-| **P02–P06** | Not started | Planned: one vector renderer for `LinePlotView` views; high-resolution snapshots for Qt Quick 3D | — |
-| **P07** | Diagram only | `src/printing/print_actions.*`: preview, page setup, cancel and failure results | as P01 |
+| **P01** | Implemented (Linux) | `src/diagram_print.*`, `src/diagram_print_dialog.*`; File → Print (preview first) / Export as PDF / Page Setup | `s7studio_diagram_print`, `s7studio_gui_workflows` (`printDiagramToPdf`) |
+| **P02** | Implemented (Linux) | Scope: visible range or whole run, redrawn from the recording at print resolution with decimation and completeness notes | `s7studio_gui_workflows` (`printViewers`) |
+| **P03** | Implemented (Linux) | Phase Portrait: the curve as shown | `s7studio_plot_print` (renderer) |
+| **P04** | Not started | Planned: high-resolution snapshots of Qt Quick 3D views | — |
+| **P05** | Implemented (Linux) | Live Oscilloscope: the current tab (Time, Spectrum, Correlation, XY), snapshot time and acquisition state; Freeze picks the frame | `s7studio_gui_workflows` (`printViewers`) |
+| **P06** | 2D views only | Frequency Response (Bode, Nyquist, Nichols), Time–Frequency trace and slice; Live Spectrum, surfaces and maps not yet | `s7studio_plot_print` |
+| **P07** | Diagram and 2D viewers | `src/printing/preview_dialog.*`: every print previews first; PDF export skips the preview; page setup, cancel and failure results | as P01, P02 |
 | **P08/P09** | Implemented separately | `src/viewers/array_print.*`; to move onto the shared page layer | `s7studio_array_persistence` |
+
+**Viewer plots** (`src/viewers/plot_print.*`, `viewer_print.*`): a
+`PlotSnapshot` copies a `LinePlotView`'s visible series, ranges, titles,
+legend, cursor, oscilloscope divisions and channel axis when the user prints;
+`paintPlot` redraws it as vectors on white paper with the screen's tick rules
+(LinePlot.qml), darkening pale trace colours and dashing comparison overlays.
+Each viewer has an icon-only print button (click: preview; arrow: Save as PDF,
+Page Setup) and, where it updates during a run, a freeze button; printing never
+pauses acquisition. `s7studio_plot_print` checks tick steps, colour darkening,
+the copied snapshot (and that later view changes leave it alone), painting
+inside its area only, the viewer PDF text (title, notes, axis titles, legend,
+tick labels) and the preview window in both modes.
 
 Shared page layer (`src/printing/print_document.*`): every page has a
 provenance header (title, file, level or range, area and scale) and a footer
