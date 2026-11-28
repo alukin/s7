@@ -43,6 +43,13 @@ less than a quarter of the Y axis. Each shard takes several minutes; use
 A new example needs a duration entry in `documentedSeconds()` in
 `tests/gui/workflows_test.cpp`; the test fails without one.
 
+`s7studio_array_persistence_test` can verify an installed prefix instead of the
+build tree: `S7_ARRAY_TEST_EXAMPLES_DIR`, `S7_ARRAY_TEST_SPECTRAL_PLUGIN`,
+`S7_ARRAY_TEST_VIDEO_PLUGIN` and `S7_ARRAY_TEST_REPLAY_DIAGRAM` select the
+examples, the s7spectral and s7video plugins and the replay diagram. Launch it
+from the directory containing the five-frame recording; set
+`S7_GUI_ARTIFACT_DIR` to keep its PDFs and screenshots.
+
 GUI test executables are excluded from the normal application build and included
 in `build-tests`. The option defaults ON for native Linux Studio builds and OFF
 for cross builds. Enabling it elsewhere reports that the wrapper is unsupported;
@@ -227,10 +234,8 @@ Visual evidence can be retained on successful workflows with
 `S7_USABILITY_CAPTURE_DIR=/absolute/path` when running the GUI suite. This is
 separate from the existing failure artifacts. The tests capture actual visible
 Qt widgets at engineering workflow boundaries, including integrator properties,
-inline errors, missing elements, simulation state and saved comparisons. See
-[the 2026-10-21 usability audit](usability/2026-10-21/AUDIT.md) for baseline
-production-application desktop captures, incremental comparisons, severities
-and assessment limits. Screenshots support a heuristic review; they are not
+inline errors, missing elements, simulation state and saved comparisons.
+Screenshots support a heuristic review; they are not
 pixel-equality gates or substitutes for human usability testing.
 
 The main GUI workflow suite runs serially in CTest so its responsiveness and

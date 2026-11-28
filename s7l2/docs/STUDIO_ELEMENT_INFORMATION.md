@@ -134,7 +134,6 @@ categories/blank space, canvas information for ordinary/schema/observer items,
 and long markup-like plugin text in both dialogs. Small-dialog checks verify
 scrolling, copying and unchanged document contents on close/cancel. Existing
 parameter-editing and schema/viewer regressions cover the preserved gestures.
-Execution results and platform limitations are recorded in RELEASE_0.1.1.md.
 
 Completed verification: 82/82 native Release CTest entries (42 GUI workflow
 cases, no skips), five fresh headless smoke tests, Windows Studio cross-build

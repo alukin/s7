@@ -123,7 +123,7 @@ GDP driver was removed.
 
 This experiment bypasses numeric per-pixel graph stepping. It supports the
 whole-frame direction, but is not an isolated, like-for-like speedup comparison
-against the [V0 numeric path](VIDEO_IO_SPIKE.md). SSH provides this experiment's
+against the V0 numeric path. SSH provides this experiment's
 transport/security; no S7 media-session authorization or wire contract has been
 implemented or qualified. D0/D1/D2 ownership stays with teren_ukr.
 

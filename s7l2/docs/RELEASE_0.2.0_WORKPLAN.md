@@ -37,7 +37,7 @@ must not be reported as final-candidate tests.
 | Item / release gate | Status at scope revision | Existing evidence | Required remaining acceptance | Lead |
 | --- | --- | --- | --- | --- |
 | **G1 — Local numerical and semantic regressions** | Implemented baseline; final gate open | [Numerical matrix](NUMERICAL_VALIDATION_MATRIX.md), [integrator review](INTEGRATOR_REVIEW_2026-11-17.md), [0.1.2 notes](RELEASE_0.1.2_NOTES.md) | Complete final-candidate numerical/causality/type/rate/rollback/reference tests, including supported coupled methods; preserve recorded envelopes | Maintainer/Codex |
-| **G1/V — Local vector-valued signal ports and wires** | **Mandatory; implementation and qualification open** | [Array/zero-copy architecture](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), [AV00 scalar baseline](ARRAY_VECTOR_AV00_BASELINE.md) and independent FFT/convolution implementations | Rank-1 typed array ports/wires, minimal rank-2/3 U8 frame values, CPU bounded leases, typed shape validation, zero-payload-copy local fan-out, compiled binding, commit/rollback, nested-schema and scalar regression; deterministic saved diagrams and negative tests | Maintainer/Codex |
+| **G1/V — Local vector-valued signal ports and wires** | **Mandatory; implementation and qualification open** | [Array/zero-copy architecture](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), AV00 scalar baseline and independent FFT/convolution implementations | Rank-1 typed array ports/wires, minimal rank-2/3 U8 frame values, CPU bounded leases, typed shape validation, zero-payload-copy local fan-out, compiled binding, commit/rollback, nested-schema and scalar regression; deterministic saved diagrams and negative tests | Maintainer/Codex |
 | **G1 / EDU — MIT-aligned teaching laboratories** | Curriculum proposed; per-lab qualification open | [course map](../education/COURSE_MAP.md), [existing examples](../examples/README.md), [lab standard](../education/LAB_STANDARD.md) | Create new educational diagrams using older examples only as references; qualify the agreed 24 named core labs with independent oracles, failure/limitation cases, source attribution, Studio workflows and release-package checks; list blocked cases explicitly | Maintainer/Codex |
 | **G2 — Practical two-host engineering workflow** | Headless transport and static scheduler implemented in bounded profiles; end-to-end demo open | [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027), [schedule contract](DISTRIBUTED_CAUSAL_SCHEDULE.md), [Phase 4](CROSS_NODE_CAUSALITY_PHASE4.md) | Two physical hosts, useful deterministic input → processing → recorded/observed output, independent reference and resource metrics; separate multiprocess feedback/invalid-cycle regressions | Maintainer/Codex, coordinated with teren_ukr |
 | **G3 / D0 — Common distributed contract and test matrix** | Partial | C++/Python existing control and F64 data streams; shared fixtures; [transport lab](../../s7py/tools/transport_lab/README.md) | Freeze supported topology, security/transport profiles, host and resource envelopes; record expected pass/fail matrix; make cross-language checks required CI | teren_ukr |
@@ -87,7 +87,7 @@ not a second simulation/control implementation.
 
 ### New array-valued signals and viewers — mandatory narrow slice (G1/V, G4/W, G4/V)
 
-Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), the [source-based impact inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and the [Codex work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md), not an unrelated frame/media runtime. **Preserve existing scalar element implementations; add new vector elements.** The revised Codex plan divides AV00–AV18 into **individually bounded unsplit or suffixed AVxxa/b/c/d sessions**, each at most five hours including verification and handoff, with mandatory further split if too large; it is not evidence that any gate has passed.
+Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), the source-based impact inventory and the Codex work plan, not an unrelated frame/media runtime. **Preserve existing scalar element implementations; add new vector elements.** The revised Codex plan divides AV00–AV18 into **individually bounded unsplit or suffixed AVxxa/b/c/d sessions**, each at most five hours including verification and handoff, with mandatory further split if too large; it is not evidence that any gate has passed.
 
 1. Implement local array-valued port descriptors, fixed shapes and CPU lease-backed zero-copy connections while preserving scalar native storage, existing numeric SignalType IDs, causal direct-feedthrough and causal-memory **per-rate-domain** publication/rollback (ADR-021/022); reject unsupported implicit/coupled numerical array trials and standalone array Schema::step(), while supporting flattened nested ports.
 2. Provide deterministic array source/pass-through, whole-array VectorDelay, and a frame-valued FFT/PSD path with independent complex-IQ numerical oracle. Verify bounded buffers, fan-out identity, lifetime, shape/type mismatch, forced faults, scalar regression and exact saved-diagram headless execution. Do not rely solely on the existing scalar peak-only FFT plugin.
@@ -101,7 +101,7 @@ Follow [array signals and zero-copy design](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md), 
 
 ### Review-driven architecture blockers and parallel execution branches
 
-**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 FFT and PSD conventions accepted. Release qualification remains open. See the [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md), [design decision register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) and [AV dependencies](ARRAY_VECTOR_CODEX_WORKPLAN.md#binding-dependency-dag-and-review-gates-supersedes-original-linear-ordering).
+**Status:** D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 FFT and PSD conventions accepted. Release qualification remains open. See the independent review, [design decision register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required) and AV dependencies.
 
 1. **Before invasive work:** AV00 records source SHA, scalar benchmarks, the installed SDK and rebuilt repository plugins, and ADR-021/022/024/029 behavior. Accepted D4 defines the AV01 shape/layout foundation. Accepted D3 defines producer reserves and optional retention. Resolve D2 publication before compiled commit work. D7 sets the standalone Schema boundary. D5 FFT/PSD and D6 provenance gate their dependent features.
 2. **Shared runtime foundation:** AV01 -> AV02/AV03 and AV04 may proceed independently after prerequisites; AV05a/b compile slot binding, AV06a/b perform per-domain commit and fault/retained-lease tests. **No public array element before AV06b**. AV07a/b provides whole-array memory, AV08a/b supports **flattened** schema aliases and persistence; AV09a is an earlier *internal* fixture, AV09b public new scalar-preserving vector elements.
@@ -320,10 +320,10 @@ release-qualified without checked evidence.
 ## Completed and retained research/baseline
 
 The N0–N4 numerical investigations are delivered as separate research reports:
-[N0](NUMERICAL_FEEDBACK_RESEARCH_N0.md),
-[Phase 1](NUMERICAL_FEEDBACK_RESEARCH_REPORT.md),
-[Phase 2](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md) and
-[Phase 3](NUMERICAL_INTEGRATION_PHASE3_REPORT.md). Results include limitations
+N0,
+Phase 1,
+Phase 2 and
+Phase 3. Results include limitations
 and negative experiments. Production Euler substeps and coupled
 Gauss–Legendre are implemented separately under
 [COUPLED_INTEGRATION.md](COUPLED_INTEGRATION.md). The initial integrated

@@ -6,7 +6,7 @@ candidate. [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027) and the
 change. The experiments and source/result identities below remain historical.
 
 Research round started 2026-11-17, following the
-[performance findings](CROSS_NODE_CAUSALITY_PHASE3.md). The production compiler,
+performance findings. The production compiler,
 runtime API, network protocol and deployment path are unchanged. All new
 executables and scripts are opt-in research fixtures; X1–X3 remain open.
 

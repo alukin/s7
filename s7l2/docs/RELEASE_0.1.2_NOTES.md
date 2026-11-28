@@ -285,9 +285,9 @@ Observation storage is temporary rather than crash-durable. Save or export
 results explicitly. Display previews can skip updates under load; authoritative
 capture is separate. Live observer bindings are fixed for a run.
 
-The [0.1.1 notes](RELEASE_0.1.1_NOTES.md), the
+The 0.1.1 notes, the
 [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md) and the
-[observer latency profile](OBSERVER_UI_LATENCY_PROFILING.md) describe the
+observer latency profile describe the
 earlier tested envelopes.
 
 ## Change review scope

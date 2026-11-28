@@ -109,7 +109,7 @@ Video Player fits each frame to the window and preserves its aspect ratio.
 The image owns a copy with Qt-aligned rows, so a paused frame can remain visible
 while the producer advances. Its status shows the frame dimensions and Gray8
 or RGB8 format. The saved test diagrams exercise the renderer and frame
-adapter. [Array work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md)
+adapter. Array work plan
 
 Choose **Print…** in Waterfall or Video Player to save a PDF or select a
 printer. The viewer captures its displayed snapshot before opening the

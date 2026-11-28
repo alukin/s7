@@ -49,7 +49,7 @@ Although the entry points are C functions, the registry pointer and `ElementDesc
 
 Plugin API v2 covered the changed C++ port metadata layout. API v3 added array declaration metadata in `ElementSpec`. API v4 added array descriptors to `Port`. API v5 extends the array descriptor and value with the MJPEG packet format, payload length and media timing. API v6 adds the virtual `Element::memory_state_is_published()` (ADR-029). The maintainer accepted [D1](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#plugin-and-format-compatibility-policy-d1) on 2026-11-26. Earlier S7 versions and third-party plugins carry no compatibility obligations. Qualify the current SDK with rebuilt repository-owned plugins, including out-of-tree `s7spectral`, `s7wavelet` and `s7video`.
 
-The loader checks the query's ABI version before reading the optional manifest or passing a registry to plugin code. This closes the version-check gap recorded in the [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
+The loader checks the query's ABI version before reading the optional manifest or passing a registry to plugin code. This closes the version-check gap recorded in the AV00 baseline.
 
 ## Minimal plugin
 

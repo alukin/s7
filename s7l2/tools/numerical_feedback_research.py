@@ -3,7 +3,7 @@
 
 Run: python3 tools/numerical_feedback_research.py --suite gate --output /tmp/gate.json
      python3 tools/numerical_feedback_research.py --suite full --output /tmp/full.json
-See docs/NUMERICAL_FEEDBACK_RESEARCH_N0.md for the frozen contract.
+The research reports are in Git history; the production contract is docs/COUPLED_INTEGRATION.md.
 """
 
 from __future__ import annotations

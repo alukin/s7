@@ -15,10 +15,10 @@ clarified that video transfer may use specialized media techniques, numeric
 streams remain appropriate for computation chains, receiver-side elements may
 transform video, and video processing normally needs a **whole frame**. This
 supersedes the per-pixel production baseline in the original
-[video plan](VIDEO_IO_PLAN.md). Exact port, execution and transport contracts
+video plan. Exact port, execution and transport contracts
 remain to be reviewed and measured; this document does not implement them.
 
-The [V0 spike](VIDEO_IO_SPIKE.md) remains historical evidence. Its scalar pixel
+The V0 spike remains historical evidence. Its scalar pixel
 path is a useful cost baseline, not a requirement for subsequent video elements.
 Changing the representation and evaluation granularity does not remove S7's
 causal connections, explicit state, type validation or headless ownership.

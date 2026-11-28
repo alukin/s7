@@ -306,7 +306,7 @@ No dependency sources are bundled. This follow-up does not move the existing
 v0.1.0 tag or replace its earlier artifact; those precede the Help UI.
 
 **0.1.0 scope update (2026-10-22):** ship a Linux preview under the narrower
-[release checklist](RELEASE_0.1.0.md). That checklist supersedes broader release
+release checklist. That checklist supersedes broader release
 gates below; multi-hour/resource, native-platform and expanded numerical work
 is deferred explicitly. Historical evidence below retains its original scope.
 
@@ -921,8 +921,8 @@ platform/accessibility and broader release acceptance remain open.
 
 ## C1/P1/A1 — hosted CI, installed package and measured acceptance (2026-10-21)
 
-The current bounded evidence and remaining release gates are in
-[LOCAL_SIMULATION_ACCEPTANCE.md](LOCAL_SIMULATION_ACCEPTANCE.md). Raw logs,
+The 0.1.x acceptance record is in Git history; current release gates are in
+the [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md). Raw logs,
 packages, captures and JSON reports remain local; prompts and usability captures
 are ignored and must not be staged.
 

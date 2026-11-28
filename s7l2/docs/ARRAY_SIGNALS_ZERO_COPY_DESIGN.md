@@ -1,7 +1,7 @@
 # S7 array-valued signals, zero-copy bindings and minimal viewers
 
 **Design notes — maintainer-approved scope. D1 compatibility policy, D2 publication, D3 buffer ownership and D4 descriptor foundation, D6 provenance semantics and D7 nested array scope accepted. D5 defines the initial FFT and PSD.**
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The [migration inventory](ARRAY_VECTOR_MIGRATION_INVENTORY.md) and [session plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) tracks release acceptance. These notes define the reusable architecture and the first release slice. The migration inventory and session plan describe the affected code and delivery order. Existing scalar elements stay intact. Vector behavior uses new elements.
 
 ## 1. Motivation and boundaries
 
@@ -125,7 +125,7 @@ The initial implementation and qualification is a **mandatory new 0.2.0 scope am
 
 ## 7. Independent-review architectural reconciliation (2026-11-23)
 
-The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) documents confirmed code constraints separately from proposed remedies. This section records the publication and ownership contracts alongside implementation guidance. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
+The independent review documents confirmed code constraints separately from proposed remedies. This section records the publication and ownership contracts alongside implementation guidance. Preserve [ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021), [ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) and the optimized scalar path.
 
 ### Publication, rollback and ownership (F1–F4, F11–F12)
 
@@ -212,7 +212,7 @@ AV08a will check exact shape and type through nested ports, output aliases, and 
 
 ### Plugin and format compatibility policy (D1)
 
-On 2026-11-26 the maintainer confirmed that S7 has no production releases and owes no compatibility to earlier versions or third-party plugins. Choose the API, ABI, schema and wire formats that best serve the design. Qualify the current SDK, repository-owned plugins and bundled diagrams together. If a shared C++ plugin boundary remains, require a valid ABI version before registration. See the [plugin interface](PLUGIN_INTERFACE.md) and [AV00 baseline](ARRAY_VECTOR_AV00_BASELINE.md).
+On 2026-11-26 the maintainer confirmed that S7 has no production releases and owes no compatibility to earlier versions or third-party plugins. Choose the API, ABI, schema and wire formats that best serve the design. Qualify the current SDK, repository-owned plugins and bundled diagrams together. If a shared C++ plugin boundary remains, require a valid ABI version before registration. See the [plugin interface](PLUGIN_INTERFACE.md) and AV00 baseline.
 
 ### Open decision register — explicit maintainer approval required
 
@@ -226,7 +226,7 @@ On 2026-11-26 the maintainer confirmed that S7 has no production releases and ow
 | D6 | **Accepted.** [Array provenance and whole-array delay](#d6--array-provenance-and-whole-array-delay). Producer-specific field contracts belong to AV11/AV12. | AV07b/AV11/AV12/AV15/AV16 |
 | D7 | **Accepted.** [Array ports on nested schemas](#d7--array-ports-on-nested-schemas). Compiled slot aliases and standalone deferral. | AV08 |
 
-**D1–D7 are accepted.** The work plan tracks implementation and verification. See the [AV work plan](ARRAY_VECTOR_CODEX_WORKPLAN.md) and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
+**D1–D7 are accepted.** The work plan tracks implementation and verification. See the AV work plan and [live release gates](RELEASE_0.2.0_WORKPLAN.md).
 
 ## 8. Earlier design questions (superseded by D1–D7 above)
 

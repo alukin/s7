@@ -4,7 +4,7 @@ The Windows release profile includes PortAudio sound elements and excludes SDR
 elements/providers (`S7_BUILD_SDR=OFF`, `S7_PORTAUDIO=ON`, `S7_PIPEWIRE=OFF`,
 `S7_SOAPYSDR=OFF`). Linux retains sound and SDR. The Windows artifact remains a
 portable folder/ZIP built by the existing cross-build workflow. The earlier
-[hardware research](WINDOWS_HARDWARE_RESEARCH.md) records broader feasibility;
+hardware research records broader feasibility;
 the release profile selects sound only.
 
 S7 builds 64-bit Windows binaries on Linux (Ubuntu 26.04 or Fedora 45): Clang 22

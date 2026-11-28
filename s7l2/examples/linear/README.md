@@ -184,10 +184,10 @@ above. For RLC and the mechanical analogue, map `q↔x`, `i↔v`, `L↔m`,
 `stiffness*x` if comparing output waveforms. The original Euler and symplectic
 diagrams use production Euler and Euler–Cromer elements. The finite
 feedback-correction methods in
-[Phase 2 research](../../docs/NUMERICAL_FEEDBACK_RESEARCH_PHASE2.md) are
+Phase 2 research are
 separate research-runner experiments, not editable S7 elements.
 The coupled Euler substeps and Gauss–Legendre stages in the
-[Phase 3 real-graph study](../../docs/NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
+Phase 3 real-graph study
 use a headless research execution policy. The
 [production integration contract](../../docs/COUPLED_INTEGRATION.md) describes
 the separate runtime methods and the Gauss diagrams above; the Phase 3 runner

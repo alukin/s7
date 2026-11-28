@@ -5,10 +5,10 @@ records sources, assumptions and experiments before a production design is
 chosen. It is not an accepted ADR or a change to S7's execution contract.
 The [work plan](RELEASE_0.2.0_WORKPLAN.md#feedback-loops-across-nodes--020-task)
 retains the open decision and acceptance gates.
-The [initial design/findings](CROSS_NODE_CAUSALITY_DESIGN.md) and
-[Phase 2 real-transport experiments](CROSS_NODE_CAUSALITY_PHASE2.md) cite these
+The initial design/findings and
+Phase 2 real-transport experiments cite these
 sources at the relevant questions and separate results from hypotheses.
-The [Phase 3 performance experiment](CROSS_NODE_CAUSALITY_PHASE3.md) adds
+The Phase 3 performance experiment adds
 derived plans, planning/dispatch scaling and repeated transport measurements.
 The [Phase 4 comparison](CROSS_NODE_CAUSALITY_PHASE4.md) adds outgoing-first
 static schedules, incremental queues and actual C++ element/runtime costs.

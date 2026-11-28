@@ -141,11 +141,11 @@ Adding this requirement is not evidence of completion.
 
 ### Array architecture acceptance boundaries (2026-11-23 independent review)
 
-The [independent review](ARRAY_VECTOR_INDEPENDENT_REVIEW_2026-11-23.md) requires a clarified **per-rate-domain**, not global multi-rate, fault/commit guarantee consistent with ADR-021 and ADR-022. Current scalar snapshot and private-state/external-I/O rollback limits remain unchanged. Array slots require explicit stable binding, no byte-copy of owning leases, staged causal-memory restoration and mixed scalar/array regression. Optional viewers must have bounded independent retention and never starve admitted producers; loss-intolerant recording is a separate profile.
+The independent review requires a clarified **per-rate-domain**, not global multi-rate, fault/commit guarantee consistent with ADR-021 and ADR-022. Current scalar snapshot and private-state/external-I/O rollback limits remain unchanged. Array slots require explicit stable binding, no byte-copy of owning leases, staged causal-memory restoration and mixed scalar/array regression. Optional viewers must have bounded independent retention and never starve admitted producers; loss-intolerant recording is a separate profile.
 
 The minimal profile is **concrete exact** F32/C32 rank-1 and U8 grayscale/RGB rank-2/3 CPU descriptors. Reject symbolic shape inference, array coupled/implicit numerical trials, unsupported standalone array `Schema::step()`, implicit block resampling and unsupported image layouts. Flattened nested array ports *are* mandatory and must be validated with saved diagrams. Graph `step()` evaluates **one whole array**; graph-domain rate is not physical source sample rate, sample index, frame sequence or PTS. Never fabricate absent timestamps/frequency axes. The existing scalar plugin API v1's C++ layout compatibility must be decided (retain proven binary ABI or bump/reject old binaries) **before invasive header changes**.
 
-The seven architectural choices **D1–D7 remain OPEN for maintainer approval** in [the design decision register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required). The [bounded task DAG](ARRAY_VECTOR_CODEX_WORKPLAN.md) is a proposed delivery plan, not authorization for ABI or semantics changes. FFT/PSD requires an independent DFT/PSD oracle and audited backend/SDK; Studio must reject incompatible ordinary **and observer** array port shapes/formats. No G1/V, G4/W, G4/V or G4/P gate is closed by this documentation change.
+The seven architectural choices **D1–D7 are accepted** (see [the design decision register](ARRAY_SIGNALS_ZERO_COPY_DESIGN.md#open-decision-register--explicit-maintainer-approval-required)); AV00–AV18 are merged. FFT/PSD requires an independent DFT/PSD oracle and audited backend/SDK; Studio must reject incompatible ordinary **and observer** array port shapes/formats. No G1/V, G4/W, G4/V or G4/P gate is closed by this documentation change.
 
 ## Acceptance gates
 
@@ -295,7 +295,7 @@ These are **not** requests to reimplement existing functionality:
 | Area | Existing scope and evidence |
 | --- | --- |
 | Indexed serial dispatch and nested-schema flattening | [Runtime performance record](RUNTIME_PERFORMANCE_ARCHITECTURE.md), [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024) |
-| Numerical integration and feedback research | [N0](NUMERICAL_FEEDBACK_RESEARCH_N0.md), [Phase 1](NUMERICAL_FEEDBACK_RESEARCH_REPORT.md), [Phase 2](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md), [Phase 3](NUMERICAL_INTEGRATION_PHASE3_REPORT.md), [production coupled contract](COUPLED_INTEGRATION.md) |
+| Numerical integration and feedback research | N0, Phase 1, Phase 2, Phase 3, [production coupled contract](COUPLED_INTEGRATION.md) |
 | Exact rates, supported numeric formats and explicit conversions | [Rate model](../../doc/S7_Sample_Rate_Model.md), [0.1.2 baseline](RELEASE_0.1.2_NOTES.md) |
 | Typed transport, frame services and cross-language fixtures | [Frame transport](FRAME_TRANSPORT.md), [frame elements](FRAME_ELEMENTS.md), [interoperability](../../doc/S7_Frame_Interoperability.md) |
 | Audio/SDR hardware owners and initial evidence | [Hardware I/O](HARDWARE_IO.md), [live tests](HARDWARE_IO_LIVE_TESTS.md) |
@@ -313,7 +313,7 @@ production subset is explicitly limited by
 [COUPLED_INTEGRATION.md](COUPLED_INTEGRATION.md) and
 [INTEGRATORS.md](INTEGRATORS.md). No new solver, general TPT implementation or
 feedback-settling algorithm is a 0.2.0 release gate. The original assignment
-and its experiment matrix remain in Git history; the [N0 contract](NUMERICAL_FEEDBACK_RESEARCH_N0.md)
+and its experiment matrix remain in Git history; the N0 contract
 and subsequent reports are the canonical experiment records.
 
 ## Deferred work and exclusions

@@ -423,7 +423,7 @@ for plot and trajectory controls.
 - **XY points or FFT averages disappear after changing tabs:** analysis history
   restarts after inactivity. Acquisition retains its bounded raw window independently.
 
-See [Preview limits](qrc:/s7studio/help/docs/RELEASE_0.1.0.md) for the qualified
+See [Preview limits](qrc:/s7studio/help/docs/RELEASE_0.1.2_NOTES.md) for the qualified
 Linux platform and deferred work. **Help → About S7 Studio** lists the author,
 contributors, software version, build details and licences. Include build
 details, reproduction steps and relevant errors in an

@@ -126,7 +126,7 @@ must reduce maximum angle error by 70–130 times (second-order convergence);
 relative energy error must remain below `1e-8`. See the examples README for
 measured results and reproduction commands.
 
-The [Phase 3 real-graph comparison](NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
+The Phase 3 real-graph comparison
 executes Euler substeps and two-stage Gauss–Legendre through a research harness.
 The production methods above implement the same equations through the runtime;
 the Phase 3 harness remains research code. The comparison records cases where

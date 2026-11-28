@@ -141,8 +141,8 @@ Do not silently enlarge 0.2.0's delivery gates when an experiment succeeds.
 
 ## Whole-frame VideoSource/VideoSink
 
-The original [video plan](VIDEO_IO_PLAN.md) proposed scalar pixel streams.
-Its [numeric V0 spike](VIDEO_IO_SPIKE.md) is historical cost evidence; the
+The original video plan proposed scalar pixel streams.
+Its numeric V0 spike is historical cost evidence; the
 [frame-oriented direction](VIDEO_IO_FRAME_DESIGN.md) supersedes a per-pixel
 production execution contract. [Full HD FFmpeg measurements](VIDEO_IO_FULL_HD.md)
 report synthetic 1080p at nominal 30 fps and real 720p camera capture upscaled

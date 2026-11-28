@@ -97,7 +97,7 @@ using the OS sound system. Their device clocks are independent rate domains
 that drift against UTC and each other, locally and across nodes. Pacing by a
 device clock, drift-tracking resampling, networked audio streams and feedback
 across rate domains are open research, recorded in
-[open problems](OPEN_PROBLEMS.md#ratedt-inference-and-validation--implemented-multi-rate-execution-deferred);
+[open problems](OPEN_PROBLEMS.md#simulation-and-rate-domains);
 a rate-domain scheduler interacts with any worker-pool design above.
 
 ## 0.2.0 boundary

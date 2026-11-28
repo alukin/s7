@@ -44,3 +44,7 @@ tmp/
 # Java/Rust/other package targets in nested modules
 **/target/
 
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -3,7 +3,7 @@
 
 Run from s7l2:
 MPLCONFIGDIR=/tmp/s7-mpl python3 -B tools/plot_numerical_integration_phase3.py \
-  --input build-release/s7tests/phase3 --compact docs/NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json
+  --input build-release/s7tests/phase3 --compact build-release/s7tests/phase3/summary.json
 """
 
 from __future__ import annotations
@@ -295,7 +295,7 @@ def compact(rows: list[dict], directory: Path) -> dict:
                                        solver="damped finite-difference Newton, 12 iterations max"),
                     tolerances=dict(solver_atol=1e-13, solver_rtol=1e-13,
                                     regression="see C++ smoke test assertions"),
-                    reproduce="cmake --build build-release --target s7tests_numerical_integration_research && ./build-release/s7tests/s7tests_numerical_integration_research build-release/s7tests/phase3 && MPLCONFIGDIR=/tmp/s7-mpl python3 -B tools/plot_numerical_integration_phase3.py --input build-release/s7tests/phase3 --compact docs/NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json",
+                    reproduce="cmake --build build-release --target s7tests_numerical_integration_research && ./build-release/s7tests/s7tests_numerical_integration_research build-release/s7tests/phase3 && MPLCONFIGDIR=/tmp/s7-mpl python3 -B tools/plot_numerical_integration_phase3.py --input build-release/s7tests/phase3 --compact build-release/s7tests/phase3/summary.json",
                     notes="C++ stage execution is primary; Python computes figures and compact summaries from CSV/JSON. Timings are five-repeat medians of step-only Release loops.")
     return dict(metadata=metadata, case_count=len(rows),
                 failed_cases=[dict(model=r["model"], h=r["h"], method=r["method"], failure=r["failure"])
@@ -306,7 +306,7 @@ def compact(rows: list[dict], directory: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("build-release/s7tests/phase3"))
-    parser.add_argument("--compact", type=Path, default=Path("docs/NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json"))
+    parser.add_argument("--compact", type=Path, default=Path("build-release/s7tests/phase3/summary.json"))
     args = parser.parse_args()
     rows = json.loads((args.input/"results.json").read_text())["cases"]
     plot_poles(args.input)

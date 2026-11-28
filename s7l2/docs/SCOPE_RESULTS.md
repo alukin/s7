@@ -173,5 +173,4 @@ details on live, imported and missing-provenance recordings.
 Supplied probe units are frozen in run provenance and saved in Scope channel
 metadata as `unit`. Imported comparison legends retain those annotations.
 Units affect labels only; samples are not converted. A shared axis containing
-different or missing units is explicitly identified. See the
-[visual usability audit](usability/2026-10-21/AUDIT.md) for measured GUI evidence.
+different or missing units is explicitly identified.

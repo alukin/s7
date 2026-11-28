@@ -344,7 +344,7 @@ the implementation resolves the confirmed paths and verifies the example at
 Verification: 10 affected module entries and all four GUI suites pass, with 66
 workflow cases and no skips. Local rendered checks show a smooth zoomed sine
 and a fully visible numeric field beside the knob. The complete recorded
-increment and limits are in [the release plan](RELEASE_0.1.1.md).
+increment and limits are in the release plan.
 
 The broader proposed Rigol control redesign above remains a separate backlog.
 The following numbered observations are retained as the original requirements.
@@ -427,5 +427,5 @@ visual refinements, the affected observer workflows passed 9/9 and exact
 value/trigger/cursor tests passed 15 cases. Final light/dark layout checks passed
 at 100%, 150% and 200%, using 1024×768 and 1440×900 logical sizes. Windows
 cross-build and Wine Studio smoke passed. Detailed scope and platform limits are
-recorded in [the release plan](RELEASE_0.1.1.md). Captures remain outside Git in
+recorded in the release plan. Captures remain outside Git in
 `/tmp/s7-controls-final-{100,150,200}`.
