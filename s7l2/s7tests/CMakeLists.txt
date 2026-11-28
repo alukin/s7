@@ -93,6 +93,12 @@ target_compile_definitions(s7tests_education_am PRIVATE S7_SP14_DIAGRAM="${PROJE
 add_test(NAME s7tests_education_am COMMAND s7tests_education_am)
 set_tests_properties(s7tests_education_am PROPERTIES TIMEOUT 30)
 
+# The nested full double pendulum against an independent forward-Euler reference.
+s7_add_test_executable(s7tests_double_pendulum_full_smoke double_pendulum_full_smoke.cpp)
+target_link_libraries(s7tests_double_pendulum_full_smoke PRIVATE s7core)
+add_test(NAME s7tests_double_pendulum_full_smoke COMMAND s7tests_double_pendulum_full_smoke
+    ${PROJECT_SOURCE_DIR}/examples/double_pendulum_full.s7diagram)
+
 # Every general example loads, validates, compiles and steps headlessly.
 s7_add_test_executable(s7tests_all_examples_smoke all_examples_smoke.cpp)
 target_link_libraries(s7tests_all_examples_smoke PRIVATE s7core s7net)

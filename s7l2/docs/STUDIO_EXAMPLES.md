@@ -44,8 +44,12 @@ are explicit integrator and function/state networks.
 - [3D helix](../examples/3int_helix_phase_trajectory.md): add a steadily rising
   third state. Run 10 seconds at 1 or 10 kHz, then use XY/XZ/YZ and 3D views.
 - `double_pendulum_small_angle.s7diagram` and `double_pendulum_full.s7diagram`:
-  top-level coupled/fully nonlinear pendulum demonstrations. Use the documented
-  family below for bounded reference comparisons; these standalone demos are
+  top-level coupled/fully nonlinear pendulum demonstrations. The full model
+  keeps its four state integrators at the top and builds the angle functions,
+  the shared denominator and each acceleration in nested subsystems
+  (double-click one to open it); `s7tests_double_pendulum_full_smoke` checks it
+  against an independent forward-Euler integration. Use the documented family
+  below for bounded reference comparisons; these standalone demos are
   experimental.
 
 ## Reference and integrator laboratories

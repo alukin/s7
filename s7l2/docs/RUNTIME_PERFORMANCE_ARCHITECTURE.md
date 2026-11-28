@@ -437,8 +437,11 @@ they are not release performance targets.
 
 ## Representative diagram: `double_pendulum_full`
 
-The saved diagram has 39 elements and 58 connections: four Euler integrators
-are causal memory, and 35 elements form the direct-feedthrough DAG. Ignoring
+The measurements below used the earlier flat layout: 39 elements and 58
+connections, where four Euler integrators are causal memory and 35 elements
+form the direct-feedthrough DAG. The diagram now builds the same arithmetic in
+four nested subsystems; flattened, it adds eight unit-Gain pass-throughs (47
+elements) and produces bitwise identical states. Ignoring
 the integrator edges that cross a step boundary, this DAG has nine longest-path
 levels, with at most six elements in one level. The two acceleration paths
 split and rejoin, so their operations can overlap when their inputs are ready;
