@@ -8,8 +8,8 @@
 
 namespace s7::audio {
 using namespace hardware;
+void initialize_pipewire() { static std::once_flag once; std::call_once(once,[]{ pw_init(nullptr,nullptr); }); }
 namespace {
-void init() { static std::once_flag once; std::call_once(once,[]{ pw_init(nullptr,nullptr); }); }
 class PwStreamOwner final : public detail::CallbackStream {
 public:
     explicit PwStreamOwner(const Request& r) : CallbackStream(detail::audio_descriptor(r)) {
@@ -19,7 +19,7 @@ public:
             if (key!="capture_sink" || (value!="true" && value!="false") || r.direction!=Direction::Capture)
                 throw std::invalid_argument("PipeWire options are boolean capture_sink on capture and underrun on playback");
         }
-        init();
+        initialize_pipewire();
         try {
             loop_=pw_thread_loop_new("s7-audio",nullptr);
             if (!loop_) throw std::runtime_error("PipeWire thread loop allocation failed");

@@ -153,14 +153,14 @@ Profile profile(const ExecutableGraph& g) {
             if (slot) throw std::invalid_argument("hardware run supports at most one capture and one playback boundary");
             slot=b;
         } else if (auto* source = dynamic_cast<CaptureBlockSource*>(e.get())) {
-            if (result.block_source) throw std::invalid_argument("hardware run supports only one IQ block source");
+            if (result.block_source) throw std::invalid_argument("hardware run supports only one block source");
             result.block_source=source;
         }
     }
     if (result.block_source) {
         if (result.primary || playback || g.domains.size()!=1 ||
             g.domains.front().rate!=*result.block_source->declared_rate())
-            throw std::invalid_argument("IQ block capture requires one hardware boundary and one block-rate domain");
+            throw std::invalid_argument("Block capture requires one hardware boundary and one block-rate domain");
         return result;
     }
     if (!result.primary) {
@@ -241,7 +241,7 @@ Run::Run(ExecutableGraph g) : block_(0) {
     const auto graph_rate=config.graph_profile().graph_rate;
     runtime_=std::make_unique<NodeRuntime>(std::move(g));
     runtime_->set_model_time_rate(graph_rate);
-    if (!config.block_source) block_=Buffer(r.block_frames*r.frame_bytes());
+    if (!config.block_source || r.channels.size()>1) block_=Buffer(r.block_frames*r.frame_bytes());
     if (audio_sink_) {
         const auto& audio=audio_sink_->request();
         audio_block_=Buffer(audio.block_frames*audio.frame_bytes());

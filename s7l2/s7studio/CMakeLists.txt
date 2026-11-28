@@ -398,7 +398,7 @@ s7_add_test_executable(s7studio_array_persistence_test tests/array_persistence_t
 target_sources(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp)
 target_include_directories(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
 target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
-target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers)
+target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers s7audio)
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
 set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

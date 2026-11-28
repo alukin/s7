@@ -18,11 +18,14 @@ zero-based positions. The runner uses no wall-clock throttle in addition to
 device pacing. Playback completion aborts pending output; the final accepted
 tail is not guaranteed to be presented.
 
-## Planned mono and stereo live spectrum
+## Mono and stereo live spectrum
 
-Choose a mono or stereo input in Studio before starting the run. The chooser
-lists available inputs reported by the selected audio backend, including
-PipeWire monitor sources where available, and shows their channel counts.
+Open [Live audio spectrum](live_audio_spectrum.s7diagram) in Studio with
+the audio and spectral plugins installed. Press **F5**, choose an audio
+input and **Mono** or **Stereo** in Run Configuration, and start the run.
+Double-click **Audio Spectrum** to open the viewer. Press **Shift+F5** to
+stop. The chooser lists inputs from the available audio backends, including
+PipeWire monitors, and shows channel counts when the backend reports them.
 
 Capture all selected channels in one stream. Each graph step publishes an
 `F32[N]` vector for each channel, covering the same sample positions. Run a

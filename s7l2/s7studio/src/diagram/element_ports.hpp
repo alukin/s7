@@ -13,12 +13,13 @@
 
 namespace s7studio::diagram {
 
-enum class ArrayObserverKind { None, Waterfall, VideoPlayer };
+enum class ArrayObserverKind { None, Waterfall, VideoPlayer, AudioSpectrum };
 
 [[nodiscard]] inline std::string_view arrayObserverType(ArrayObserverKind kind)
 {
     switch (kind) {
     case ArrayObserverKind::Waterfall: return "Waterfall";
+    case ArrayObserverKind::AudioSpectrum: return "AudioSpectrum";
     case ArrayObserverKind::VideoPlayer: return "VideoPlayer";
     case ArrayObserverKind::None: return {};
     }
@@ -27,6 +28,7 @@ enum class ArrayObserverKind { None, Waterfall, VideoPlayer };
 
 [[nodiscard]] inline ArrayObserverKind arrayObserverKind(const std::string_view type)
 {
+    if (type == "AudioSpectrum") return ArrayObserverKind::AudioSpectrum;
     if (type == "Waterfall") return ArrayObserverKind::Waterfall;
     if (type == "VideoPlayer") return ArrayObserverKind::VideoPlayer;
     return ArrayObserverKind::None;
@@ -35,6 +37,10 @@ enum class ArrayObserverKind { None, Waterfall, VideoPlayer };
 [[nodiscard]] inline QString arrayObserverPortProblem(ArrayObserverKind kind, const s7::ArrayDescriptor* shape)
 {
     switch (kind) {
+    case ArrayObserverKind::AudioSpectrum:
+        if (shape && shape->type() == s7::SignalType::F32 && shape->rank() == 2 &&
+            shape->extents()[0] <= 2 && shape->extents()[1] >= 2) return {};
+        return QStringLiteral("Audio Spectrum requires F32 [channels, bins] with one or two channels.");
     case ArrayObserverKind::Waterfall:
         if (shape && shape->type() == s7::SignalType::F32 && shape->rank() == 1) return {};
         return QStringLiteral("Waterfall requires an F32 spectrum vector.");

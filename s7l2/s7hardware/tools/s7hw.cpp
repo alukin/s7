@@ -73,7 +73,7 @@ int main(int argc,char** argv) {
             graph=s7::Compiler::compile(schema);
             const auto config=s7::hardware::graph_profile(*graph);
             if (frames % config.frames_per_step)
-                throw std::invalid_argument("--frames must be a whole number of IQ blocks");
+                throw std::invalid_argument("--frames must be a whole number of capture blocks");
             steps=frames/config.frames_per_step;
             if (mode=="--check") { std::cout<<"Graph and hardware execution profile valid; no hardware activated.\n"; return 0; }
         }

@@ -23,4 +23,13 @@ public:
 inline constexpr auto live_run_symbol = "s7_create_live_run_v1";
 using CreateLiveRun = LiveRun* (*)(ExecutableGraph&, Rate);
 
+struct AudioInputDevice {
+    std::string backend, selector, label;
+    unsigned channels{}; // Zero when the provider cannot report a channel count.
+    bool monitor{};
+};
+
+inline constexpr auto audio_inputs_symbol = "s7_audio_inputs_v1";
+using ListAudioInputs = void (*)(std::vector<AudioInputDevice>&);
+
 } // namespace s7::hardware

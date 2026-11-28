@@ -67,6 +67,7 @@ void registerBuiltinViewers(ViewerRegistry& registry)
     add(SurfaceWindow::viewerType(true));
     add(ResponseWindow::viewerType());
     add(TimeFrequencyWindow::viewerType());
+    add(arrayViewerType(diagram::ArrayObserverKind::AudioSpectrum));
     add(arrayViewerType(diagram::ArrayObserverKind::Waterfall));
     add(arrayViewerType(diagram::ArrayObserverKind::VideoPlayer));
 }

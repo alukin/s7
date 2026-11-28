@@ -59,10 +59,18 @@ extern "C" s7::hardware::LiveRun* s7_create_live_run_v1(s7::ExecutableGraph& gra
     return new PublicLiveRun(std::move(graph));
 }
 
+namespace s7::audio {
+std::vector<hardware::AudioInputDevice> capture_devices();
+}
+
+extern "C" void s7_audio_inputs_v1(std::vector<s7::hardware::AudioInputDevice>& devices) {
+    devices = s7::audio::capture_devices();
+}
+
 extern "C" const S7PluginInfo* s7_plugin_query() {
-    static const S7PluginInfo info{S7_PLUGIN_API_VERSION,2,"s7audio","0.1.0","S7 Project"}; return &info;
+    static const S7PluginInfo info{S7_PLUGIN_API_VERSION,3,"s7audio","0.1.0","S7 Project"}; return &info;
 }
 extern "C" const char* s7_plugin_manifest_json() {
-    return R"({"plugin_name":"s7audio","plugin_version":"0.1.0","author":"S7 Project","description":"Explicitly activated PortAudio and native PipeWire boundaries","element_count":2,"elements":["AudioSource","AudioSink"]})";
+    return R"({"plugin_name":"s7audio","plugin_version":"0.1.0","author":"S7 Project","description":"Explicitly activated PortAudio and native PipeWire boundaries","element_count":3,"elements":["AudioSource","AudioSink","AudioBlockSource"]})";
 }
 extern "C" void s7_register_elements(void* registry) { s7::audio::register_elements(*static_cast<s7::ElementRegistry*>(registry)); }

@@ -1,0 +1,32 @@
+{
+  "id": "live_audio_spectrum",
+  "dt": 0.042666666666666665,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {"runtime_seconds": -1},
+  "schema": {
+    "name": "live_audio_spectrum",
+    "elements": [
+      {"id": "capture", "type": "AudioBlockSource", "params": {
+        "backend": "pipewire", "device": "default", "channels": ["0"],
+        "frame_rate": [48000, 1], "block_frames": 2048, "queue_frames": 8192
+      }},
+      {"id": "psd", "type": "AudioBlockPSD", "params": {"components": 2048, "channels": 1}}
+    ],
+    "connections": [
+      {"from_element": "capture", "from_port": 0, "to_element": "psd", "to_port": 0}
+    ]
+  },
+  "diagram": {
+    "grid": {"step": 20, "mm_per_step": 5.291666666666667},
+    "nodes": [
+      {"id": "capture", "position": [8, 10]},
+      {"id": "psd", "position": [26, 10]},
+      {"id": "spectrum", "position": [44, 10], "observer": true, "type": "AudioSpectrum"}
+    ],
+    "wires": [
+      {"id": "audio_block", "from": {"port": ["capture", "out", 0]}, "to": {"port": ["psd", "in", 0]}, "bends": []},
+      {"id": "audio_psd", "from": {"port": ["psd", "out", 0]}, "to": {"port": ["spectrum", "in", 0]}, "bends": []}
+    ]
+  }
+}

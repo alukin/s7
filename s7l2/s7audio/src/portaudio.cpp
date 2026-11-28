@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "callback_stream.hpp"
+#include <s7/hardware_live_run.hpp>
 #include <portaudio.h>
 #include <charconv>
 #include <mutex>
@@ -103,5 +104,22 @@ public:
     }
 };
 }
+std::vector<AudioInputDevice> portaudio_inputs() {
+    Context context;
+    const auto count = Pa_GetDeviceCount();
+    if (count < 0) Context::check(count);
+    std::vector<AudioInputDevice> devices;
+    for (PaDeviceIndex i = 0; i < count; ++i) {
+        const auto* info = Pa_GetDeviceInfo(i);
+        if (info && info->maxInputChannels > 0) {
+            const auto* host = Pa_GetHostApiInfo(info->hostApi);
+            devices.push_back({"portaudio", std::to_string(i),
+                std::string(host ? host->name : "PortAudio") + ": " + info->name,
+                static_cast<unsigned>(info->maxInputChannels)});
+        }
+    }
+    return devices;
+}
+
 std::unique_ptr<Provider> portaudio_provider() { return std::make_unique<PortAudio>(); }
 } // namespace s7::audio

@@ -148,7 +148,7 @@ public:
     explicit Sink(Request, std::string_view name = "HardwareSink");
 };
 
-// A single-channel C32 capture device, with one complete IQ block per graph step.
+// One complete capture block per step. C32 IQ is rank one. F32 audio uses [channels, samples].
 class CaptureBlockSource : public ArrayElement {
 public:
     CaptureBlockSource(std::string_view name, Request, std::uint64_t source_id);

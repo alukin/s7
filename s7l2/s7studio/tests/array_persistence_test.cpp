@@ -7,13 +7,16 @@
 #include "local_schema_runner.hpp"
 #include "scene_serializer.hpp"
 #include "viewers/array_print.hpp"
+#include "viewers/line_plot_view.hpp"
 #include "viewers/video_frame.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "viewers/waterfall_history.hpp"
 #include "wire_type_labels.hpp"
 
+#include <s7/audio.hpp>
 #include <s7/builtin_element_registry.hpp>
+#include <s7/compiler.hpp>
 #include <s7/plugin_loader.hpp>
 #include <s7/schema_library.hpp>
 
@@ -29,6 +32,7 @@
 #include <QPainter>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLineSeries>
 #include <QPushButton>
 #include <QPrinter>
 #include <QTemporaryDir>
@@ -38,6 +42,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
+#include <numbers>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -562,6 +568,114 @@ void checkSavedReplay(const QString& diagramPath)
     saveViewerPdf(viewer->widget(), QStringLiteral("video-replay.pdf"));
 }
 
+class TestAudioStream final : public s7::hardware::Stream {
+public:
+    explicit TestAudioStream(const s7::hardware::Request& request) : Stream(describe(request)) {}
+
+private:
+    static s7::hardware::Descriptor describe(const s7::hardware::Request& request)
+    {
+        s7::hardware::Descriptor descriptor;
+        descriptor.actual = request;
+        return descriptor;
+    }
+
+    void do_start() override {}
+    void do_stop() noexcept override {}
+
+    s7::hardware::Transfer do_read(std::span<std::byte> output, std::size_t frames,
+                                   s7::hardware::Deadline, std::stop_token) override
+    {
+        const auto channels = descriptor().actual.channels.size();
+        // Exercise deinterleaving across multiple reads per committed block.
+        frames = std::min<std::size_t>(frames, 311);
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            for (std::size_t channel = 0; channel < channels; ++channel) {
+                const auto signal = static_cast<float>(std::sin(2 * std::numbers::pi *
+                    static_cast<double>((position_ + frame) % 48) * (channel == 0 ? 1 : 3) / 48));
+                std::memcpy(output.data() + (frame * channels + channel) * sizeof(float), &signal, sizeof(float));
+            }
+        }
+        position_ += frames;
+        return {frames, s7::hardware::Status::Ok, 0, {}};
+    }
+    std::size_t position_{};
+};
+
+class TestAudioProvider final : public s7::hardware::Provider {
+public:
+    std::string_view id() const noexcept override { return "audio-test"; }
+    std::vector<s7::hardware::DeviceInfo> devices() override { return {}; }
+    std::unique_ptr<s7::hardware::Stream> prepare(const s7::hardware::Request& request) override
+    {
+        return std::make_unique<TestAudioStream>(request);
+    }
+};
+
+void checkSavedAudioSpectrum()
+{
+    using namespace s7studio;
+    auto& registry = s7::ElementRegistry::instance();
+    s7::audio::register_elements(registry);
+    QFile file(QDir(QStringLiteral(S7_ARRAY_VIEW_EXAMPLES)).filePath("hardware/live_audio_spectrum.s7diagram"));
+    require(file.open(QIODevice::ReadOnly), "audio spectrum example is missing");
+    const auto bytes = file.readAll();
+    const auto document = DiagramDocument::fromJson(boost::json::parse(
+        std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size()))));
+    DiagramScene scene;
+    SceneSerializer{}.deserialize(document, scene);
+    QString typeError;
+    static_cast<void>(updateWireTypeLabels(scene, &typeError));
+    require(typeError.isEmpty(), typeError.toStdString());
+    require(NetModel(scene).observationConnections().size() == 1, "audio spectrum viewer binding is missing");
+
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    auto* viewer = manager.openObserver("AudioSpectrum", "spectrum");
+    require(viewer, "audio spectrum viewer did not open");
+    auto* plot = viewer->widget()->findChild<viewers::LinePlotView*>("audioSpectrum.plot");
+    require(plot, "audio spectrum plot is missing");
+    for (const int count : {2, 1}) {
+        auto model = document.runtimeSchema.as_object();
+        auto& elements = model.at("elements").as_array();
+        auto& source = elements[0].as_object().at("params").as_object();
+        source["backend"] = "audio-test";
+        source["channels"] = count == 2 ? array{"0", "1"} : array{"0"};
+        elements[1].as_object().at("params").as_object()["channels"] = count;
+        auto schema = s7::SchemaLibraryLoader::build_schema(model);
+        s7::hardware::Run run(s7::Compiler::compile(schema), [](std::string_view) {
+            return std::make_unique<TestAudioProvider>();
+        });
+
+        s7::ArrayPool::Retention reader;
+        auto mailbox = std::make_shared<s7::ArrayMailbox>();
+        manager.presentArrays({{"spectrum/spectrum", {ArrayObserverKind::AudioSpectrum, mailbox}}});
+        auto& runtime = run.runtime();
+        const auto stats = run.execute(2, std::chrono::milliseconds(100), {}, [&](std::uint64_t step) {
+            const auto* descriptor = runtime.array_output_descriptor("psd", 0);
+            require(descriptor && runtime.admit_array_output("psd", 0, reader, 1, descriptor->byte_size()),
+                    "audio spectrum admission failed");
+            auto sample = runtime.try_retain_array_output("psd", 0, reader);
+            if (!sample && sample.error() == s7::ArrayPoolError::Exhausted && mailbox->discard_pending())
+                sample = runtime.try_retain_array_output("psd", 0, reader);
+            require(sample && sample->value.sample_window && sample->value.sample_window->first_sample == (step - 1) * 2048,
+                    "audio PSD lost its common sample position");
+            mailbox->offer(std::move(*sample));
+            manager.refreshViews();
+        });
+        require(stats.status == s7::hardware::Status::Ok && stats.transferred_frames == 4096 &&
+                plot->series().size() == count, "audio spectrum displayed the wrong channel count");
+        for (int channel = 0; channel < count; ++channel) {
+            auto* series = plot->series().at(channel);
+            const auto points = series->points();
+            const auto peak = std::ranges::max_element(points, {}, [](const QPointF& point) { return point.y(); });
+            require(peak != points.end() && std::abs(peak->x() - (channel == 0 ? 1000 : 3000)) < 12 &&
+                    series->color() == QColor(channel == 0 ? "#2878d0" : "#d76b23") &&
+                    series->name() == (count == 1 ? "Mono" : (channel == 0 ? "Left" : "Right")),
+                    "audio peak, trace color or legend differs from the independent expectation");
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) try {
@@ -577,6 +691,7 @@ int main(int argc, char** argv) try {
         s7::PluginLoader loader;
         require(loader.load_plugin(plugin.toStdString(), s7::ElementRegistry::instance()), "cannot load spectral test plugin");
         check_saved_views(QStringLiteral("time_frequency/waterfall_psd.s7diagram"), true);
+        checkSavedAudioSpectrum();
     }
     if (const auto plugin = qEnvironmentVariable("S7_ARRAY_TEST_VIDEO_PLUGIN"); !plugin.isEmpty()) {
         s7::PluginLoader loader;

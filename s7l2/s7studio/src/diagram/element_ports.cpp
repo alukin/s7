@@ -79,7 +79,7 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         return {std::move(inputs), {}};
     }
     if (type == "TimeFrequency") return {{QStringLiteral("in")}, {}};
-    if (type == "Waterfall") return {{QStringLiteral("spectrum")}, {}};
+    if (type == "Waterfall" || type == "AudioSpectrum") return {{QStringLiteral("spectrum")}, {}};
     if (type == "VideoPlayer") return {{QStringLiteral("frame")}, {}};
     if (type == "FrequencyResponse") return {{QStringLiteral("input"), QStringLiteral("output")}, {}};
     if (type == "PhasePortrait") {

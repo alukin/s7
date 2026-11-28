@@ -568,6 +568,42 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "AudioSpectrum",
+      "display_name": "Audio Spectrum",
+      "description": "Shows mono or stereo power spectra as color-coded traces on shared axes.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "spectrum",
+          "description": "One-sided F32 spectrum [channels, bins]",
+          "type": "F32",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }
