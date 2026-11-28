@@ -5,12 +5,12 @@
 
 namespace s7studio::diagram {
 
-// Diagram file format, version 2 (docs/STUDIO_DIAGRAM_EDITOR.md, "Diagram
-// file format"). A diagram document is a runtime schema plus its layout:
+// Diagram file format (docs/STUDIO_DIAGRAM_EDITOR.md, "Diagram file
+// format"). It is not versioned before 0.2.0: saved diagrams are updated
+// with the format. A diagram document is a runtime schema plus its layout:
 //
 // {
 //   "document_kind": "s7.diagram",
-//   "diagram_version": 2,
 //   "id": "feedback_loop_demo",
 //   "description": "Purpose and notes for this diagram",
 //   "dt": 0.001,

@@ -54,7 +54,7 @@ def make(method):
             'Euler is a drift baseline, expected to FAIL the long-run accuracy budgets.\n'
             'Trapezoid solves the nonlinear endpoint jointly; reduce dt on nonconvergence.\n'
             'State after runtime step k is z[k-1], observation timestamp is k*dt.')
-    return {'id': name, 'dt': 0.001, 'document_kind': 's7.diagram', 'diagram_version': 2,
+    return {'id': name, 'dt': 0.001, 'document_kind': 's7.diagram',
             'sheet': {'orientation': 'landscape', 'width_mm': 420.0, 'height_mm': 210.0},
             'schema': {'name': name, 'elements': elements, 'connections': connections},
             'probes': [{'name': n, 'element': e, 'port': p, 'unit': u}

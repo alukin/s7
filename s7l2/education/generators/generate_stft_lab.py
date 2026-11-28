@@ -48,7 +48,7 @@ def make():
              '[Open SP11 student lab](qrc:/s7studio/help/education/labs/SP11-short-time-fourier/README.md)'
              f' · [MIT STFT lecture]({MIT})'
              ' · [S7 time–frequency guide](qrc:/s7studio/help/examples/time_frequency/README.md)')
-    return dict(id='sp11_short_time_fourier', document_kind='s7.diagram', diagram_version=2,
+    return dict(id='sp11_short_time_fourier', document_kind='s7.diagram',
                 dt=1/128, studio_run=dict(runtime_seconds=4, clear_scope_traces=True),
                 sheet=dict(orientation='landscape', width_mm=470, height_mm=390),
                 schema=dict(name='SP11 — When did that frequency happen?', dt=1/128,

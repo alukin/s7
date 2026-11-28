@@ -2,7 +2,6 @@
   "id": "waterfall_psd",
   "dt": 0.01,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "schema": {
     "name": "waterfall_psd",
     "elements": [

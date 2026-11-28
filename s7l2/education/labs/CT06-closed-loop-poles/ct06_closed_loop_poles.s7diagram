@@ -1,7 +1,6 @@
 {
   "id": "ct06_closed_loop_poles",
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "dt": 0.1,
   "studio_run": {
     "runtime_seconds": 32,

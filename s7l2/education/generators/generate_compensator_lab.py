@@ -19,7 +19,7 @@ def component(d,ident,kind,x,y,title):
         inner=Drawing()
         for e in schema['elements']:inner.element(e['id'],e['type'],e['params'],*positions[e['id']],e['id'])
         for c in schema['connections']:wire(inner,c['from_element'],c['to_element'],c['to_port'],output=c['from_port'])
-        schema['diagram_version']=2;schema['sheet']=dict(orientation='landscape',width_mm=480,height_mm=340)
+        schema['sheet']=dict(orientation='landscape',width_mm=480,height_mm=340)
         schema['diagram']=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=inner.nodes,wires=inner.wires,
             text_frames=[dict(id='lead_notes',position=[2,1],params=dict(text='u[n] = b u[n−1] + K (e[n] − a e[n−1]).\nTwo explicit memories, no actuator limiter. Gains a,b,K enter as signals.\nThis instance is drawn here; its reusable definition is in schema_elements.s7library.',width=1640,height=240,font_size=18))])
     d.element(ident,kind,{},x,y,title);d.elements[-1]['schema']=schema
@@ -58,7 +58,7 @@ def make():
            'Plotted signals use normalized unit 1; sample n is observed at Scope time (n+1)/10 s.  \n'
            '[Open CT08 student lab](qrc:/s7studio/help/education/labs/CT08-lead-lag/README.md)'
            f' · [MIT lead compensation]({MIT.format(25)}) · [MIT lag compensation]({MIT.format(14)})')
-    return dict(id='ct08_lead_lag',document_kind='s7.diagram',diagram_version=2,dt=.1,
+    return dict(id='ct08_lead_lag',document_kind='s7.diagram',dt=.1,
         studio_run=dict(runtime_seconds=64,clear_scope_traces=True),sheet=dict(orientation='landscape',width_mm=470,height_mm=485),
         schema=dict(name='CT08 — Lead/lag compensation and control effort',dt=.1,elements=d.elements,connections=d.connections),probes=[],
         diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,

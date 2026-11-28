@@ -57,8 +57,9 @@ def make():
              ' · [MIT convolution lesson](https://sigproc.mit.edu/_static/fall26/lectures/Unit-Sample_Response_and_Convolution-handout.pdf)'
              ' · [MIT block diagrams](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/)'
              ' · Original S7 exercise, not an official MIT resource.')
-    return dict(id='three_tap_fir', dt=1/300, document_kind='s7.diagram', diagram_version=2,
+    return dict(id='three_tap_fir', dt=1/300, document_kind='s7.diagram',
                 sheet=dict(orientation='landscape', width_mm=500, height_mm=360),
+                studio_run=dict(runtime_seconds=4, clear_scope_traces=True),
                 schema=dict(name='three_tap_fir', dt=1/300, elements=elements, connections=connections),
                 probes=[dict(name=name, element=ident, port=0, unit='V')
                         for name, ident in [('input', 'source'), ('filtered', 'filtered')]],

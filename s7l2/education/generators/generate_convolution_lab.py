@@ -64,7 +64,7 @@ def make():
              '[Open SP10 student lab](qrc:/s7studio/help/education/labs/SP10-circular-convolution/README.md)'
              f' · [MIT circular convolution]({MIT})'
              ' · [S7 convolution implementation](qrc:/s7studio/help/docs/CONVOLUTION.md)')
-    return dict(id='sp10_circular_convolution', document_kind='s7.diagram', diagram_version=2,
+    return dict(id='sp10_circular_convolution', document_kind='s7.diagram',
                 description='Original SP10 lab: linear/circular convolution, explicit padding and warm-up.',
                 dt=.125, studio_run=dict(runtime_seconds=2, clear_scope_traces=True),
                 sheet=dict(orientation='landscape', width_mm=660, height_mm=520),

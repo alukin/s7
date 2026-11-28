@@ -32,6 +32,8 @@ jobs:
           cmake --version
       - name: Check AI development tooling (Python-only)
         run: python3 -m unittest discover -s ../tools/ai/tests -v
+      - name: Check saved diagrams are in the current format
+        run: python3 tools/update_diagrams.py
       - name: Check licensing metadata
         run: |
           dnf install -y python3-pip

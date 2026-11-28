@@ -358,7 +358,6 @@ int main(int argc, char** argv)
         const auto innerDocument = SceneSerializer{}.serialize(inner, options);
         nested.schema = innerDocument.runtimeSchema;
         nested.schema.as_object()["diagram"] = innerDocument.diagram;
-        nested.schema.as_object()["diagram_version"] = kDiagramVersion;
         DiagramScene root;
         const auto node = root.addElement(nested, {40, 40});
         root.resizeElement(node, QSize(14, 9));
@@ -768,7 +767,6 @@ int main(int argc, char** argv)
             }
             return false;
         };
-        check(refusedField("diagram_version", 2.7) && refusedField("diagram_version", 1e20), "a fractional or huge diagram_version is refused");
         check(refusedField("probe_port", 1e20) && refusedField("probe_port", -1), "an invalid probe port is refused");
         check(refusedField("width_mm", 0) && refusedField("width_mm", 1e300), "an invalid page size is refused");
     }

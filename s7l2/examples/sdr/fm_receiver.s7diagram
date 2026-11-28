@@ -3,7 +3,6 @@
   "description": "Receive 88.7 MHz FM from an AD93xx radio through SoapySDR and play live 48 kHz stereo audio.",
   "dt": 1.4880952380952381e-06,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "studio_run": {
     "runtime_seconds": -1
   },

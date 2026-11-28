@@ -341,22 +341,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     if (progress) {
         progress(0);
     }
-    // A layout of another version is refused unless it lays nothing out
-    // (documents written by tools carry an empty one).
-    static const boost::json::object noLayout;
-    auto laysOut = [](const boost::json::object& layout) {
-        for (const char* key : {"nodes", "wires", "text_frames"}) {
-            if (const auto* list = layout.if_contains(key); list && list->is_array() && !list->as_array().empty()) {
-                return true;
-            }
-        }
-        return false;
-    };
-    if (document.diagramVersion != kDiagramVersion && laysOut(document.diagram)) {
-        throw error("diagram_version " + std::to_string(document.diagramVersion) + " is not supported (this Studio reads version " +
-                    std::to_string(kDiagramVersion) + "); open the plain runtime schema to lay it out again");
-    }
-    const auto& layout = document.diagramVersion == kDiagramVersion ? document.diagram : noLayout;
+    const auto& layout = document.diagram;
 
     // Elements and connections of the runtime schema.
     struct Model {

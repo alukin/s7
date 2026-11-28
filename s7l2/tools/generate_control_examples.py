@@ -53,7 +53,7 @@ class Diagram:
             self.wire(element, ident, port, channel, True)
 
     def save(self):
-        document = dict(id=self.name, dt=self.dt, document_kind='s7.diagram', diagram_version=2,
+        document = dict(id=self.name, dt=self.dt, document_kind='s7.diagram',
                         sheet=dict(orientation='landscape', width_mm=1000, height_mm=450),
                         schema=dict(name=self.name, dt=self.dt, elements=self.elements,
                                     connections=self.connections), probes=self.probes,

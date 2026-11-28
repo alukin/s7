@@ -41,7 +41,7 @@ class Diagram:
                 self.probes.append(probe)
 
     def save(self):
-        document = dict(id=self.name, dt=self.dt, document_kind='s7.diagram', diagram_version=2,
+        document = dict(id=self.name, dt=self.dt, document_kind='s7.diagram',
                         sheet=dict(orientation='landscape', width_mm=1000, height_mm=600),
                         schema=dict(name=self.name, dt=self.dt, elements=self.elements,
                                     connections=self.connections), probes=self.probes,

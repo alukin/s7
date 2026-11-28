@@ -92,7 +92,7 @@ def make(model, method):
              'Equations, units, experiments and limits: examples/linear/README.md.\n'
              'State at runtime step k represents (k-1)*dt; Scope labels k*dt.\n'
              'Experimental teaching model; manual Studio workflow not yet qualified.')
-    return dict(id=name, dt=.001, document_kind='s7.diagram', diagram_version=2,
+    return dict(id=name, dt=.001, document_kind='s7.diagram',
                 sheet=dict(orientation='landscape', width_mm=490, height_mm=210),
                 schema=dict(name=name, elements=elements, connections=connections), probes=probes,
                 diagram=dict(grid=dict(step=20, mm_per_step=5.291666666666667),

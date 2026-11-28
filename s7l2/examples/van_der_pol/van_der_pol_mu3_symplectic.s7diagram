@@ -2,7 +2,6 @@
   "id": "van_der_pol_mu3_symplectic",
   "dt": 0.001,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 1000,

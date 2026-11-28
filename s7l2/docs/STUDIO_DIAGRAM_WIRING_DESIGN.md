@@ -43,7 +43,6 @@ Status: implemented 2026-10-06 (phases 1–4). `STUDIO_DIAGRAM_EDITOR.md` descri
 ```json
 {
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "id": "feedback_loop_demo",
   "dt": 0.001,
   "sheet": { "orientation": "landscape", "width_mm": 297.0, "height_mm": 210.0 },

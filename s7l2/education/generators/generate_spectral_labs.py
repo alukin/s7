@@ -46,7 +46,7 @@ def make(lab):
            f'[Open {lab} student lab](qrc:/s7studio/help/education/labs/{slug}/README.md)'
            f' · [MIT teaching materials]({reading})'
            ' · [S7 spectrum guide](qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md)')
-    return dict(id=ident,dt=1/128,document_kind='s7.diagram',diagram_version=2,
+    return dict(id=ident,dt=1/128,document_kind='s7.diagram',
                 studio_run=dict(runtime_seconds=2,clear_scope_traces=True),
                 sheet=dict(orientation='landscape',width_mm=370,height_mm=335),
                 schema=dict(name=f'{lab} — {title}',dt=1/128,elements=d.elements,connections=d.connections),probes=[],

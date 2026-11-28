@@ -123,9 +123,6 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         doc.pageLayout = DiagramPageLayout::fromJson(it->value().as_object());
     }
     
-    if (auto it = root.find("diagram_version"); it != root.end() && it->value().is_number()) {
-        doc.diagramVersion = wholeNumber(it->value(), "diagram_version", std::numeric_limits<int>::max());
-    }
 
     if (auto it = root.find("diagram"); it != root.end() && it->value().is_object()) {
         doc.diagram = it->value().as_object();
@@ -182,13 +179,6 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         doc.runtimeSchema = json;
     }
     if (doc.runtimeSchema.is_object()) validateExposedPorts(doc.runtimeSchema.as_object());
-    // Filters in an older document were designed for its saved dt (ADR-022);
-    // record that rate so a run at another dt is refused, not misread. A
-    // document without a saved dt has no known design rate.
-    if (root.contains("dt") && doc.dt > 0) {
-        static_cast<void>(s7::record_design_rates(doc.runtimeSchema, doc.dt));
-    }
-    
     return doc;
 }
 
@@ -198,12 +188,16 @@ auto DiagramDocument::toJson() const -> boost::json::value {
     root["description"] = description.toStdString();
     root["dt"] = dt;
     root["document_kind"] = "s7.diagram";
-    root["diagram_version"] = kDiagramVersion;
     root["sheet"] = pageLayout.toJson();
     if (!runConfiguration.empty()) root["studio_run"] = runConfiguration;
     
     if (runtimeSchema.is_object()) {
-        root["schema"] = runtimeSchema;
+        // Rate-designed elements (FirFilter, IirFilter) save the rate their
+        // coefficients were designed for: this document's dt (ADR-022), so a
+        // run at another dt is refused instead of misreading them.
+        auto schema = runtimeSchema;
+        if (dt > 0) static_cast<void>(s7::record_design_rates(schema, dt));
+        root["schema"] = std::move(schema);
     }
     
     if (!diagram.empty()) {

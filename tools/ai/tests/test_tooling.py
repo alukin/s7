@@ -20,7 +20,7 @@ import validate_diagram
 
 
 def example_document():
-    return {"document_kind": "s7.diagram", "diagram_version": 2,
+    return {"document_kind": "s7.diagram",
             "dt": 0.001,
             "schema": {
                 "name": "tiny", "elements": [

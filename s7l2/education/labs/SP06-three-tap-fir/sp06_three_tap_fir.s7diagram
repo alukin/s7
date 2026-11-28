@@ -2,11 +2,14 @@
   "id": "three_tap_fir",
   "dt": 0.0033333333333333335,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 500,
     "height_mm": 360
+  },
+  "studio_run": {
+    "runtime_seconds": 4,
+    "clear_scope_traces": true
   },
   "schema": {
     "name": "three_tap_fir",

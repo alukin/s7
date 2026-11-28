@@ -3,7 +3,6 @@
   "dt": 3,
   "description": "Original S7 lesson FN06; see its linked student guide.",
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "studio_run": {
     "runtime_seconds": 30,
     "clear_scope_traces": true

@@ -1,7 +1,6 @@
 {
   "id": "ct04_controller_comparison",
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "dt": 0.01,
   "studio_run": {
     "runtime_seconds": 16,
@@ -284,7 +283,6 @@
             }
           ],
           "dt": 0.01,
-          "diagram_version": 2,
           "sheet": {
             "orientation": "landscape",
             "width_mm": 390,

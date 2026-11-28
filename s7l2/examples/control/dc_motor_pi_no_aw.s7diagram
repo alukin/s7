@@ -2,7 +2,6 @@
   "id": "dc_motor_pi_no_aw",
   "dt": 0.001,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 1000,

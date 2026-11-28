@@ -48,7 +48,7 @@ def make():
            '[Open SP14 student lab](qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md)'
            ' · [MIT modulation](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/08c6a7bc7e56eda548248c354886dc37_MIT6_003F11_lec23.pdf)'
            ' · [MIT synchronous detection](https://ocw.mit.edu/courses/res-6-007-signals-and-systems-spring-2011/a774c49855ba6bfe7266943eb8b5bc41_MITRES_6_007S11_lec13.pdf)')
-    return dict(id='sp14_coherent_am',document_kind='s7.diagram',diagram_version=2,dt=h,
+    return dict(id='sp14_coherent_am',document_kind='s7.diagram',dt=h,
         studio_run=dict(runtime_seconds=4,clear_scope_traces=True),sheet=dict(orientation='landscape',width_mm=475,height_mm=365),
         schema=dict(name='SP14 — AM sidebands and coherent detection',dt=h,elements=d.elements,connections=d.connections),probes=[],
         diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,

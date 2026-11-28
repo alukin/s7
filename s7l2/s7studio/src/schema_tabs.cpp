@@ -41,9 +41,7 @@ boost::json::value SchemaTabs::payload(const Entry& entry) const {
 void SchemaTabs::reload(Entry& entry,const boost::json::value& schema) {
     const QSignalBlocker block(entry.editor->scene()->undoStack());
     if (schema.as_object().contains("diagram")) {
-        auto document=diagram::DiagramDocument::fromJson(schema);
-        if (!schema.as_object().contains("diagram_version")) document.diagramVersion=diagram::kDiagramVersion;
-        entry.editor->loadDocument(document);
+        entry.editor->loadDocument(diagram::DiagramDocument::fromJson(schema));
     } else entry.editor->loadRuntimeSchema(schema);
     entry.editor->scene()->undoStack()->clear();
     entry.editor->scene()->undoStack()->setClean();
@@ -96,7 +94,6 @@ bool SchemaTabs::commitAll() {
             schema["elements"]=document.runtimeSchema.as_object().at("elements");
             schema["connections"]=document.runtimeSchema.as_object().at("connections");
             schema["diagram"]=document.diagram;
-            schema["diagram_version"]=diagram::kDiagramVersion;
             schema["sheet"]=page.toJson();
             // Exposed bindings and all other schema fields survive unchanged.
             auto node=it->parent->scene()->elementNode(it->elementId);

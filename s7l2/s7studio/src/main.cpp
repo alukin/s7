@@ -361,7 +361,7 @@ int runWireTypes(int argc, char** argv)
 }
 
 // --normalize <in> <out>: loads a diagram (or lays a schema out) and writes
-// it as Studio saves it (format version 2).
+// it as Studio saves it.
 int runNormalize(int argc, char** argv)
 {
     QApplication app(argc, argv);
@@ -380,6 +380,8 @@ int runNormalize(int argc, char** argv)
     options.sheetHeightMm = loaded.pageLayout.heightMm;
     auto document = s7studio::diagram::SceneSerializer{}.serialize(*editor.scene(), options);
     document.id = loaded.id;
+    document.description = loaded.description;
+    document.runConfiguration = loaded.runConfiguration;
     document.runtimeNodes = loaded.runtimeNodes;
     document.streams = loaded.streams;
     // Root keys of the schema other than its elements and connections stay.

@@ -30,8 +30,10 @@ def is_index(value):
 def inspect_document(doc):
     """Format-level checks; only Studio can validate element metadata and geometry."""
     errors, notes = [], []
-    if doc.get("document_kind") != "s7.diagram" or doc.get("diagram_version") != 2:
-        errors.append("expected document_kind=s7.diagram and diagram_version=2")
+    if doc.get("document_kind") != "s7.diagram":
+        errors.append("expected document_kind=s7.diagram")
+    if "diagram_version" in doc:
+        errors.append("diagram_version is obsolete; run s7l2/tools/update_diagrams.py --write")
     schema = doc.get("schema")
     if not isinstance(schema, dict):
         return ["schema must be an object"], notes

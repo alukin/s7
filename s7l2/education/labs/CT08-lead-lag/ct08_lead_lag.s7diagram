@@ -1,7 +1,6 @@
 {
   "id": "ct08_lead_lag",
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "dt": 0.1,
   "studio_run": {
     "runtime_seconds": 64,
@@ -406,7 +405,6 @@
               "port": 0
             }
           ],
-          "diagram_version": 2,
           "sheet": {
             "orientation": "landscape",
             "width_mm": 480,
@@ -978,7 +976,6 @@
               "port": 0
             }
           ],
-          "diagram_version": 2,
           "sheet": {
             "orientation": "landscape",
             "width_mm": 480,

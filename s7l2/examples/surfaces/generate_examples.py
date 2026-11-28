@@ -64,7 +64,7 @@ for name,extent,nx,ny,formula in settings:
  wire('function',0,'surface',6)
  if complex_:wire('function',1,'surface',7)
  note=f'{formula}\nRun at 1 kHz for {math.ceil((nx*ny+1)/1000)} s; open surface. {nx} × {ny} samples, X fastest.\nCoordinates are dimensionless. Gray cells are missing; complex gray also marks undefined phase at zero.\nSchema definition is editable in the standard schema library. See this folder README.'
- doc=dict(id='surface_'+name,dt=.001,document_kind='s7.diagram',diagram_version=2,sheet=dict(orientation='landscape',width_mm=560,height_mm=220),schema=dict(name='surface_'+name,elements=elements,connections=connections),probes=[],diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=nodes,wires=wires,text_frames=[dict(id='notes',position=[2,2],params=dict(text=note,width=1900,height=190,font_size=10))]))
+ doc=dict(id='surface_'+name,dt=.001,document_kind='s7.diagram',sheet=dict(orientation='landscape',width_mm=560,height_mm=220),schema=dict(name='surface_'+name,elements=elements,connections=connections),probes=[],diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=nodes,wires=wires,text_frames=[dict(id='notes',position=[2,2],params=dict(text=note,width=1900,height=190,font_size=10))]))
  (folder/(name+'.s7diagram')).write_text(json.dumps(doc,indent=2,ensure_ascii=False)+'\n')
  refine(folder/(name+'.s7diagram'))
 library_path.write_text(json.dumps(library,indent=2,ensure_ascii=False)+'\n')

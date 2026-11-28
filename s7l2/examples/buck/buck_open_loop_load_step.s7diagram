@@ -2,7 +2,6 @@
   "id": "buck_open_loop_load_step",
   "dt": 1e-05,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 1000,

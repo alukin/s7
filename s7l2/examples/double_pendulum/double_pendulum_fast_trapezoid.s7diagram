@@ -2,7 +2,6 @@
   "id": "double_pendulum_fast_trapezoid",
   "dt": 0.001,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 650.0,

@@ -2,7 +2,6 @@
   "id": "video_patterns",
   "dt": 0.04,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "schema": {
     "name": "video_patterns",
     "elements": [

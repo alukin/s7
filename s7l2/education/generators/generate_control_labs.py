@@ -47,7 +47,6 @@ def controller(d, ident, kind, tracking, x, y):
                           'i_rate: weights [1, Kt]' if e['id']=='i_rate' else e['id'])
         for c in schema['connections']:
             wire(inner,c['from_element'],c['to_element'],c['to_port'],output=c['from_port'])
-        schema['diagram_version']=2
         schema['sheet']=dict(orientation='landscape',width_mm=390,height_mm=340)
         schema['diagram']=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=inner.nodes,wires=inner.wires,
             text_frames=[dict(id='pi_notes',position=[2,1],params=dict(text=f'PI instance: current error → proportional + integral → actuator.\nIntegral rate = Ki × error + Kt × (actual − unlimited); current Kt={tracking}/s.\nTo disable back-calculation, set the second i_rate weight to 0; return to the root tab before Run.',width=1360,height=230,font_size=18))])
@@ -118,7 +117,7 @@ def make(lab):
            'Source/state index n is observed at Scope time (n+1)/100 s. States update afterward; no extra feedback delay is needed.  \n'
            f'[Open {lab} student lab](qrc:/s7studio/help/education/labs/{slug}/README.md)'
            f' · [MIT PID lecture]({MIT_PID}) · [MIT windup notes]({MIT_WINDUP})')
-    return dict(id=name,document_kind='s7.diagram',diagram_version=2,dt=.01,
+    return dict(id=name,document_kind='s7.diagram',dt=.01,
                 studio_run=dict(runtime_seconds=seconds,clear_scope_traces=True),
                 sheet=dict(orientation='landscape',width_mm=530,height_mm=500),
                 schema=dict(name=f'{lab} — {title}',dt=.01,elements=d.elements,connections=d.connections),probes=[],

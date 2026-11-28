@@ -2,7 +2,6 @@
   "id": "sp07_filter_transfer",
   "dt": 0.015625,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "studio_run": {
     "runtime_seconds": 64,
     "clear_scope_traces": true

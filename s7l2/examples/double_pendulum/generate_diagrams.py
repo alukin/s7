@@ -85,7 +85,7 @@ def make(method, mode):
             + explanation[method] + '\n'
             'Normal frequencies: sqrt(g*(2-sqrt(2))), sqrt(g*(2+sqrt(2))). '
             'After step k, plotted state is z[k-1]; runtime timestamp is k*h. See README.md.')
-    return {'id': name, 'dt': 0.001, 'document_kind': 's7.diagram', 'diagram_version': 2,
+    return {'id': name, 'dt': 0.001, 'document_kind': 's7.diagram',
             'sheet': {'orientation': 'landscape', 'width_mm': 650.0, 'height_mm': 330.0},
             'schema': {'name': name, 'elements': elements, 'connections': connections},
             'probes': [{'name': n, 'element': e, 'port': p, 'unit': u}

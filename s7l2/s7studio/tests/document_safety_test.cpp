@@ -74,10 +74,9 @@ int main(int argc, char** argv) {
         choose(QMessageBox::Discard);
         window.openPath(input);
         require(window.currentDocument() == original && !window.documentModified(), "discard opens clean document");
-        // Parsing succeeds, but the layout version is rejected by the scene
-        // loader. An unsuccessful open must preserve the current document.
+        // Parsing succeeds, but the layout names an element the schema does
+        // not have. An unsuccessful open must preserve the current document.
         auto invalid = original.as_object();
-        invalid["diagram_version"] = 999;
         invalid["diagram"].as_object()["nodes"] = boost::json::array{
             boost::json::object{{"id", "ghost"}, {"position", boost::json::array{0, 0}}}};
         const auto invalidPath = dir.filePath("invalid.s7diagram");

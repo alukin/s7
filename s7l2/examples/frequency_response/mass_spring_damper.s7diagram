@@ -2,7 +2,6 @@
   "id": "impulse_mass_spring_damper",
   "dt": 0.0009765625,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 300,

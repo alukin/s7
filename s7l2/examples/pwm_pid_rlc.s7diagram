@@ -2,7 +2,6 @@
   "id": "pwm_pid_rlc",
   "dt": 1e-05,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
     "width_mm": 1100,
@@ -56,7 +55,8 @@
         "params": {
           "b0": 0.19900497512437812,
           "b1": -0.19900497512437812,
-          "a1": -0.9950248756218906
+          "a1": -0.9950248756218906,
+          "design_rate_hz": 100000.0
         }
       },
       {

@@ -52,7 +52,7 @@ def make(lab):
            f' · [MIT root locus]({MIT.format(11)}) · [MIT stability margins]({MIT.format(23)})')
     for node in d.nodes: node['position']=[.65*node['position'][0],.65*node['position'][1]+5]
     for w in d.wires:w['bends']=[[.65*x,.65*y+5] for x,y in w['bends']]
-    return dict(id=name,document_kind='s7.diagram',diagram_version=2,dt=.1,
+    return dict(id=name,document_kind='s7.diagram',dt=.1,
         studio_run=dict(runtime_seconds=seconds,clear_scope_traces=True),sheet=dict(orientation='landscape',width_mm=515,height_mm=455 if margins else 355),
         schema=dict(name=f'{lab} — {title}',dt=.1,elements=d.elements,connections=d.connections),probes=[],
         diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,

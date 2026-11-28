@@ -116,7 +116,7 @@ def make(lab):
              f'[Open {lab} student lab](qrc:/s7studio/help/education/labs/{slug}/README.md)'
              f' · [MIT teaching materials]({MIT.format("09" if lab == "FN04" else "04" if lab in ("CT01", "CT02") else "07")}) · [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)')
     return dict(id=ident, dt=h, description=f'Original S7 lesson {lab}; see its linked student guide.',
-                document_kind='s7.diagram', diagram_version=2,
+                document_kind='s7.diagram',
                 studio_run=dict(runtime_seconds=duration, clear_scope_traces=True),
                 sheet=dict(orientation='landscape', width_mm=sheet[0], height_mm=sheet[1]),
                 schema=dict(name=f'{lab} — {title}', dt=h, elements=d.elements, connections=d.connections),

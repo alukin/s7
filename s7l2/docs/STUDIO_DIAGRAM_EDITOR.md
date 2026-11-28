@@ -14,7 +14,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/diagram/diagram_routing.*`, `diagram_geometry.*` | Route validation, junction placement, preview and repair using the grid geometry shared by the editor |
 | `s7studio/src/diagram/net_model.*` | Connections read from the wire trees, wires that connect nothing, the runtime schema of the scene |
 | `s7studio/src/diagram/wire_router.*` | Orthogonal A* router on the grid |
-| `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ scene (format version 2); layered auto-layout for plain schemas |
+| `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ scene; layered auto-layout for plain schemas |
 | `s7studio/src/diagram_editor.*` | Widget hosting the scene and view, page frame (mm-based sheet), rulers, zoom; keys go to the scene first; emits node double-click signals |
 | `s7studio/src/element_requirements.*` | The plugins a schema's element types come from (`requires`); finds and loads them on diagram load and reports what is missing |
 | `s7studio/src/wire_type_labels.*` | Resolves the scene's types and labels the first wire of each net; marks wires that connect nothing. `s7studio --wire-types <file>` prints them, `S7_WIRE_TYPES_PNG=<png>` renders the result |
@@ -134,12 +134,11 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - Nodes → Deploy to Nodes…: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.
 - Nodes → Open Deployed Diagram…: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
 
-## Diagram file format (`.s7diagram`, version 2)
+## Diagram file format (`.s7diagram`)
 
 ```json
 {
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "id": "feedback_loop_demo",
   "dt": 0.001,
   "sheet": { "orientation": "landscape", "width_mm": 297.0, "height_mm": 210.0 },
@@ -161,7 +160,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - Coordinates and optional element sizes are whole grid steps (`grid.step` scene units each; scene units are 96 per inch, so a step is 5.29 mm on the sheet). Missing element sizes use the default. Text frame sizes are in scene units in their params.
 - A wire's `from` is an output port or a junction on another wire; `to` is an input port. `bends` are the bends placed by hand. Optional `route` points are the current routed path in grid coordinates and act as a cache; older diagrams without them remain valid and Studio routes their wires on load. Structurally invalid cached routes are rerouted.
 - On load the connections the wires make must equal `schema.connections`, otherwise loading fails naming the connection. A layout without `wires` is wired automatically (one trunk per output, further connections as branches); a document without `diagram` (a plain runtime schema) is also laid out by data flow (columns from inputs to outputs, rows by the mean row of the inputs).
-- A layout of another `diagram_version` is refused unless it is empty. `s7studio --normalize <in> <out>` loads a diagram or schema and writes it as Studio saves it.
+- The format is not versioned before 0.2.0, and Studio keeps no compatibility code for earlier layouts: when the format changes, `python3 s7l2/tools/update_diagrams.py --write` updates every saved diagram in the repository (without `--write` it lists the files that need it and exits 1). Saving records `design_rate_hz` on rate-designed elements from the document's `dt` (ADR-022). `s7studio --normalize <in> <out>` loads a diagram or schema and writes it as Studio saves it.
 - Deployment: each schema element may carry `node` (the node_uuid it runs on); the root keeps `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and `streams` (stream descriptors, so redeployments continue the streams). See `S7_Network_Wire_Protocol_v1.md`, section 12.1, items 1 and 6.
 
 ## Tests and tools

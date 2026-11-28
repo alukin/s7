@@ -1,7 +1,6 @@
 {
   "id": "sp10_circular_convolution",
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "description": "Original SP10 lab: linear/circular convolution, explicit padding and warm-up.",
   "dt": 0.125,
   "studio_run": {

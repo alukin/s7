@@ -106,6 +106,7 @@ PreparedRun prepareRunProvenance(const RunConfiguration& config) {
         {"model_sha256", hash(model)}, {"requested_steps", QString::number(config.ticks)},
         {"dt_seconds", config.dt}, {"rate", QJsonObject{{"numerator", QString::number(rate.numerator)}, {"denominator", QString::number(rate.denominator)}}},
         {"probes", probes}, {"initial_conditions", initial}, {"seeds", seeds}, {"element_versions", versions},
+        {"recording_overflow", QString::fromLatin1(recordingOverflowName(config.recordingOverflow))},
         {"software", QJsonObject{{"project_version", S7_BUILD_VERSION}, {"revision", S7_BUILD_REVISION},
             {"modified_sources", bool(S7_BUILD_DIRTY)}, {"compiler", S7_BUILD_COMPILER},
             {"qt_version", qVersion()}, {"platform", QSysInfo::buildAbi()},
@@ -146,8 +147,7 @@ RunConfiguration configurationFromProvenance(const QJsonObject& p) {
     }
     auto schema = json::parse(model.toStdString());
     if (!schema.is_object()) throw std::invalid_argument("Recorded model is not an object.");
-    // Absent in provenance written before D1: those runs recorded losslessly.
-    const auto overflow = p.value("recording_overflow").toString(QStringLiteral("lossless"));
+    const auto overflow = p.value("recording_overflow").toString();
     if (overflow != QStringLiteral("lossless") && overflow != QStringLiteral("drop"))
         throw std::invalid_argument("Invalid recorded recording_overflow.");
     return {0, std::move(schema), dt, static_cast<long>(steps), std::move(probes),

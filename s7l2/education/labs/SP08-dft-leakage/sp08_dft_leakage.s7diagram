@@ -2,7 +2,6 @@
   "id": "sp08_dft_leakage",
   "dt": 0.0078125,
   "document_kind": "s7.diagram",
-  "diagram_version": 2,
   "studio_run": {
     "runtime_seconds": 2,
     "clear_scope_traces": true

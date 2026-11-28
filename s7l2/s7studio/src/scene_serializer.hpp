@@ -22,7 +22,7 @@ struct SerializationOptions {
     double sheetHeightMm = 210.0;
 };
 
-// Diagram documents (format version 2, diagram_format.hpp) <-> DiagramScene.
+// Diagram documents (diagram_format.hpp) <-> DiagramScene.
 class SceneSerializer {
 public:
     [[nodiscard]] auto serialize(const DiagramScene& scene, const SerializationOptions& options) const -> DiagramDocument;

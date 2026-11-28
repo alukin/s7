@@ -79,7 +79,7 @@ def make(lab):
            f'[Open {lab} student lab](qrc:/s7studio/help/education/labs/{slug}/README.md)'
            f' · [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec{lecture}/)'
            ' · [S7 timing and integrators](qrc:/s7studio/help/docs/INTEGRATORS.md)')
-    return dict(id=ident,dt=1/rate,document_kind='s7.diagram',diagram_version=2,
+    return dict(id=ident,dt=1/rate,document_kind='s7.diagram',
                 studio_run=dict(runtime_seconds=seconds,clear_scope_traces=True),
                 sheet=dict(orientation='landscape',width_mm=sheet[0],height_mm=sheet[1]),
                 schema=dict(name=f'{lab} — {title}',dt=1/rate,elements=d.elements,connections=d.connections),probes=[],
