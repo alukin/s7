@@ -119,7 +119,7 @@ QString captureVisibleViews(const QWidget* root, ViewerPrintSnapshot& snapshot, 
     return {};
 }
 
-printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer)
+printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer, const QPageLayout& layout)
 {
     printing::PrintDocument document;
     document.name = snapshot.title;
@@ -152,6 +152,28 @@ printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, cons
         if (draw) draw(painter, QRectF(area.left(), top, area.width(), height));
     };
     document.pages.push_back(std::move(page));
+    if (!snapshot.appendix.isEmpty()) {
+        printing::PrintPage details;
+        details.title = snapshot.appendixTitle.isEmpty() ? snapshot.title : snapshot.appendixTitle;
+        details.subtitle = snapshot.title;
+        constexpr double kLine = 15;
+        const auto perPage = std::max(1, static_cast<int>(printing::contentArea(layout, details).height() / kLine));
+        for (qsizetype first = 0; first < snapshot.appendix.size(); first += perPage) {
+            auto next = details;
+            next.draw = [lines = snapshot.appendix.mid(first, perPage)](QPainter& painter, const QRectF& area) {
+                QFont font = painter.font();
+                font.setPointSizeF(8);
+                painter.setFont(font);
+                painter.setPen(Qt::black);
+                double y = area.top();
+                for (const auto& line : lines) {
+                    painter.drawText(QRectF(area.left(), y, area.width(), kLine), Qt::AlignLeft | Qt::AlignVCenter, line);
+                    y += kLine;
+                }
+            };
+            document.pages.push_back(std::move(next));
+        }
+    }
     return document;
 }
 
@@ -203,7 +225,7 @@ QToolButton* makePrintButton(QWidget* parent, const QString& objectPrefix, std::
             QMessageBox::information(parent, QStringLiteral("Print"), QStringLiteral("This viewer has nothing to print yet."));
             return std::nullopt;
         }
-        return [shot = *snapshot, footer = printing::standardFooter()](const QPageLayout&) { return viewerDocument(shot, footer); };
+        return [shot = *snapshot, footer = printing::standardFooter()](const QPageLayout& layout) { return viewerDocument(shot, footer, layout); };
     };
     const auto suggested = [pdfName] {
         const QSettings settings;

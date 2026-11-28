@@ -6,6 +6,7 @@
 #include "viewers/plot_print.hpp"
 
 #include <QStringList>
+#include <QToolButton>
 
 #include <functional>
 #include <optional>
@@ -15,7 +16,6 @@ class QIcon;
 class QImage;
 class QQuickWidget;
 class QMenu;
-class QToolButton;
 class QWidget;
 
 namespace s7studio::viewers {
@@ -29,6 +29,10 @@ struct ViewerPrintSnapshot {
     std::vector<PlotSnapshot> plots;  // stacked top to bottom
     // Raster pictures of views drawn on the GPU (Qt Quick 3D), below the plots.
     std::vector<QImage> images;
+    // Further lines printed on the following pages under `appendixTitle`
+    // (e.g. the identity and gaps of every Waterfall row).
+    QString appendixTitle;
+    QStringList appendix;
     // Why the view could not be captured; reported instead of printing.
     QString error;
     // Content other than plots (an image, a custom canvas); drawn below the plots.
@@ -44,8 +48,9 @@ struct ViewerPrintSnapshot {
 // A rendered picture of a Qt Quick scene; null when it is blank or failed.
 [[nodiscard]] QImage captureQuickScene(QQuickWidget& quick, double scale);
 
-// The printed document of a snapshot: one page, provenance header.
-[[nodiscard]] printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer);
+// The printed document of a snapshot: the view on the first page with its
+// provenance header, then any appendix lines paginated for `layout`.
+[[nodiscard]] printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer, const QPageLayout& layout);
 
 // The diagram name and file shown under each viewer printout's title; set
 // once by the main window.

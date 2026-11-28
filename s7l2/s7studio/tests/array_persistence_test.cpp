@@ -6,7 +6,8 @@
 #include "diagram_document.hpp"
 #include "local_schema_runner.hpp"
 #include "scene_serializer.hpp"
-#include "viewers/array_print.hpp"
+#include "printing/print_document.hpp"
+#include "viewers/viewer_print.hpp"
 #include "viewers/video_frame.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
@@ -102,15 +103,22 @@ void checkPdfError()
 {
     QTemporaryDir temporary;
     require(temporary.isValid(), "could not create a PDF error test directory");
-    const s7studio::viewers::ArrayPrintSnapshot page{QStringLiteral("test"), {}, {},
-        [](QPainter& painter, const QRect& bounds) { painter.fillRect(bounds, Qt::black); }};
-    require(!s7studio::viewers::saveArrayPdf(page, QDir(temporary.path()).filePath("missing/test.pdf")).isEmpty(),
+    s7studio::viewers::ViewerPrintSnapshot page;
+    page.title = QStringLiteral("test");
+    page.appendix = {QStringLiteral("row 1"), QStringLiteral("row 2")};
+    page.draw = [](QPainter& painter, const QRectF& bounds) { painter.fillRect(bounds, Qt::black); };
+    const s7studio::printing::DocumentBuilder build = [&page](const QPageLayout& layout) {
+        return s7studio::viewers::viewerDocument(page, QStringLiteral("footer"), layout);
+    };
+    const auto layout = s7studio::viewers::viewerPageLayout();
+    require(build(layout).pages.size() == 2, "the row appendix did not get its own page");
+    require(!s7studio::printing::savePdf(build, layout, QDir(temporary.path()).filePath("missing/test.pdf")).isEmpty(),
             "PDF export reported success for a missing destination directory");
     QPrinter printer;
     printer.setOutputFormat(QPrinter::PdfFormat);
     const auto path = QDir(temporary.path()).filePath("printer.pdf");
     printer.setOutputFileName(path);
-    require(s7studio::viewers::printArraySnapshot(page, printer).isEmpty() && QFileInfo(path).size() > 1000,
+    require(s7studio::printing::print(build, printer).isEmpty() && QFileInfo(path).size() > 1000,
             "Qt printer backend could not write the test page");
 }
 

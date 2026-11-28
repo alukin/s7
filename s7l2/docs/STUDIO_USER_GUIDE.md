@@ -171,8 +171,8 @@ changes the diagram, its undo history or a running model. A cancelled dialog
 writes nothing; an unwritable file or a printer failure is reported.
 
 **Viewers.** The Scope, Phase Portrait, 3D Phase Trajectory, Live
-Oscilloscope, Live Spectrum, Surface, Frequency Response and Time–Frequency
-viewers have a small printer button. A click opens the
+Oscilloscope, Live Spectrum, Surface, Frequency Response, Time–Frequency,
+Waterfall and Video Player viewers have a small printer button. A click opens the
 print preview of what the viewer shows at that moment; the button's arrow
 offers **Save as PDF…** (no preview) and **Page Setup…** (remembered for
 viewer printouts; the default is your printer's paper in landscape). Viewers

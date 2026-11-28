@@ -164,7 +164,7 @@ void checkPlot(const QString& out)
     snapshot.plots.push_back(plot);
     const auto pdf = out + QStringLiteral("/viewer.pdf");
     const auto layout = viewerPageLayout();
-    require(printing::savePdf([&](const QPageLayout&) { return viewerDocument(snapshot, QStringLiteral("footer")); }, layout, pdf).isEmpty(),
+    require(printing::savePdf([&](const QPageLayout&) { return viewerDocument(snapshot, QStringLiteral("footer"), layout); }, layout, pdf).isEmpty(),
             "viewer PDF failed");
     require(pdfPages(pdf) == 1, "viewer PDF page count");
     if (const auto text = pdfText(pdf); !text.isEmpty()) {
@@ -176,7 +176,7 @@ void checkPlot(const QString& out)
     }
 
     // The preview window: pages, PDF-only mode and a missing builder.
-    const printing::DocumentBuilder build = [&](const QPageLayout&) { return viewerDocument(snapshot, QStringLiteral("footer")); };
+    const printing::DocumentBuilder build = [&](const QPageLayout& used) { return viewerDocument(snapshot, QStringLiteral("footer"), used); };
     printing::PreviewDialog preview(build, layout, {});
     require(preview.pageCount() == 1, "preview page count");
     printing::PreviewDialog pdfOnly(build, layout, {}, printing::PreviewDialog::Mode::PdfOnly);

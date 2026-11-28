@@ -111,8 +111,9 @@ while the producer advances. Its status shows the frame dimensions and Gray8
 or RGB8 format. The saved test diagrams exercise the renderer and frame
 adapter. Array work plan
 
-Choose **Print…** in Waterfall or Video Player to save a PDF or select a
-printer. The viewer captures its displayed snapshot before opening the
+Click the printer button in Waterfall or Video Player to preview the print
+(then print or close), or use its arrow for **Save as PDF…** without a
+preview. The viewer captures its displayed snapshot before opening the
 dialog. You can use **Pause display** to select a particular frame before
 printing. Printing leaves the model running and retains a single owned
 viewer snapshot across both viewer types.

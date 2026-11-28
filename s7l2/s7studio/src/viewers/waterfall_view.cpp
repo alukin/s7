@@ -161,15 +161,16 @@ void WaterfallView::clear()
     plot_->setSnapshot({});
 }
 
-std::optional<ArrayPrintSnapshot> WaterfallView::printSnapshot() const
+std::optional<ViewerPrintSnapshot> WaterfallView::printSnapshot() const
 {
     const auto& snapshot = plot_->snapshot();
     if (snapshot.image.isNull() || !snapshot.axes) return std::nullopt;
     const auto& axes = *snapshot.axes;
     const auto first = std::ranges::find_if(snapshot.lines, [](const auto& row) { return row.has_value(); });
     const auto& scale = snapshot.scale;
-    ArrayPrintSnapshot page;
-    page.details = {
+    ViewerPrintSnapshot page;
+    page.appendixTitle = QStringLiteral("Waterfall row details");
+    page.notes = {
         QStringLiteral("Domain steps %1–%2 · %3 bins · Domain rate %4")
             .arg((*first)->domainStep).arg(snapshot.lines.back()->domainStep).arg(axes.bins)
             .arg(QString::fromStdString(axes.domainRate.to_string())),
@@ -189,22 +190,22 @@ std::optional<ArrayPrintSnapshot> WaterfallView::printSnapshot() const
             line += QStringLiteral(" · Source %1 / epoch %2 / sequence %3")
                 .arg(row->origin->source_id).arg(row->origin->epoch).arg(row->origin->sequence);
         }
-        page.rows.append(line);
+        page.appendix.append(line);
         if (row->skippedDomainSteps || row->sourceDiscontinuity) {
-            page.rows.append(QStringLiteral("     Gap before row · Skipped steps %1 · Source discontinuity %2")
+            page.appendix.append(QStringLiteral("     Gap before row · Skipped steps %1 · Source discontinuity %2")
                 .arg(row->skippedDomainSteps).arg(row->sourceDiscontinuity ? QStringLiteral("yes") : QStringLiteral("no")));
         }
         if (row->sampleWindow) {
             const auto number = [](std::optional<std::uint64_t> value) {
                 return value ? QString::number(*value) : QStringLiteral("unknown");
             };
-            page.rows.append(QStringLiteral("     First sample %1 · Valid samples %2 · Missing samples %3")
+            page.appendix.append(QStringLiteral("     First sample %1 · Valid samples %2 · Missing samples %3")
                 .arg(number(row->sampleWindow->first_sample), number(row->sampleWindow->valid_sample_count),
                      row->sampleWindow->missing_samples ? QStringLiteral("yes") : QStringLiteral("no")));
         }
     }
-    page.draw = [snapshot](QPainter& painter, const QRect& bounds) {
-        Plot::draw(painter, bounds, snapshot);
+    page.draw = [snapshot](QPainter& painter, const QRectF& bounds) {
+        Plot::draw(painter, bounds.toAlignedRect(), snapshot);
     };
     return page;
 }

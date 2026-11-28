@@ -166,7 +166,6 @@ add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
     src/viewers/array_viewer.cpp
-    src/viewers/array_print.cpp
     src/viewers/plot_print.cpp src/viewers/plot_print.hpp
     src/viewers/viewer_print.cpp src/viewers/viewer_print.hpp
     src/viewers/video_frame.cpp

@@ -121,8 +121,8 @@ Implemented in stages; the matrix stays open until every row has evidence.
 | **P04** | Implemented (Linux, Xvfb/llvmpipe) | 3D Phase Trajectory, Surface and the 3D tabs of Response/Time–Frequency print as an image of the Qt Quick 3D scene re-rendered at 3× its on-screen size; a blank capture is refused | `s7studio_gui_workflows` (`print3DTrajectory`) |
 | **P05** | Implemented (Linux) | Live Oscilloscope: the current tab (Time, Spectrum, Correlation, XY), snapshot time and acquisition state; Freeze picks the frame | `s7studio_gui_workflows` (`printViewers`) |
 | **P06** | Implemented (Linux) | Frequency Response (all tabs), Time–Frequency (map, trace, slice), Real/Complex Surface, Live Spectrum (vector analyzer picture on white paper) | `s7studio_plot_print`, `s7studio_live_spectrum_viewer` |
-| **P07** | Diagram and P02–P06 viewers | `src/printing/preview_dialog.*`: every print previews first; PDF export skips the preview; page setup, cancel and failure results | as P01, P02 |
-| **P08/P09** | Implemented separately | `src/viewers/array_print.*`; to move onto the shared page layer | `s7studio_array_persistence` |
+| **P07** | Diagram and all viewers | `src/printing/preview_dialog.*`: every print previews first; PDF export skips the preview; page setup, cancel and failure results | as P01, P02 |
+| **P08/P09** | Implemented (Linux) | Waterfall and Video Player on the shared page layer (`viewers/viewer_print.*`): icon print button, preview first, Pause display as freeze; Waterfall row identity and gaps paginate as an appendix | `s7studio_array_persistence`, `s7studio_array_persistence_spectral` |
 
 **Viewer plots** (`src/viewers/plot_print.*`, `viewer_print.*`): a
 `PlotSnapshot` copies a `LinePlotView`'s visible series, ranges, titles,
@@ -175,8 +175,28 @@ tile count at 200 % on A4 matches an independent count; a selection prints as
 "Selection"; a later edit leaves a built job's page unchanged; an empty job, an
 unwritable path and a 300 dpi device fail without a file or false success.
 
+### Test matrix (Linux, development checkpoint)
+
+Commands run from the build directory; GUI suites through
+`tools/run_gui_test.py` on a private Xvfb display (Mesa llvmpipe OpenGL).
+Record the candidate SHA, Qt version and platform when re-running on the
+release candidate.
+
+| ID | Automated check | Command | Checked |
+| --- | --- | --- | --- |
+| P01 | page count/size, element positions, PDF text incl. Greek/math, subsystems, tiling, selection, snapshot isolation; File menu PDF and preview | `ctest -R s7studio_diagram_print`; `s7studio_gui_workflows_test printDiagramToPdf` | PDF pages and rendered PNGs reviewed |
+| P02 | Scope visible range and whole run, decimation/completeness notes, axis titles | `s7studio_gui_workflows_test printViewers` | PDF reviewed |
+| P03 | plot snapshot, tick rules, colours, painting bounds | `ctest -R s7studio_plot_print` | PNG reviewed |
+| P04 | 3D trajectory PDF holds an embedded image of stated size | `s7studio_gui_workflows_test print3DTrajectory` | PDF reviewed |
+| P05 | live oscilloscope preview of the current tab with acquisition state | `s7studio_gui_workflows_test printViewers` | preview reviewed |
+| P06 | Live Spectrum freeze and paper picture; analysis views via the shared capture | `ctest -R s7studio_live_spectrum_viewer` | — |
+| P07 | preview in both modes, cancelled file dialog, unwritable path, 300 dpi device refusal, printer path | `ctest -R "s7studio_(diagram\|plot)_print"` | — |
+| P08/P09 | Waterfall and Video PDFs through the print button, cancel, appendix pagination, printer path | `ctest -R s7studio_array_persistence` | — |
+
 Not yet covered: physical printer output, Windows/Wine runs and installed
-package checks (acceptance items 5 and 6).
+package checks (acceptance items 5 and 6), and printing of the Surface,
+Response and Time–Frequency 3D tabs beyond the shared capture path exercised
+by the trajectory.
 
 ## Release decision and exclusions
 

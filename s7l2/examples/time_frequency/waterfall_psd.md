@@ -8,6 +8,6 @@ block is a complex tone of a quarter cycle per sample: its power is in the
 400 Hz bin. The horizontal axis shows frequency in hertz and the vertical
 axis shows model time.
 
-Use **Print… → Save as PDF…** to capture the displayed spectrum history,
+Click the viewer's printer button to preview and print, or use its arrow → **Save as PDF…** to capture the displayed spectrum history,
 including the selected palette and power reference. The following pages
 list the rows and any gaps.
