@@ -112,8 +112,7 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
         const auto *views = findChild<QTabWidget *>(QStringLiteral("response.views"));
         snapshot.title = QStringLiteral("Frequency response \u00B7 %1").arg(views ? views->tabText(views->currentIndex()) : QString());
         snapshot.notes << QStringLiteral("Gain reference %1.").arg(reference_->value());
-        snapshot.plots = visiblePlots(this);
-        if (snapshot.plots.empty()) return std::nullopt;
+        snapshot.error = captureVisibleViews(this, snapshot);
         return snapshot;
     }, [] { return QStringLiteral("frequency-response"); }));
     connect(save, &QPushButton::clicked, this, &ResponseWindow::exportResult);

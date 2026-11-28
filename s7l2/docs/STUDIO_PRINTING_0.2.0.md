@@ -118,10 +118,10 @@ Implemented in stages; the matrix stays open until every row has evidence.
 | **P01** | Implemented (Linux) | `src/diagram_print.*`, `src/diagram_print_dialog.*`; File → Print (preview first) / Export as PDF / Page Setup | `s7studio_diagram_print`, `s7studio_gui_workflows` (`printDiagramToPdf`) |
 | **P02** | Implemented (Linux) | Scope: visible range or whole run, redrawn from the recording at print resolution with decimation and completeness notes | `s7studio_gui_workflows` (`printViewers`) |
 | **P03** | Implemented (Linux) | Phase Portrait: the curve as shown | `s7studio_plot_print` (renderer) |
-| **P04** | Not started | Planned: high-resolution snapshots of Qt Quick 3D views | — |
+| **P04** | Implemented (Linux, Xvfb/llvmpipe) | 3D Phase Trajectory, Surface and the 3D tabs of Response/Time–Frequency print as an image of the Qt Quick 3D scene re-rendered at 3× its on-screen size; a blank capture is refused | `s7studio_gui_workflows` (`print3DTrajectory`) |
 | **P05** | Implemented (Linux) | Live Oscilloscope: the current tab (Time, Spectrum, Correlation, XY), snapshot time and acquisition state; Freeze picks the frame | `s7studio_gui_workflows` (`printViewers`) |
-| **P06** | 2D views only | Frequency Response (Bode, Nyquist, Nichols), Time–Frequency trace and slice; Live Spectrum, surfaces and maps not yet | `s7studio_plot_print` |
-| **P07** | Diagram and 2D viewers | `src/printing/preview_dialog.*`: every print previews first; PDF export skips the preview; page setup, cancel and failure results | as P01, P02 |
+| **P06** | Implemented (Linux) | Frequency Response (all tabs), Time–Frequency (map, trace, slice), Real/Complex Surface, Live Spectrum (vector analyzer picture on white paper) | `s7studio_plot_print`, `s7studio_live_spectrum_viewer` |
+| **P07** | Diagram and P02–P06 viewers | `src/printing/preview_dialog.*`: every print previews first; PDF export skips the preview; page setup, cancel and failure results | as P01, P02 |
 | **P08/P09** | Implemented separately | `src/viewers/array_print.*`; to move onto the shared page layer | `s7studio_array_persistence` |
 
 **Viewer plots** (`src/viewers/plot_print.*`, `viewer_print.*`): a
@@ -135,6 +135,19 @@ pauses acquisition. `s7studio_plot_print` checks tick steps, colour darkening,
 the copied snapshot (and that later view changes leave it alone), painting
 inside its area only, the viewer PDF text (title, notes, axis titles, legend,
 tick labels) and the preview window in both modes.
+
+**3D views** (`captureVisibleViews`): Qt Quick scenes outside line plots
+are captured with `QQuickItem::grabToImage` at three times their on-screen
+size (falling back to the widget framebuffer) and drawn aspect-correct with
+their size noted in the header. A capture that comes back a single colour is
+reported as an error rather than printed blank. Vector output for 3D scenes
+is not attempted.
+
+**Live Spectrum** paints its analyzer through one painter for screen and
+paper: on paper the background is white, LED colours are darkened and unlit
+segments are a faint tint. `s7studio_live_spectrum_viewer` checks that freeze
+holds the picture while samples arrive and that the paper picture is white
+with lit LEDs.
 
 Shared page layer (`src/printing/print_document.*`): every page has a
 provenance header (title, file, level or range, area and scale) and a footer

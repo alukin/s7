@@ -4,6 +4,7 @@
 #include "observation/step_aligner.hpp"
 #include "observation_viewer.hpp"
 #include "surface_plot.hpp"
+class QToolButton;
 class QLabel;
 namespace s7studio::viewers {
 class SurfaceWindow final : public QWidget, public ObservationViewer {
@@ -33,6 +34,7 @@ class SurfaceWindow final : public QWidget, public ObservationViewer {
     observation::StepAligner<8> aligner_;
     SurfacePlotView *plot_;
     QLabel *status_;
+    QToolButton *freeze_ = nullptr;
     QString error_;
     std::uint64_t dropped_ = 0;
     bool dirty_ = false;

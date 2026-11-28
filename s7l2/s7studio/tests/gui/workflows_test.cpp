@@ -1461,6 +1461,41 @@ private slots:
         QCOMPARE(pages, 1);
     }
 
+    // 3D printing (P04): the trajectory view prints as an embedded image
+    // captured from the Qt Quick 3D scene, stating its pixel size.
+    void print3DTrajectory() {
+        if (!graphicsAvailable_) QSKIP("OpenGL unavailable: Qt Quick 3D printing was not tested");
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/3int_helix_phase_trajectory.s7diagram"));
+        QString observerId;
+        for (const auto& node : scene()->elementNodes())
+            if (node->element().type == "PhaseTrajectory3D") observerId = QString::fromStdString(node->element().id);
+        QVERIFY(!observerId.isEmpty());
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* viewer = manager->openObserver("PhaseTrajectory3D", observerId); QVERIFY(viewer);
+        viewer->widget()->resize(900, 700); viewer->widget()->show();
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 2));
+        QTRY_COMPARE_WITH_TIMEOUT(completed.count(), 1, 20000);
+        for (auto* quick : viewer->widget()->findChildren<QQuickWidget*>()) QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        QTest::qWait(300);
+        QVERIFY(viewer->widget()->findChild<QToolButton*>("trajectory.freeze"));
+        auto* savePdf = viewer->widget()->findChild<QAction*>("trajectory.savePdf"); QVERIFY(savePdf);
+        const auto path = temporary_.filePath("trajectory.pdf");
+        QVERIFY(modalWorkflow([savePdf] { savePdf->trigger(); }, [&path](QDialog* file) { return selectFile(file, path); }));
+        QFile file(path); QVERIFY2(file.open(QIODevice::ReadOnly), "the 3D view was not printed");
+        const auto pdf = QString::fromLatin1(file.readAll());
+        QCOMPARE(pdf.count(QRegularExpression(QStringLiteral("/Type\\s*/Page(?![s\\w])"))), 1);
+        QVERIFY(pdf.contains(QRegularExpression(QStringLiteral("/Subtype\\s*/Image"))));
+        const auto tool = QStandardPaths::findExecutable("pdftotext");
+        if (!tool.isEmpty()) {
+            QProcess process; process.start(tool, {"-enc", "UTF-8", path, "-"}); process.waitForFinished(20000);
+            QVERIFY(QString::fromUtf8(process.readAllStandardOutput()).contains("3D view printed as a"));
+        }
+        if (const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR"); !directory.isEmpty())
+            QFile::copy(path, directory + "/trajectory.pdf");
+    }
+
     void spectrumReferenceExamples_data() {
         QTest::addColumn<QString>("example");
         QTest::newRow("three-bin-tones") << QStringLiteral("three_bin_tones");

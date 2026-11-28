@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "viewers/live_spectrum_window.hpp"
+#include "viewers/viewer_print.hpp"
 
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLinearGradient>
@@ -13,6 +15,7 @@
 #include <QRadioButton>
 #include <QSpinBox>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -27,11 +30,6 @@ constexpr double kPeakHoldSeconds = 1.0;     // peak caps wait, then drop
 constexpr double kPeakFallDbPerSecond = 20;
 constexpr double kCurvePeakFallDbPerSecond = 10;
 
-const QColor kBackground(10, 10, 12);
-const QColor kGrid(48, 52, 56);
-const QColor kText(150, 158, 165);
-const QColor kGreen(40, 225, 70), kYellow(255, 210, 40), kRed(255, 55, 40);
-
 QString hertz(double value)
 {
     const double magnitude = std::abs(value);
@@ -40,30 +38,43 @@ QString hertz(double value)
     return QString::number(value, 'g', 3);
 }
 
-// The painted analyzer; it only reads the window's display state.
-class SpectrumCanvas final : public QWidget {
-public:
-    explicit SpectrumCanvas(const LiveSpectrumDisplay& display, QWidget* parent) : QWidget(parent), display_(display)
-    {
-        setMinimumSize(480, 260);
-        setAttribute(Qt::WA_OpaquePaintEvent);
-    }
+// The analyzer drawing, on screen (dark instrument look) or on white paper.
+struct SpectrumPalette {
+    QColor background, grid, text, green, yellow, red, peakTrace, curveLine, fillTop, fillBottom;
+    bool paper = false;
+};
 
-protected:
-    void paintEvent(QPaintEvent*) override
+const SpectrumPalette kScreen{QColor(10, 10, 12), QColor(48, 52, 56), QColor(150, 158, 165), QColor(40, 225, 70),
+                              QColor(255, 210, 40), QColor(255, 55, 40), QColor(255, 140, 40, 170), QColor(150, 255, 170),
+                              QColor(80, 255, 120, 150), QColor(20, 80, 40, 60), false};
+const SpectrumPalette kPaper{Qt::white, QColor(215, 215, 215), QColor(40, 40, 40), QColor(0, 150, 45), QColor(205, 150, 0),
+                             QColor(205, 35, 25), QColor(215, 100, 0), QColor(0, 110, 40), QColor(0, 160, 60, 110),
+                             QColor(0, 160, 60, 25), true};
+
+class SpectrumPainter {
+public:
+    SpectrumPainter(const LiveSpectrumDisplay& display, const SpectrumPalette& palette) : display_(display), palette_(palette) {}
+
+    void paint(QPainter& painter, const QRectF& area) const
     {
-        QPainter painter(this);
-        painter.fillRect(rect(), kBackground);
-        const QRectF plot = QRectF(rect()).adjusted(46, 12, -12, -28);
-        if (plot.width() < 40 || plot.height() < 40) return;
-        drawScale(painter, plot);
-        if (display_.spectrum.frequencies.empty()) {
-            painter.setPen(kText);
-            painter.drawText(plot, Qt::AlignCenter, display_.message);
-            return;
+        painter.save();
+        painter.fillRect(area, palette_.background);
+        const QRectF plot = area.adjusted(46, 12, -12, -28);
+        if (plot.width() >= 40 && plot.height() >= 40) {
+            QFont font = painter.font();
+            font.setPointSize(8);
+            painter.setFont(font);
+            drawScale(painter, area, plot);
+            if (display_.spectrum.frequencies.empty()) {
+                painter.setPen(palette_.text);
+                painter.drawText(plot, Qt::AlignCenter, display_.message);
+            } else if (display_.style == LiveSpectrumDisplay::Style::Bars) {
+                drawBars(painter, plot);
+            } else {
+                drawCurve(painter, plot);
+            }
         }
-        if (display_.style == LiveSpectrumDisplay::Style::Bars) drawBars(painter, plot);
-        else drawCurve(painter, plot);
+        painter.restore();
     }
 
 private:
@@ -72,18 +83,23 @@ private:
         return std::clamp((decibels - display_.floorDb) / (display_.ceilingDb - display_.floorDb), 0.0, 1.0);
     }
 
-    void drawScale(QPainter& painter, const QRectF& plot) const
+    void drawScale(QPainter& painter, const QRectF& area, const QRectF& plot) const
     {
-        painter.setFont(QFont(font().family(), 8));
         const int step = display_.ceilingDb - display_.floorDb > 80 ? 20 : 10;
         for (int db = static_cast<int>(std::ceil(display_.floorDb / step)) * step; db <= display_.ceilingDb; db += step) {
             const double y = plot.bottom() - fraction(db) * plot.height();
-            painter.setPen(kGrid);
+            painter.setPen(palette_.grid);
             painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y));
-            painter.setPen(kText);
-            painter.drawText(QRectF(0, y - 8, plot.left() - 6, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(db));
+            painter.setPen(palette_.text);
+            painter.drawText(QRectF(area.left(), y - 8, plot.left() - area.left() - 6, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(db));
         }
-        painter.drawText(QRectF(0, plot.bottom() + 6, plot.left() - 6, 16), Qt::AlignRight | Qt::AlignVCenter, QStringLiteral("dBFS"));
+        painter.drawText(QRectF(area.left(), plot.bottom() + 6, plot.left() - area.left() - 6, 16), Qt::AlignRight | Qt::AlignVCenter,
+                         QStringLiteral("dBFS"));
+        if (palette_.paper) {
+            painter.setPen(QPen(palette_.grid.darker(140), 0.75));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(plot);
+        }
     }
 
     void drawBars(QPainter& painter, const QRectF& plot) const
@@ -103,17 +119,22 @@ private:
                 : std::clamp(static_cast<int>(fraction(display_.barPeaks[bar]) * segments) - 1, 0, segments - 1);
             for (int segment = 0; segment < segments; ++segment) {
                 const double level = (segment + 0.5) / segments;
-                const QColor colour = level < 0.65 ? kGreen : level < 0.85 ? kYellow : kRed;
+                const QColor colour = level < 0.65 ? palette_.green : level < 0.85 ? palette_.yellow : palette_.red;
                 const double y = plot.bottom() - (segment + 1) * segmentStep + (segmentStep - segmentHeight);
                 const bool on = segment + 0.5 <= lit;
-                if (on || segment == peak) painter.setBrush(segment == peak && !on ? colour.lighter(130) : colour);
-                else painter.setBrush(QColor(colour.red() / 7, colour.green() / 7, colour.blue() / 7));  // an unlit LED
+                if (on || segment == peak) {
+                    painter.setBrush(segment == peak && !on ? (palette_.paper ? colour.darker(130) : colour.lighter(130)) : colour);
+                } else if (palette_.paper) {
+                    // An unlit LED: a faint tint, light on paper.
+                    painter.setBrush(QColor((colour.red() + 7 * 255) / 8, (colour.green() + 7 * 255) / 8, (colour.blue() + 7 * 255) / 8));
+                } else {
+                    painter.setBrush(QColor(colour.red() / 7, colour.green() / 7, colour.blue() / 7));
+                }
                 painter.drawRect(QRectF(x, y, width, segmentHeight));
             }
         }
         // Frequency labels under a subset of bars.
-        painter.setPen(kText);
-        painter.setFont(QFont(font().family(), 8));
+        painter.setPen(palette_.text);
         const std::size_t every = std::max<std::size_t>(1, count / 10);
         for (std::size_t bar = 0; bar < count; bar += every) {
             const double centre = display_.iq || !display_.logFrequency
@@ -128,6 +149,7 @@ private:
     {
         const auto& spectrum = display_.spectrum;
         const auto& frequencies = spectrum.frequencies;
+        if (frequencies.size() < 2) return;
         const bool log = display_.logFrequency && !display_.iq;
         const double low = log ? std::max(spectrum.barLow.empty() ? 20.0 : spectrum.barLow.front(), frequencies[1])
                                : frequencies.front();
@@ -137,7 +159,6 @@ private:
             return plot.left() + t * plot.width();
         };
         // Frequency grid and labels.
-        painter.setFont(QFont(font().family(), 8));
         std::vector<double> ticks;
         if (log) {
             for (double decade = 1; decade <= high; decade *= 10)
@@ -147,9 +168,9 @@ private:
         }
         for (const double f : ticks) {
             const double x = xOf(f);
-            painter.setPen(kGrid);
+            painter.setPen(palette_.grid);
             painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
-            painter.setPen(kText);
+            painter.setPen(palette_.text);
             painter.drawText(QRectF(x - 32, plot.bottom() + 6, 64, 16), Qt::AlignCenter, hertz(f + display_.centreHz));
         }
         const auto trace = [&](const std::vector<double>& values) {
@@ -164,32 +185,62 @@ private:
             return path;
         };
         painter.setRenderHint(QPainter::Antialiasing);
+        painter.save();
+        painter.setClipRect(plot);
         if (!display_.curvePeak.empty()) {
-            painter.setPen(QPen(QColor(255, 140, 40, 170), 1.0));
+            painter.setPen(QPen(palette_.peakTrace, 1.0));
             painter.setBrush(Qt::NoBrush);
             painter.drawPath(trace(display_.curvePeak));
         }
         auto line = trace(display_.curve);
-        if (line.isEmpty()) return;
-        QPainterPath fill = line;
-        fill.lineTo(line.currentPosition().x(), plot.bottom());
-        fill.lineTo(line.elementAt(0).x, plot.bottom());
-        fill.closeSubpath();
-        QLinearGradient gradient(plot.topLeft(), plot.bottomLeft());
-        gradient.setColorAt(0, QColor(80, 255, 120, 150));
-        gradient.setColorAt(1, QColor(20, 80, 40, 60));
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(gradient);
-        painter.drawPath(fill);
-        painter.setPen(QPen(QColor(150, 255, 170), 1.3));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawPath(line);
+        if (!line.isEmpty()) {
+            QPainterPath fill = line;
+            fill.lineTo(line.currentPosition().x(), plot.bottom());
+            fill.lineTo(line.elementAt(0).x, plot.bottom());
+            fill.closeSubpath();
+            QLinearGradient gradient(plot.topLeft(), plot.bottomLeft());
+            gradient.setColorAt(0, palette_.fillTop);
+            gradient.setColorAt(1, palette_.fillBottom);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(gradient);
+            painter.drawPath(fill);
+            painter.setPen(QPen(palette_.curveLine, 1.3));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawPath(line);
+        }
+        painter.restore();
     }
 
+    const LiveSpectrumDisplay& display_;
+    const SpectrumPalette& palette_;
+};
+
+// The on-screen analyzer; it only reads the window's display state.
+class SpectrumCanvas final : public QWidget {
+public:
+    explicit SpectrumCanvas(const LiveSpectrumDisplay& display, QWidget* parent) : QWidget(parent), display_(display)
+    {
+        setMinimumSize(480, 260);
+        setAttribute(Qt::WA_OpaquePaintEvent);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        SpectrumPainter(display_, kScreen).paint(painter, QRectF(rect()));
+    }
+
+private:
     const LiveSpectrumDisplay& display_;
 };
 
 } // namespace
+
+void paintLiveSpectrum(QPainter& painter, const QRectF& area, const LiveSpectrumDisplay& display, bool paper)
+{
+    SpectrumPainter(display, paper ? kPaper : kScreen).paint(painter, area);
+}
 
 LiveSpectrumWindow::LiveSpectrumWindow(QString id) : id_(std::move(id))
 {
@@ -234,6 +285,28 @@ LiveSpectrumWindow::LiveSpectrumWindow(QString id) : id_(std::move(id))
     peakHold_->setChecked(true);
     controls->addWidget(peakHold_);
     controls->addStretch();
+    // Freeze holds the picture while the source keeps acquiring; print
+    // draws a copy of the frozen or current picture on white paper (P06).
+    freeze_ = makeFreezeButton(this, QStringLiteral("spectrum"));
+    controls->addWidget(freeze_);
+    controls->addWidget(makePrintButton(this, QStringLiteral("spectrum"), [this]() -> std::optional<ViewerPrintSnapshot> {
+        if (display_.spectrum.frequencies.empty()) return std::nullopt;
+        ViewerPrintSnapshot snapshot;
+        snapshot.title = windowTitle();
+        snapshot.notes << QStringLiteral("Live snapshot at %1%2; acquisition continues.")
+            .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")),
+                 freeze_->isChecked() ? QStringLiteral(" of the frozen display") : QString());
+        snapshot.notes << QStringLiteral("%1, %2 frequency axis, %3-point FFT (Hann), %4 Hz bins, amplitude in dBFS%5.")
+            .arg(display_.style == LiveSpectrumDisplay::Style::Bars ? QStringLiteral("%1 bars (strongest bin per band)").arg(display_.bars.size())
+                                                                    : QStringLiteral("curve"),
+                 display_.iq || !display_.logFrequency ? QStringLiteral("linear") : QStringLiteral("log"))
+            .arg(display_.spectrum.frequencies.size() > 1 ? (display_.iq ? display_.spectrum.frequencies.size() : (display_.spectrum.frequencies.size() - 1) * 2) : 0)
+            .arg(QString::number(display_.spectrum.binSpacing, 'g', 5),
+                 peakHold_->isChecked() ? QStringLiteral(", peak hold on") : QString());
+        if (!status_->text().trimmed().isEmpty()) snapshot.notes << status_->text().simplified();
+        snapshot.draw = [display = display_](QPainter& painter, const QRectF& area) { paintLiveSpectrum(painter, area, display, true); };
+        return snapshot;
+    }, [this] { return QStringLiteral("live-spectrum-%1").arg(id_); }));
 
     canvas_ = new SpectrumCanvas(display_, this);
     layout->addWidget(canvas_, 1);
@@ -341,7 +414,7 @@ void LiveSpectrumWindow::resetDisplay()
 
 void LiveSpectrumWindow::updateSpectrum()
 {
-    if (!source_ || !isVisible()) return;
+    if (!source_ || !isVisible() || (freeze_ && freeze_->isChecked())) return;
     const auto frame = source_->snapshot();
     if (!frame) return;
     if (!frame->error.isEmpty()) {

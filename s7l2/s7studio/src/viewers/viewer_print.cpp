@@ -6,6 +6,11 @@
 #include "viewers/line_plot_view.hpp"
 
 #include <QDir>
+#include <QEventLoop>
+#include <QQuickItem>
+#include <QQuickItemGrabResult>
+#include <QQuickWidget>
+#include <QTimer>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
@@ -66,6 +71,54 @@ std::vector<PlotSnapshot> visiblePlots(const QWidget* root)
     return plots;
 }
 
+QImage captureQuickScene(QQuickWidget& quick, double scale)
+{
+    QImage image;
+    const QSize target(static_cast<int>(quick.width() * scale), static_cast<int>(quick.height() * scale));
+    // Re-render the scene into a larger texture where Qt Quick allows it.
+    if (auto* root = quick.rootObject(); root && target.isValid()) {
+        if (const auto result = root->grabToImage(target)) {
+            QEventLoop loop;
+            QTimer timeout;
+            timeout.setSingleShot(true);
+            QObject::connect(result.data(), &QQuickItemGrabResult::ready, &loop, &QEventLoop::quit);
+            QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+            timeout.start(3000);
+            loop.exec();
+            image = result->image();
+        }
+    }
+    if (image.isNull()) image = quick.grabFramebuffer();
+    if (image.isNull()) return {};
+    // A single colour means nothing was rendered.
+    const auto first = image.pixel(0, 0);
+    for (int y = 0; y < image.height(); y += 3)
+        for (int x = 0; x < image.width(); x += 3)
+            if (image.pixel(x, y) != first) return image;
+    return {};
+}
+
+QString captureVisibleViews(const QWidget* root, ViewerPrintSnapshot& snapshot, double scale)
+{
+    snapshot.plots = visiblePlots(root);
+    std::vector<std::pair<QPoint, QQuickWidget*>> scenes;
+    for (auto* quick : root->findChildren<QQuickWidget*>()) {
+        if (!quick->isVisible() || quick->width() < 8 || quick->height() < 8) continue;
+        bool insidePlot = false;  // line plots print as vectors
+        for (auto* parent = quick->parentWidget(); parent && parent != root; parent = parent->parentWidget())
+            insidePlot |= qobject_cast<LinePlotView*>(parent) != nullptr;
+        if (!insidePlot) scenes.emplace_back(quick->mapTo(root, QPoint(0, 0)), quick);
+    }
+    std::ranges::sort(scenes, [](const auto& a, const auto& b) { return a.first.y() != b.first.y() ? a.first.y() < b.first.y() : a.first.x() < b.first.x(); });
+    for (const auto& [position, quick] : scenes) {
+        auto image = captureQuickScene(*quick, scale);
+        if (image.isNull()) return QStringLiteral("A 3D view could not be captured for printing (it rendered nothing).");
+        snapshot.notes << QStringLiteral("3D view printed as a %1 \u00D7 %2 pixel image.").arg(image.width()).arg(image.height());
+        snapshot.images.push_back(std::move(image));
+    }
+    return {};
+}
+
 printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer)
 {
     printing::PrintDocument document;
@@ -75,14 +128,25 @@ printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, cons
     page.title = snapshot.title;
     page.subtitle = printContext();
     page.notes = snapshot.notes;
-    page.draw = [plots = snapshot.plots, draw = snapshot.draw](QPainter& painter, const QRectF& area) {
-        const int count = static_cast<int>(plots.size()) + (draw ? 1 : 0);
+    page.draw = [plots = snapshot.plots, images = snapshot.images, draw = snapshot.draw](QPainter& painter, const QRectF& area) {
+        const int count = static_cast<int>(plots.size() + images.size()) + (draw ? 1 : 0);
         if (count == 0) return;
         constexpr double gap = 12;
         const double height = (area.height() - gap * (count - 1)) / count;
         double top = area.top();
         for (const auto& plot : plots) {
             paintPlot(painter, QRectF(area.left(), top, area.width(), height), plot);
+            top += height + gap;
+        }
+        for (const auto& image : images) {
+            const QRectF slot(area.left(), top, area.width(), height);
+            const QSizeF size = QSizeF(image.size()).scaled(slot.size(), Qt::KeepAspectRatio);
+            const QRectF target(slot.left() + (slot.width() - size.width()) / 2, slot.top() + (slot.height() - size.height()) / 2,
+                                size.width(), size.height());
+            painter.drawImage(target, image);
+            painter.setPen(QPen(QColor(0xa0, 0xa0, 0xa0), 0.5));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(target);
             top += height + gap;
         }
         if (draw) draw(painter, QRectF(area.left(), top, area.width(), height));
@@ -131,7 +195,11 @@ QToolButton* makePrintButton(QWidget* parent, const QString& objectPrefix, std::
     button->setPopupMode(QToolButton::MenuButtonPopup);
     const auto take = [parent, capture]() -> std::optional<printing::DocumentBuilder> {
         const auto snapshot = capture();
-        if (!snapshot || (snapshot->plots.empty() && !snapshot->draw)) {
+        if (snapshot && !snapshot->error.isEmpty()) {
+            QMessageBox::warning(parent, QStringLiteral("Print"), snapshot->error);
+            return std::nullopt;
+        }
+        if (!snapshot || (snapshot->plots.empty() && snapshot->images.empty() && !snapshot->draw)) {
             QMessageBox::information(parent, QStringLiteral("Print"), QStringLiteral("This viewer has nothing to print yet."));
             return std::nullopt;
         }

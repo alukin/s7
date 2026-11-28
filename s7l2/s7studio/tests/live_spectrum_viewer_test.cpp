@@ -6,7 +6,10 @@
 #include "analysis/live_spectrum.hpp"
 #include "viewers/live_spectrum_window.hpp"
 
+#include <QImage>
+#include <QPainter>
 #include <QRadioButton>
+#include <QToolButton>
 #include <QSpinBox>
 #include <QtTest>
 
@@ -143,6 +146,51 @@ private slots:
         QCOMPARE(audio.findChild<QSpinBox*>("spectrum.bars")->value(), 16);
         QCOMPARE(audio.display().floorDb, -70.0);
         QVERIFY(!audio.display().logFrequency);
+    }
+
+    // Freeze holds the picture while samples keep arriving; the printout
+    // paints a copy on white paper with lit LEDs in their colour bands.
+    void freezeAndPaperPicture()
+    {
+        viewers::LiveSpectrumWindow window(QStringLiteral("print"));
+        auto* freeze = window.findChild<QToolButton*>("spectrum.freeze");
+        QVERIFY(freeze && freeze->isCheckable() && window.findChild<QToolButton*>("spectrum.print"));
+        auto mono = std::make_shared<observation::LiveAcquisition>(2, 1.0 / 48000,
+            QVector<observation::LiveChannel>{{"left", "FS", "f32"}}, QJsonObject{}, 48000, 1);
+        window.attachLiveSource(mono);
+        const auto feed = [&](double cyclesPerSample, std::int64_t first) {
+            std::vector<std::int64_t> steps; std::vector<double> times, values;
+            for (std::int64_t n = first; n < first + 8192; ++n) {
+                steps.push_back(n); times.push_back(static_cast<double>(n) / 48000);
+                values.push_back(0.5 * std::cos(2 * std::numbers::pi * cyclesPerSample * static_cast<double>(n)));
+            }
+            mono->append(steps, times, values);
+        };
+        feed(1000.0 / 48000, 0);
+        window.show();
+        window.updateSpectrum();
+        QVERIFY(!window.display().spectrum.frequencies.empty());
+        const auto before = window.display().spectrum.barDecibels;
+        freeze->setChecked(true);
+        feed(8000.0 / 48000, 8192);
+        window.updateSpectrum();
+        QCOMPARE(window.display().spectrum.barDecibels, before);
+        freeze->setChecked(false);
+        window.updateSpectrum();
+        QVERIFY(window.display().spectrum.barDecibels != before);
+
+        QImage paper(900, 400, QImage::Format_ARGB32);
+        paper.fill(Qt::black);
+        {
+            QPainter painter(&paper);
+            viewers::paintLiveSpectrum(painter, QRectF(paper.rect()), window.display(), true);
+        }
+        QCOMPARE(paper.pixel(2, 2), qRgb(255, 255, 255));
+        int green = 0;
+        for (int y = 0; y < paper.height(); ++y)
+            for (int x = 0; x < paper.width(); ++x)
+                if (paper.pixel(x, y) == qRgb(0, 150, 45)) ++green;
+        QVERIFY2(green > 50, qPrintable(QString::number(green)));
     }
 };
 

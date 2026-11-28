@@ -170,8 +170,9 @@ Printing works on a copy of the diagram taken when the window opens: it never
 changes the diagram, its undo history or a running model. A cancelled dialog
 writes nothing; an unwritable file or a printer failure is reported.
 
-**Viewers.** The Scope, Phase Portrait, Live Oscilloscope, Frequency Response
-and Time–Frequency viewers have a small printer button. A click opens the
+**Viewers.** The Scope, Phase Portrait, 3D Phase Trajectory, Live
+Oscilloscope, Live Spectrum, Surface, Frequency Response and Time–Frequency
+viewers have a small printer button. A click opens the
 print preview of what the viewer shows at that moment; the button's arrow
 offers **Save as PDF…** (no preview) and **Page Setup…** (remembered for
 viewer printouts; the default is your printer's paper in landscape). Viewers
@@ -182,7 +183,8 @@ darkened. The header names the viewer and diagram and states the shown range,
 rates and any recording warnings. The Scope prints the visible range, or the
 whole run with **Print the Whole Run** in the arrow menu; it notes when traces
 show the minimum and maximum per print column rather than every sample.
-3D views print in a later step.
+3D views print as a high-resolution image of the scene (three times its
+on-screen size); the header states the image size.
 
 ## Running and observing
 

@@ -9,12 +9,15 @@
 #include <QWidget>
 
 class QButtonGroup;
+class QPainter;
+class QRectF;
 class QCheckBox;
 class QComboBox;
 class QLabel;
 class QRadioButton;
 class QSpinBox;
 class QTimer;
+class QToolButton;
 
 namespace s7studio::viewers {
 
@@ -31,6 +34,10 @@ struct LiveSpectrumDisplay {
     std::vector<double> curve, curvePeak;            // smoothed per-bin trace and its decaying peak (dB)
     QString message = QStringLiteral("Waiting for live samples");
 };
+
+// Paints the analyzer picture of `display` into `area`: the dark instrument
+// look on screen, or white paper with darkened colours for printing.
+void paintLiveSpectrum(QPainter& painter, const QRectF& area, const LiveSpectrumDisplay& display, bool paper);
 
 // A simple live spectrum observer in the style of hardware audio analyzers:
 // LED bar columns with falling peak caps, or a filled spectrum curve with a
@@ -83,6 +90,7 @@ private:
     QComboBox* fftSize_ = nullptr;
     QSpinBox* floor_ = nullptr;
     QCheckBox* peakHold_ = nullptr;
+    QToolButton* freeze_ = nullptr;
     QLabel* status_ = nullptr;
     QTimer* timer_ = nullptr;
     QElapsedTimer clock_;

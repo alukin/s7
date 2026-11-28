@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "phase_trajectory_3d_view_window.hpp"
+#include "viewers/viewer_print.hpp"
 #include "instrument_controls.hpp"
 
 #include "viewers/quick_support.hpp"
 
 #include <QCheckBox>
+#include <QToolButton>
 #include <QSaveFile>
 #include <QFile>
 #include <QFileDialog>
@@ -87,6 +89,24 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
         controls->addWidget(button);
     }
     controls->addStretch(1);
+    // Freeze holds the trajectory while samples keep arriving; print captures
+    // the 3D view as an image (P04), previewed first.
+    freezeButton_ = viewers::makeFreezeButton(this, QStringLiteral("trajectory"));
+    controls->addWidget(freezeButton_);
+    connect(freezeButton_, &QToolButton::toggled, this, [this](bool frozen) {
+        if (!frozen) {
+            dirty_ = true;
+            refreshPlots();
+        }
+    });
+    controls->addWidget(viewers::makePrintButton(this, QStringLiteral("trajectory"), [this]() -> std::optional<viewers::ViewerPrintSnapshot> {
+        viewers::ViewerPrintSnapshot snapshot;
+        snapshot.title = windowTitle();
+        if (!statusLabel_->text().trimmed().isEmpty()) snapshot.notes << statusLabel_->text().simplified();
+        if (freezeButton_->isChecked()) snapshot.notes << QStringLiteral("The display was frozen; samples kept arriving.");
+        snapshot.error = viewers::captureVisibleViews(this, snapshot);
+        return snapshot;
+    }, [this] { return QStringLiteral("phase-trajectory-%1-%2-%3").arg(xProbeName_, yProbeName_, zProbeName_); }));
     statusLabel_ = new QLabel(this);
     statusLabel_->setObjectName(QStringLiteral("viewer.status"));
     statusLabel_->setTextFormat(Qt::PlainText);
@@ -245,7 +265,7 @@ void PhaseTrajectory3DViewWindow::exportCsv()
 
 void PhaseTrajectory3DViewWindow::refreshPlots()
 {
-    if (!dirty_ || !isVisible()) {
+    if (!dirty_ || !isVisible() || (freezeButton_ && freezeButton_->isChecked())) {
         return;
     }
     dirty_ = false;

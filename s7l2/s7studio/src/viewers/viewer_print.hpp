@@ -12,6 +12,8 @@
 #include <vector>
 
 class QIcon;
+class QImage;
+class QQuickWidget;
 class QMenu;
 class QToolButton;
 class QWidget;
@@ -25,12 +27,22 @@ struct ViewerPrintSnapshot {
     QString title;      // e.g. "Scope · states"
     QStringList notes;  // range, rate, completeness and decimation, snapshot time
     std::vector<PlotSnapshot> plots;  // stacked top to bottom
+    // Raster pictures of views drawn on the GPU (Qt Quick 3D), below the plots.
+    std::vector<QImage> images;
+    // Why the view could not be captured; reported instead of printing.
+    QString error;
     // Content other than plots (an image, a custom canvas); drawn below the plots.
     std::function<void(QPainter& painter, const QRectF& area)> draw;
 };
 
 // The LinePlotViews shown under `root` (hidden tabs excluded), top to bottom.
 [[nodiscard]] std::vector<PlotSnapshot> visiblePlots(const QWidget* root);
+// Everything shown under `root`: plots as vectors, 3D views (Qt Quick scenes
+// outside line plots) as images at `scale` times their on-screen size.
+// Returns an error message when a shown 3D view could not be captured.
+[[nodiscard]] QString captureVisibleViews(const QWidget* root, ViewerPrintSnapshot& snapshot, double scale = 3.0);
+// A rendered picture of a Qt Quick scene; null when it is blank or failed.
+[[nodiscard]] QImage captureQuickScene(QQuickWidget& quick, double scale);
 
 // The printed document of a snapshot: one page, provenance header.
 [[nodiscard]] printing::PrintDocument viewerDocument(const ViewerPrintSnapshot& snapshot, const QString& footer);

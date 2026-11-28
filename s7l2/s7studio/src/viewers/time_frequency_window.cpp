@@ -188,8 +188,7 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         const auto *views = findChild<QTabWidget *>(QStringLiteral("timeFrequency.views"));
         snapshot.title = QStringLiteral("Time\u2013frequency \u00B7 %1").arg(views ? views->tabText(views->currentIndex()) : QString());
         if (status_ && !status_->text().trimmed().isEmpty()) snapshot.notes << status_->text().simplified();
-        snapshot.plots = visiblePlots(this);
-        if (snapshot.plots.empty()) return std::nullopt;
+        snapshot.error = captureVisibleViews(this, snapshot);
         return snapshot;
     }, [] { return QStringLiteral("time-frequency"); }));
     follow_ = new QCheckBox("Follow latest retained interval", this);

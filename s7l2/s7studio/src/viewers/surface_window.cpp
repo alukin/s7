@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "surface_window.hpp"
+#include "viewers/viewer_print.hpp"
 #include "analysis/result_file.hpp"
 #include "observation/run_metadata.hpp"
 #include <QCheckBox>
+#include <QToolButton>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -88,6 +90,24 @@ SurfaceWindow::SurfaceWindow(bool complex, const QString &name, QWidget *parent)
     connect(clear, &QPushButton::clicked, this, &SurfaceWindow::clearSamples);
     auto *exportButton = new QPushButton("Export raw CSV", this);
     controls->addWidget(exportButton);
+    // Freeze holds the surface while samples keep arriving; print captures
+    // the view (3D image, P04/P06), previewed first.
+    freeze_ = makeFreezeButton(this, QStringLiteral("surface"));
+    controls->addWidget(freeze_);
+    connect(freeze_, &QToolButton::toggled, this, [this](bool frozen) {
+        if (!frozen) {
+            dirty_ = true;
+            refreshPlot();
+        }
+    });
+    controls->addWidget(makePrintButton(this, QStringLiteral("surface"), [this]() -> std::optional<ViewerPrintSnapshot> {
+        ViewerPrintSnapshot snapshot;
+        snapshot.title = windowTitle();
+        if (!status_->text().trimmed().isEmpty()) snapshot.notes << status_->text().simplified();
+        if (freeze_->isChecked()) snapshot.notes << QStringLiteral("The display was frozen; samples kept arriving.");
+        snapshot.error = captureVisibleViews(this, snapshot);
+        return snapshot;
+    }, [this] { return windowTitle().section(QStringLiteral(" \u2014 "), -1).simplified().replace(QLatin1Char(' '), QLatin1Char('-')); }));
     connect(exportButton, &QPushButton::clicked, this, &SurfaceWindow::exportCsv);
     root->addLayout(controls);
     auto *displayControls = new QHBoxLayout;
@@ -237,7 +257,7 @@ void SurfaceWindow::updateStatus() {
             .arg(sourceStatusText().isEmpty() ? "" : " | " + sourceStatusText()));
 }
 void SurfaceWindow::refreshPlot() {
-    if (!dirty_ || !isVisible())
+    if (!dirty_ || !isVisible() || (freeze_ && freeze_->isChecked()))
         return;
     dirty_ = false;
     auto axis = [this](int i) {

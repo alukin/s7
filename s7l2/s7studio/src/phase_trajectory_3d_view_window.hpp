@@ -15,6 +15,7 @@
 
 #include <cstdint>
 
+class QToolButton;
 class QCheckBox;
 class QLabel;
 class QPushButton;
@@ -102,6 +103,7 @@ private:
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
+    QToolButton* freezeButton_ = nullptr;
     Throttle* statusRefresh_ = nullptr;  // data-driven status updates at 10 Hz
     QTimer* repaintTimer_ = nullptr;
 };
