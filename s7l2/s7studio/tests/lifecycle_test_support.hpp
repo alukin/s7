@@ -50,6 +50,12 @@ public:
         if (gate_->fail.load()) throw std::runtime_error("injected worker step failure");
     }
 };
+// An input-only element, like a RecordingSink or a NetSink.
+class SinkElement : public s7::Element {
+public:
+    SinkElement() : Element("LifecycleSink", true) { register_input(0, "in", s7::SignalType::F64, nullptr); }
+    void step() override { static_cast<void>(read_input<double>(0)); }
+};
 [[maybe_unused]] auto schema(double value = 1) -> boost::json::value {
     return boost::json::object{{"name", "lifecycle"}, {"dt", .001},
         {"elements", boost::json::array{boost::json::object{{"id", "source"}, {"type", "LifecycleGate"}, {"params", {{"value", value}}}}}},
@@ -66,4 +72,9 @@ inline void registerLifecycleElements() {
         metadata.parameters = {{"value", "real", "test value", 1.0, {}, {}, {}, false}};
         s7::ElementRegistry::instance().register_element(s7::ElementDescriptor("LifecycleGate",
             [](const s7::ElementCreationContext& context) { return std::make_unique<GatedElement>(currentGate, context.get_real("value")); }, metadata));
+        s7::ElementMetadata sink;
+        sink.type_name = "LifecycleSink";
+        sink.input_ports = {{"in", "test input", s7::SignalType::F64}};
+        s7::ElementRegistry::instance().register_element(s7::ElementDescriptor("LifecycleSink",
+            [](const s7::ElementCreationContext&) { return std::make_unique<SinkElement>(); }, sink));
     }

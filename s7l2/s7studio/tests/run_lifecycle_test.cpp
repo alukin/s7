@@ -91,6 +91,19 @@ private slots:
         QVERIFY(!runner_->activeConfiguration());
         QCOMPARE(configuration->dt, .001); // retained const snapshots survive reset
     }
+    void runWithASinkCompletes() {
+        // Elements without outputs have no final sample; a finished run of a
+        // graph with a sink succeeds (every RecordingSink diagram used to fail).
+        QSignalSpy completed(runner_.get(), &s7studio::LocalSchemaRunner::runCompleted);
+        const boost::json::value json = boost::json::object{{"name", "sink"}, {"dt", .001},
+            {"elements", boost::json::array{boost::json::object{{"id", "value"}, {"type", "Constant"}, {"params", {{"value", 2.5}}}},
+                                            boost::json::object{{"id", "sink"}, {"type", "LifecycleSink"}, {"params", boost::json::object{}}}}},
+            {"connections", boost::json::array{boost::json::object{{"from_element", "value"}, {"from_port", 0}, {"to_element", "sink"}, {"to_port", 0}}}}};
+        runner_->run(json, .001, 5, {{"scope/value", "value", 0}});
+        QTRY_COMPARE(completed.count(), 1);
+        QVERIFY2(completed.front().at(0).toBool(), qPrintable(completed.front().at(1).toString()));
+        QCOMPARE(runner_->completedTicks(), 5L);
+    }
     void configurationAndSamplesStayWithTheirRun() {
         auto json = schema(2.5);
         auto probes = probes_;

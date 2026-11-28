@@ -204,7 +204,16 @@ inline std::vector<std::string> collectSamples(const s7::Schema& schema, const s
     lines.reserve(schema.elements().size());
 
     for (const auto& element : schema.elements()) {
-        if (runtime.array_output_descriptor(element.id, 0)) continue;
+        // Sinks (recordings, network and device outputs) have no output to
+        // sample: asking for port 0 throws, which used to fail every finished
+        // run of a diagram with a RecordingSink.
+        const s7::ArrayDescriptor* array = nullptr;
+        try {
+            array = runtime.array_output_descriptor(element.id, 0);
+        } catch (const std::out_of_range&) {
+            continue;
+        }
+        if (array) continue;
         const auto sample = observation.sample_output(element.id, 0);
         std::ostringstream out;
         out << element.id << '[' << sample.port << "]=";
