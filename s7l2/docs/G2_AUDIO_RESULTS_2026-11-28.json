@@ -1,0 +1,978 @@
+{
+ "date": "2026-11-28",
+ "scope": "G2 two-node audio equalizer (tools/run_g2_audio_demo.py); examples/audio/two_node_equalizer.s7diagram",
+ "note": "The VM runs on the same physical machine as the development host: two OS instances over a virtual bridge, not two physical hosts. Fresh credentials from tools/generate_test_runtime_certs.sh for the LAN runs; repository test credentials for the local run. Built from d3ceb1d plus the uncommitted G2 changes of this commit (json_parse fix included).",
+ "builds": {
+  "development_host": "Ubuntu 26.04.1, GCC 16 trunk (20260322), Release",
+  "vm": "Oracle Linux 10.2, gcc-toolset-15 GCC 15.2.1, Release, S7_BUILD_STUDIO=OFF, S7_BUILD_SDR=OFF"
+ },
+ "runs": {
+  "local": {
+   "description": "Both nodes on the development host (loopback), shared mTLS connection",
+   "passed": true,
+   "problems": [],
+   "diagram_sha256": "fe2d55a3863fb90f392533d47bda8ed0c5247c2cd64fbb8125822a74785a56ad",
+   "equalizer_gains_db": [
+    6.0,
+    0.0,
+    -9.0,
+    3.0,
+    -6.0
+   ],
+   "results": {
+    "recorded_samples": {
+     "input": 772801,
+     "output": 772801,
+     "rate_hz": 48000.0
+    },
+    "input_vs_programme": {
+     "max_abs_error": 4.018505233487943e-11,
+     "tolerance": 1e-09,
+     "first_bad_sample": null
+    },
+    "output_vs_reference_equalizer": {
+     "max_abs_error": 9.992007221626409e-16,
+     "tolerance": 1e-09
+    },
+    "distributed_vs_local": {
+     "compared_samples": 772801,
+     "input_samples_differing": 0,
+     "output_samples_differing": 0,
+     "max_abs_output_difference": 0.0
+    },
+    "tone_gains": {
+     "window_s": [
+      10.5,
+      14.0
+     ],
+     "tolerance_db": 0.01,
+     "tones": [
+      {
+       "frequency_hz": 100.0,
+       "measured_db": 3.9491384947047274,
+       "analytic_db": 3.9491384947061663,
+       "error_db": -1.4388490399142029e-12
+      },
+      {
+       "frequency_hz": 12000.0,
+       "measured_db": -1.0961595926796597,
+       "analytic_db": -1.0961595926798948,
+       "error_db": 2.3514523661560816e-13
+      },
+      {
+       "frequency_hz": 1600.0,
+       "measured_db": -8.606651261162884,
+       "analytic_db": -8.606651261163023,
+       "error_db": 1.3855583347321954e-13
+      },
+      {
+       "frequency_hz": 400.0,
+       "measured_db": 0.45970781180079057,
+       "analytic_db": 0.4597078118001668,
+       "error_db": 6.237788063856442e-13
+      },
+      {
+       "frequency_hz": 6000.0,
+       "measured_db": 2.2248607535985716,
+       "analytic_db": 2.224860753599072,
+       "error_db": -5.004885395010206e-13
+      }
+     ]
+    },
+    "sweep_response": {
+     "tolerance_db": 0.5,
+     "points": [
+      {
+       "frequency_hz": 31.5,
+       "measured_db": 5.695472555682701,
+       "analytic_db": 5.694698072650693,
+       "error_db": 0.0007744830320079998
+      },
+      {
+       "frequency_hz": 40,
+       "measured_db": 5.524707488170782,
+       "analytic_db": 5.524362907443686,
+       "error_db": 0.00034458072709586673
+      },
+      {
+       "frequency_hz": 50,
+       "measured_db": 5.292121624105662,
+       "analytic_db": 5.2919851830562,
+       "error_db": 0.00013644104946219926
+      },
+      {
+       "frequency_hz": 63,
+       "measured_db": 4.958259039919957,
+       "analytic_db": 4.955637835192967,
+       "error_db": 0.002621204726990456
+      },
+      {
+       "frequency_hz": 80,
+       "measured_db": 4.490935582408236,
+       "analytic_db": 4.490193905965962,
+       "error_db": 0.000741676442273409
+      },
+      {
+       "frequency_hz": 100,
+       "measured_db": 3.951309221333181,
+       "analytic_db": 3.9491384947061663,
+       "error_db": 0.002170726627014563
+      },
+      {
+       "frequency_hz": 125,
+       "measured_db": 3.329555853715682,
+       "analytic_db": 3.329615019275532,
+       "error_db": -5.916555984963878e-05
+      },
+      {
+       "frequency_hz": 160,
+       "measured_db": 2.5613648344409343,
+       "analytic_db": 2.6062874289473665,
+       "error_db": -0.04492259450643221
+      },
+      {
+       "frequency_hz": 200,
+       "measured_db": 1.9746921730961022,
+       "analytic_db": 1.9746253337338948,
+       "error_db": 6.683936220741593e-05
+      },
+      {
+       "frequency_hz": 250,
+       "measured_db": 1.4056958180111514,
+       "analytic_db": 1.4066819030504563,
+       "error_db": -0.0009860850393048626
+      },
+      {
+       "frequency_hz": 315,
+       "measured_db": 0.9191217470089876,
+       "analytic_db": 0.9033589041388521,
+       "error_db": 0.01576284287013552
+      },
+      {
+       "frequency_hz": 400,
+       "measured_db": 0.4596775274482198,
+       "analytic_db": 0.4597078118001668,
+       "error_db": -3.0284351946963106e-05
+      },
+      {
+       "frequency_hz": 500,
+       "measured_db": 0.07174627025018974,
+       "analytic_db": 0.0722101633993496,
+       "error_db": -0.000463893149159858
+      },
+      {
+       "frequency_hz": 630,
+       "measured_db": -0.40451281369394454,
+       "analytic_db": -0.3852443379540338,
+       "error_db": -0.01926847573991075
+      },
+      {
+       "frequency_hz": 800,
+       "measured_db": -1.09421152277586,
+       "analytic_db": -1.0944417188773816,
+       "error_db": 0.00023019610152164027
+      },
+      {
+       "frequency_hz": 1000,
+       "measured_db": -2.3409190817718635,
+       "analytic_db": -2.341522029366917,
+       "error_db": 0.0006029475950533048
+      },
+      {
+       "frequency_hz": 1250,
+       "measured_db": -4.953941983317605,
+       "analytic_db": -4.9580032824904645,
+       "error_db": 0.004061299172859911
+      },
+      {
+       "frequency_hz": 1600,
+       "measured_db": -8.600925994122841,
+       "analytic_db": -8.606651261163023,
+       "error_db": 0.005725267040181947
+      },
+      {
+       "frequency_hz": 2000,
+       "measured_db": -5.077356199983198,
+       "analytic_db": -5.0761935242542044,
+       "error_db": -0.001162675728993534
+      },
+      {
+       "frequency_hz": 2500,
+       "measured_db": -1.9223125542924118,
+       "analytic_db": -1.9217556321561589,
+       "error_db": -0.0005569221362529131
+      },
+      {
+       "frequency_hz": 3150,
+       "measured_db": -0.11640450789406266,
+       "analytic_db": -0.11624411843542613,
+       "error_db": -0.00016038945863652843
+      },
+      {
+       "frequency_hz": 4000,
+       "measured_db": 1.1523305464681894,
+       "analytic_db": 1.152569805861552,
+       "error_db": -0.00023925939336266744
+      },
+      {
+       "frequency_hz": 5000,
+       "measured_db": 1.9948967799355468,
+       "analytic_db": 1.9953839465122323,
+       "error_db": -0.0004871665766854605
+      },
+      {
+       "frequency_hz": 6300,
+       "measured_db": 2.184022066951978,
+       "analytic_db": 2.1844897535383745,
+       "error_db": -0.00046768658639662064
+      },
+      {
+       "frequency_hz": 8000,
+       "measured_db": 1.3883912107228136,
+       "analytic_db": 1.388207130139991,
+       "error_db": 0.00018408058282259887
+      },
+      {
+       "frequency_hz": 10000,
+       "measured_db": 0.1023988040722873,
+       "analytic_db": 0.10201589469228257,
+       "error_db": 0.00038290938000472285
+      },
+      {
+       "frequency_hz": 12500,
+       "measured_db": -1.3787177601343483,
+       "analytic_db": -1.3791707409576675,
+       "error_db": 0.0004529808233191268
+      },
+      {
+       "frequency_hz": 16000,
+       "measured_db": -3.257754838265105,
+       "analytic_db": -3.2582610882335223,
+       "error_db": 0.0005062499684171939
+      }
+     ]
+    },
+    "levels": {
+     "input_peak": 0.33525788383272376,
+     "output_peak": 0.49145617522271057
+    }
+   },
+   "metrics": {
+    "data_security": "shared",
+    "stream_settings": {
+     "max_elements_per_packet": 4800,
+     "max_batch_latency_ms": 100,
+     "max_wait_ms": 5000
+    },
+    "node_a": {
+     "step_rate_hz": 47989.710770540994,
+     "lag_ms_last": 0.001757,
+     "lag_ms_max_polled": 0.016464,
+     "max_lag_ms_since_activation": 3.329677,
+     "rebases": 0,
+     "host": {
+      "os": "Ubuntu 26.04.1 LTS",
+      "kernel": "7.0.0-44-generic",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 16,
+      "memory_mib": 60775,
+      "load_average": [
+       14.6708984375,
+       9.87109375,
+       6.04931640625
+      ]
+     },
+     "peak_rss_mib": 21.37890625,
+     "cpu_percent": 20.270993714435253
+    },
+    "node_b": {
+     "step_rate_hz": 48013.11980951618,
+     "lag_ms_last": 100.069536,
+     "lag_ms_max_polled": 100.295699,
+     "max_lag_ms_since_activation": 101.681008,
+     "rebases": 0,
+     "host": {
+      "os": "Ubuntu 26.04.1 LTS",
+      "kernel": "7.0.0-44-generic",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 16,
+      "memory_mib": 60775,
+      "load_average": [
+       14.6708984375,
+       9.87109375,
+       6.04931640625
+      ]
+     },
+     "peak_rss_mib": 21.88671875,
+     "cpu_percent": 4.071217403788569
+    },
+    "stream": {
+     "elements_received": 734403,
+     "packets": 154,
+     "consumer_buffered_elements_max": 4798,
+     "consumer_buffered_elements_mean": 4785.7692307692305,
+     "producer_send_log_depth_max": 0,
+     "latency_ms": {
+      "p50": 0.512,
+      "p99": 1.024,
+      "max": 1.643361
+     },
+     "late": 0,
+     "faults": [
+      "NONE"
+     ],
+     "replayed": 0,
+     "duplicates_discarded": 0,
+     "malformed": 0,
+     "lost_resumes": 0
+    }
+   }
+  },
+  "two_host_shared": {
+   "description": "Node A on the development host, node B on the Oracle Linux 10.2 VirtualBox VM (bridged LAN), shared mTLS connection",
+   "passed": true,
+   "problems": [],
+   "diagram_sha256": "fe2d55a3863fb90f392533d47bda8ed0c5247c2cd64fbb8125822a74785a56ad",
+   "equalizer_gains_db": [
+    6.0,
+    0.0,
+    -9.0,
+    3.0,
+    -6.0
+   ],
+   "results": {
+    "recorded_samples": {
+     "input": 816001,
+     "output": 816001,
+     "rate_hz": 48000.0
+    },
+    "input_vs_programme": {
+     "max_abs_error": 4.018505233487943e-11,
+     "tolerance": 1e-09,
+     "first_bad_sample": null
+    },
+    "output_vs_reference_equalizer": {
+     "max_abs_error": 9.992007221626409e-16,
+     "tolerance": 1e-09
+    },
+    "distributed_vs_local": {
+     "compared_samples": 816001,
+     "input_samples_differing": 0,
+     "output_samples_differing": 0,
+     "max_abs_output_difference": 0.0
+    },
+    "tone_gains": {
+     "window_s": [
+      10.5,
+      14.0
+     ],
+     "tolerance_db": 0.01,
+     "tones": [
+      {
+       "frequency_hz": 100.0,
+       "measured_db": 3.9491384947047274,
+       "analytic_db": 3.9491384947061663,
+       "error_db": -1.4388490399142029e-12
+      },
+      {
+       "frequency_hz": 12000.0,
+       "measured_db": -1.0961595926796597,
+       "analytic_db": -1.0961595926798948,
+       "error_db": 2.3514523661560816e-13
+      },
+      {
+       "frequency_hz": 1600.0,
+       "measured_db": -8.606651261162884,
+       "analytic_db": -8.606651261163023,
+       "error_db": 1.3855583347321954e-13
+      },
+      {
+       "frequency_hz": 400.0,
+       "measured_db": 0.45970781180079057,
+       "analytic_db": 0.4597078118001668,
+       "error_db": 6.237788063856442e-13
+      },
+      {
+       "frequency_hz": 6000.0,
+       "measured_db": 2.2248607535985716,
+       "analytic_db": 2.224860753599072,
+       "error_db": -5.004885395010206e-13
+      }
+     ]
+    },
+    "sweep_response": {
+     "tolerance_db": 0.5,
+     "points": [
+      {
+       "frequency_hz": 31.5,
+       "measured_db": 5.695472555682701,
+       "analytic_db": 5.694698072650693,
+       "error_db": 0.0007744830320079998
+      },
+      {
+       "frequency_hz": 40,
+       "measured_db": 5.524707488170782,
+       "analytic_db": 5.524362907443686,
+       "error_db": 0.00034458072709586673
+      },
+      {
+       "frequency_hz": 50,
+       "measured_db": 5.292121624105662,
+       "analytic_db": 5.2919851830562,
+       "error_db": 0.00013644104946219926
+      },
+      {
+       "frequency_hz": 63,
+       "measured_db": 4.958259039919957,
+       "analytic_db": 4.955637835192967,
+       "error_db": 0.002621204726990456
+      },
+      {
+       "frequency_hz": 80,
+       "measured_db": 4.490935582408236,
+       "analytic_db": 4.490193905965962,
+       "error_db": 0.000741676442273409
+      },
+      {
+       "frequency_hz": 100,
+       "measured_db": 3.951309221333181,
+       "analytic_db": 3.9491384947061663,
+       "error_db": 0.002170726627014563
+      },
+      {
+       "frequency_hz": 125,
+       "measured_db": 3.329555853715682,
+       "analytic_db": 3.329615019275532,
+       "error_db": -5.916555984963878e-05
+      },
+      {
+       "frequency_hz": 160,
+       "measured_db": 2.5613648344409343,
+       "analytic_db": 2.6062874289473665,
+       "error_db": -0.04492259450643221
+      },
+      {
+       "frequency_hz": 200,
+       "measured_db": 1.9746921730961022,
+       "analytic_db": 1.9746253337338948,
+       "error_db": 6.683936220741593e-05
+      },
+      {
+       "frequency_hz": 250,
+       "measured_db": 1.4056958180111514,
+       "analytic_db": 1.4066819030504563,
+       "error_db": -0.0009860850393048626
+      },
+      {
+       "frequency_hz": 315,
+       "measured_db": 0.9191217470089876,
+       "analytic_db": 0.9033589041388521,
+       "error_db": 0.01576284287013552
+      },
+      {
+       "frequency_hz": 400,
+       "measured_db": 0.4596775274482198,
+       "analytic_db": 0.4597078118001668,
+       "error_db": -3.0284351946963106e-05
+      },
+      {
+       "frequency_hz": 500,
+       "measured_db": 0.07174627025018974,
+       "analytic_db": 0.0722101633993496,
+       "error_db": -0.000463893149159858
+      },
+      {
+       "frequency_hz": 630,
+       "measured_db": -0.40451281369394454,
+       "analytic_db": -0.3852443379540338,
+       "error_db": -0.01926847573991075
+      },
+      {
+       "frequency_hz": 800,
+       "measured_db": -1.09421152277586,
+       "analytic_db": -1.0944417188773816,
+       "error_db": 0.00023019610152164027
+      },
+      {
+       "frequency_hz": 1000,
+       "measured_db": -2.3409190817718635,
+       "analytic_db": -2.341522029366917,
+       "error_db": 0.0006029475950533048
+      },
+      {
+       "frequency_hz": 1250,
+       "measured_db": -4.953941983317605,
+       "analytic_db": -4.9580032824904645,
+       "error_db": 0.004061299172859911
+      },
+      {
+       "frequency_hz": 1600,
+       "measured_db": -8.600925994122841,
+       "analytic_db": -8.606651261163023,
+       "error_db": 0.005725267040181947
+      },
+      {
+       "frequency_hz": 2000,
+       "measured_db": -5.077356199983198,
+       "analytic_db": -5.0761935242542044,
+       "error_db": -0.001162675728993534
+      },
+      {
+       "frequency_hz": 2500,
+       "measured_db": -1.9223125542924118,
+       "analytic_db": -1.9217556321561589,
+       "error_db": -0.0005569221362529131
+      },
+      {
+       "frequency_hz": 3150,
+       "measured_db": -0.11640450789406266,
+       "analytic_db": -0.11624411843542613,
+       "error_db": -0.00016038945863652843
+      },
+      {
+       "frequency_hz": 4000,
+       "measured_db": 1.1523305464681894,
+       "analytic_db": 1.152569805861552,
+       "error_db": -0.00023925939336266744
+      },
+      {
+       "frequency_hz": 5000,
+       "measured_db": 1.9948967799355468,
+       "analytic_db": 1.9953839465122323,
+       "error_db": -0.0004871665766854605
+      },
+      {
+       "frequency_hz": 6300,
+       "measured_db": 2.184022066951978,
+       "analytic_db": 2.1844897535383745,
+       "error_db": -0.00046768658639662064
+      },
+      {
+       "frequency_hz": 8000,
+       "measured_db": 1.3883912107228136,
+       "analytic_db": 1.388207130139991,
+       "error_db": 0.00018408058282259887
+      },
+      {
+       "frequency_hz": 10000,
+       "measured_db": 0.1023988040722873,
+       "analytic_db": 0.10201589469228257,
+       "error_db": 0.00038290938000472285
+      },
+      {
+       "frequency_hz": 12500,
+       "measured_db": -1.3787177601343483,
+       "analytic_db": -1.3791707409576675,
+       "error_db": 0.0004529808233191268
+      },
+      {
+       "frequency_hz": 16000,
+       "measured_db": -3.257754838265105,
+       "analytic_db": -3.2582610882335223,
+       "error_db": 0.0005062499684171939
+      }
+     ]
+    },
+    "levels": {
+     "input_peak": 0.33525788383276767,
+     "output_peak": 0.49145617522271057
+    }
+   },
+   "metrics": {
+    "data_security": "shared",
+    "stream_settings": {
+     "max_elements_per_packet": 4800,
+     "max_batch_latency_ms": 100,
+     "max_wait_ms": 5000
+    },
+    "node_a": {
+     "step_rate_hz": 48001.00108977835,
+     "lag_ms_last": 0.013901,
+     "lag_ms_max_polled": 0.019236,
+     "max_lag_ms_since_activation": 0.870461,
+     "rebases": 0,
+     "host": {
+      "os": "Ubuntu 26.04.1 LTS",
+      "kernel": "7.0.0-44-generic",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 16,
+      "memory_mib": 60775,
+      "load_average": [
+       3.32763671875,
+       7.09130859375,
+       5.60791015625
+      ]
+     },
+     "peak_rss_mib": 21.4140625,
+     "cpu_percent": 18.78713364239931
+    },
+    "node_b": {
+     "step_rate_hz": 48058.50363979472,
+     "lag_ms_last": 103.612346,
+     "lag_ms_max_polled": 104.088962,
+     "max_lag_ms_since_activation": 104.773736,
+     "rebases": 0,
+     "host": {
+      "os": "Oracle Linux Server 10.2",
+      "kernel": "6.12.0-208.112.5.2.el10uek.x86_64",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 14,
+      "memory_mib": 31634,
+      "load_average": [
+       0.68017578125,
+       0.5029296875,
+       0.3623046875
+      ]
+     },
+     "peak_rss_mib": 19.78125,
+     "cpu_percent": 3.9610693565351687
+    },
+    "stream": {
+     "elements_received": 734417,
+     "packets": 154,
+     "consumer_buffered_elements_max": 4789,
+     "consumer_buffered_elements_mean": 4755.692307692308,
+     "producer_send_log_depth_max": 0,
+     "latency_ms": {
+      "min": 4.115928,
+      "mean": 4.288539,
+      "max": 4.58956,
+      "p50": 4.58956,
+      "p99": 4.58956
+     },
+     "late": 0,
+     "faults": [
+      "NONE"
+     ],
+     "replayed": 0,
+     "duplicates_discarded": 0,
+     "malformed": 0,
+     "lost_resumes": 0
+    }
+   }
+  },
+  "two_host_split_mtls_120s": {
+   "description": "As two_host_shared with a separate mTLS data listener, 120 s run",
+   "passed": true,
+   "problems": [],
+   "diagram_sha256": "fe2d55a3863fb90f392533d47bda8ed0c5247c2cd64fbb8125822a74785a56ad",
+   "equalizer_gains_db": [
+    6.0,
+    0.0,
+    -9.0,
+    3.0,
+    -6.0
+   ],
+   "results": {
+    "recorded_samples": {
+     "input": 5803197,
+     "output": 5803197,
+     "rate_hz": 48000.0
+    },
+    "input_vs_programme": {
+     "max_abs_error": 3.210681514955951e-10,
+     "tolerance": 1e-09,
+     "first_bad_sample": null
+    },
+    "output_vs_reference_equalizer": {
+     "max_abs_error": 9.992007221626409e-16,
+     "tolerance": 1e-09
+    },
+    "distributed_vs_local": {
+     "compared_samples": 5803197,
+     "input_samples_differing": 0,
+     "output_samples_differing": 0,
+     "max_abs_output_difference": 0.0
+    },
+    "tone_gains": {
+     "window_s": [
+      10.5,
+      14.0
+     ],
+     "tolerance_db": 0.01,
+     "tones": [
+      {
+       "frequency_hz": 100.0,
+       "measured_db": 3.9491384947047274,
+       "analytic_db": 3.9491384947061663,
+       "error_db": -1.4388490399142029e-12
+      },
+      {
+       "frequency_hz": 12000.0,
+       "measured_db": -1.0961595926796597,
+       "analytic_db": -1.0961595926798948,
+       "error_db": 2.3514523661560816e-13
+      },
+      {
+       "frequency_hz": 1600.0,
+       "measured_db": -8.606651261162884,
+       "analytic_db": -8.606651261163023,
+       "error_db": 1.3855583347321954e-13
+      },
+      {
+       "frequency_hz": 400.0,
+       "measured_db": 0.45970781180079057,
+       "analytic_db": 0.4597078118001668,
+       "error_db": 6.237788063856442e-13
+      },
+      {
+       "frequency_hz": 6000.0,
+       "measured_db": 2.2248607535985716,
+       "analytic_db": 2.224860753599072,
+       "error_db": -5.004885395010206e-13
+      }
+     ]
+    },
+    "sweep_response": {
+     "tolerance_db": 0.5,
+     "points": [
+      {
+       "frequency_hz": 31.5,
+       "measured_db": 5.695472555682701,
+       "analytic_db": 5.694698072650693,
+       "error_db": 0.0007744830320079998
+      },
+      {
+       "frequency_hz": 40,
+       "measured_db": 5.524707488170782,
+       "analytic_db": 5.524362907443686,
+       "error_db": 0.00034458072709586673
+      },
+      {
+       "frequency_hz": 50,
+       "measured_db": 5.292121624105662,
+       "analytic_db": 5.2919851830562,
+       "error_db": 0.00013644104946219926
+      },
+      {
+       "frequency_hz": 63,
+       "measured_db": 4.958259039919957,
+       "analytic_db": 4.955637835192967,
+       "error_db": 0.002621204726990456
+      },
+      {
+       "frequency_hz": 80,
+       "measured_db": 4.490935582408236,
+       "analytic_db": 4.490193905965962,
+       "error_db": 0.000741676442273409
+      },
+      {
+       "frequency_hz": 100,
+       "measured_db": 3.951309221333181,
+       "analytic_db": 3.9491384947061663,
+       "error_db": 0.002170726627014563
+      },
+      {
+       "frequency_hz": 125,
+       "measured_db": 3.329555853715682,
+       "analytic_db": 3.329615019275532,
+       "error_db": -5.916555984963878e-05
+      },
+      {
+       "frequency_hz": 160,
+       "measured_db": 2.5613648344409343,
+       "analytic_db": 2.6062874289473665,
+       "error_db": -0.04492259450643221
+      },
+      {
+       "frequency_hz": 200,
+       "measured_db": 1.9746921730961022,
+       "analytic_db": 1.9746253337338948,
+       "error_db": 6.683936220741593e-05
+      },
+      {
+       "frequency_hz": 250,
+       "measured_db": 1.4056958180111514,
+       "analytic_db": 1.4066819030504563,
+       "error_db": -0.0009860850393048626
+      },
+      {
+       "frequency_hz": 315,
+       "measured_db": 0.9191217470089876,
+       "analytic_db": 0.9033589041388521,
+       "error_db": 0.01576284287013552
+      },
+      {
+       "frequency_hz": 400,
+       "measured_db": 0.4596775274482198,
+       "analytic_db": 0.4597078118001668,
+       "error_db": -3.0284351946963106e-05
+      },
+      {
+       "frequency_hz": 500,
+       "measured_db": 0.07174627025018974,
+       "analytic_db": 0.0722101633993496,
+       "error_db": -0.000463893149159858
+      },
+      {
+       "frequency_hz": 630,
+       "measured_db": -0.40451281369394454,
+       "analytic_db": -0.3852443379540338,
+       "error_db": -0.01926847573991075
+      },
+      {
+       "frequency_hz": 800,
+       "measured_db": -1.09421152277586,
+       "analytic_db": -1.0944417188773816,
+       "error_db": 0.00023019610152164027
+      },
+      {
+       "frequency_hz": 1000,
+       "measured_db": -2.3409190817718635,
+       "analytic_db": -2.341522029366917,
+       "error_db": 0.0006029475950533048
+      },
+      {
+       "frequency_hz": 1250,
+       "measured_db": -4.953941983317605,
+       "analytic_db": -4.9580032824904645,
+       "error_db": 0.004061299172859911
+      },
+      {
+       "frequency_hz": 1600,
+       "measured_db": -8.600925994122841,
+       "analytic_db": -8.606651261163023,
+       "error_db": 0.005725267040181947
+      },
+      {
+       "frequency_hz": 2000,
+       "measured_db": -5.077356199983198,
+       "analytic_db": -5.0761935242542044,
+       "error_db": -0.001162675728993534
+      },
+      {
+       "frequency_hz": 2500,
+       "measured_db": -1.9223125542924118,
+       "analytic_db": -1.9217556321561589,
+       "error_db": -0.0005569221362529131
+      },
+      {
+       "frequency_hz": 3150,
+       "measured_db": -0.11640450789406266,
+       "analytic_db": -0.11624411843542613,
+       "error_db": -0.00016038945863652843
+      },
+      {
+       "frequency_hz": 4000,
+       "measured_db": 1.1523305464681894,
+       "analytic_db": 1.152569805861552,
+       "error_db": -0.00023925939336266744
+      },
+      {
+       "frequency_hz": 5000,
+       "measured_db": 1.9948967799355468,
+       "analytic_db": 1.9953839465122323,
+       "error_db": -0.0004871665766854605
+      },
+      {
+       "frequency_hz": 6300,
+       "measured_db": 2.184022066951978,
+       "analytic_db": 2.1844897535383745,
+       "error_db": -0.00046768658639662064
+      },
+      {
+       "frequency_hz": 8000,
+       "measured_db": 1.3883912107228136,
+       "analytic_db": 1.388207130139991,
+       "error_db": 0.00018408058282259887
+      },
+      {
+       "frequency_hz": 10000,
+       "measured_db": 0.1023988040722873,
+       "analytic_db": 0.10201589469228257,
+       "error_db": 0.00038290938000472285
+      },
+      {
+       "frequency_hz": 12500,
+       "measured_db": -1.3787177601343483,
+       "analytic_db": -1.3791707409576675,
+       "error_db": 0.0004529808233191268
+      },
+      {
+       "frequency_hz": 16000,
+       "measured_db": -3.257754838265105,
+       "analytic_db": -3.2582610882335223,
+       "error_db": 0.0005062499684171939
+      }
+     ]
+    },
+    "levels": {
+     "input_peak": 0.3352578838378319,
+     "output_peak": 0.49145617522271057
+    }
+   },
+   "metrics": {
+    "data_security": "mtls",
+    "stream_settings": {
+     "max_elements_per_packet": 4800,
+     "max_batch_latency_ms": 100,
+     "max_wait_ms": 5000
+    },
+    "node_a": {
+     "step_rate_hz": 47999.682631662676,
+     "lag_ms_last": 0.004865,
+     "lag_ms_max_polled": 0.025763,
+     "max_lag_ms_since_activation": 3.057239,
+     "rebases": 0,
+     "host": {
+      "os": "Ubuntu 26.04.1 LTS",
+      "kernel": "7.0.0-44-generic",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 16,
+      "memory_mib": 60775,
+      "load_average": [
+       0.82373046875,
+       4.28955078125,
+       4.7666015625
+      ]
+     },
+     "peak_rss_mib": 23.15625,
+     "cpu_percent": 19.341302098047684
+    },
+    "node_b": {
+     "step_rate_hz": 48013.735475826885,
+     "lag_ms_last": 103.846142,
+     "lag_ms_max_polled": 104.456477,
+     "max_lag_ms_since_activation": 105.82267,
+     "rebases": 0,
+     "host": {
+      "os": "Oracle Linux Server 10.2",
+      "kernel": "6.12.0-208.112.5.2.el10uek.x86_64",
+      "cpu": "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics",
+      "logical_cpus": 14,
+      "memory_mib": 31634,
+      "load_average": [
+       0.0703125,
+       0.3125,
+       0.3125
+      ]
+     },
+     "peak_rss_mib": 19.8125,
+     "cpu_percent": 3.5615986799986272
+    },
+    "stream": {
+     "elements_received": 5745634,
+     "packets": 1198,
+     "consumer_buffered_elements_max": 4796,
+     "consumer_buffered_elements_mean": 4740.97,
+     "producer_send_log_depth_max": 34,
+     "latency_ms": {
+      "min": 3.987478,
+      "mean": 4.262355,
+      "max": 5.783736,
+      "p50": 5.783736,
+      "p99": 5.783736
+     },
+     "late": 0,
+     "faults": [
+      "NONE"
+     ],
+     "replayed": 0,
+     "duplicates_discarded": 0,
+     "malformed": 0,
+     "lost_resumes": 0
+    }
+   }
+  }
+ }
+}

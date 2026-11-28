@@ -24,3 +24,17 @@ foreach(data_security IN ITEMS mtls trusted_plaintext)
         COMMAND ${PROJECT_SOURCE_DIR}/tools/test_two_node_deployment.sh ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR} ${data_security})
     set_tests_properties(s7_two_node_split_${data_security} PROPERTIES ENVIRONMENT "${S7_SCRIPT_TEST_ENV}")
 endforeach()
+
+# The G2 two-node audio equalizer on this host (tools/run_g2_audio_demo.py):
+# every recorded sample checked against independent references and against
+# the same graph run in one process. Real-time paced: about a minute.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND AND NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME s7_g2_audio_equalizer_local
+        COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/run_g2_audio_demo.py local
+                --runtime $<TARGET_FILE:s7runtime> --ctl $<TARGET_FILE:s7ctl>)
+    set_tests_properties(s7_g2_audio_equalizer_local PROPERTIES TIMEOUT 300 LABELS "integration")
+    # The saved example matches its generator (tools/generate_g2_audio_example.py).
+    add_test(NAME s7_g2_audio_example_current
+        COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/generate_g2_audio_example.py --check)
+endif()

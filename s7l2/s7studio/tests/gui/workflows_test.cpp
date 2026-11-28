@@ -4520,6 +4520,10 @@ private slots:
             if (type == "AudioSource" || type == "AudioBlockSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrBlockSource" || type == "SdrSink")
                 QSKIP("Hardware examples open a real sound device or radio");
         }
+        // Distributed examples are deployed to runtime nodes, not run here: a
+        // local Run would leave their recordings in the test's directory.
+        if (json.contains("runtime_nodes"))
+            QSKIP("Distributed example: deployed and checked by the s7_g2_audio_equalizer_local test");
         const double seconds = documentedSeconds(diagram);
         QVERIFY2(seconds > 0, "every bundled example needs studio_run.runtime_seconds (tools/example_runs.py for generated ones)");
         for(const auto& element:json["schema"].toObject()["elements"].toArray()){const auto type=element.toObject()["type"].toString();if((type=="FourierCoefficient"||type=="WaveletCoefficient")&&!s7::ElementRegistry::instance().find(type.toStdString()))QSKIP("Optional analysis plugin is not loaded; build/load it to run this graph example");}

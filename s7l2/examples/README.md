@@ -283,6 +283,7 @@ nested schemas, vector wires and optional in-graph analysis plugins.
 ## Audio
 
 - [Live microphone spectrum](audio/microphone_spectrum.s7diagram) and [run guide](audio/microphone_spectrum.md)
+- [Two-node audio equalizer (G2)](audio/two_node_equalizer.s7diagram) and [run guide](audio/two_node_equalizer.md): a 48 kHz programme on one runtime node, the bundled AudioEqualizer and recordings on another, every sample checked
 - [Live SDR spectrum](sdr/live_spectrum.s7diagram) and [run guide](sdr/LIVE_SPECTRUM.md)
 
 ## Software-defined radio

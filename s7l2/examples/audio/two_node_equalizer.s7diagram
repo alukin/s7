@@ -1,0 +1,1913 @@
+{
+  "id": "two_node_equalizer",
+  "dt": 2.0833333333333333e-05,
+  "document_kind": "s7.diagram",
+  "description": "G2: deterministic audio programme on node A, AudioEqualizer and recordings on node B.",
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 430.0,
+    "height_mm": 380.0
+  },
+  "studio_run": {
+    "runtime_seconds": 15,
+    "clear_scope_traces": true
+  },
+  "schema": {
+    "name": "two_node_equalizer",
+    "dt": 2.0833333333333333e-05,
+    "elements": [
+      {
+        "id": "sweep",
+        "type": "ChirpGenerator",
+        "params": {
+          "type": "F64",
+          "start_hz": 20,
+          "end_hz": 20000,
+          "sweep_time": 10.0,
+          "amplitude": 0.25,
+          "sweep": "logarithmic",
+          "end_behavior": "hold"
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "sweep_gate",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 1,
+          "final_value": 0,
+          "start_time": 10.0
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "sweep_part",
+        "type": "Multiply",
+        "params": {},
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_100",
+        "type": "AnalogOscillator",
+        "params": {
+          "type": "F64",
+          "amplitude": 0.08,
+          "frequency_hz": 100
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_400",
+        "type": "AnalogOscillator",
+        "params": {
+          "type": "F64",
+          "amplitude": 0.08,
+          "frequency_hz": 400
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_1600",
+        "type": "AnalogOscillator",
+        "params": {
+          "type": "F64",
+          "amplitude": 0.08,
+          "frequency_hz": 1600
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_6000",
+        "type": "AnalogOscillator",
+        "params": {
+          "type": "F64",
+          "amplitude": 0.08,
+          "frequency_hz": 6000
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_12000",
+        "type": "AnalogOscillator",
+        "params": {
+          "type": "F64",
+          "amplitude": 0.08,
+          "frequency_hz": 12000
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tones",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_gate",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "start_time": 10.0
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "tone_part",
+        "type": "Multiply",
+        "params": {},
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "programme",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        },
+        "node": "11111111-2222-3333-4444-555555555555"
+      },
+      {
+        "id": "equalizer",
+        "type": "AudioEqualizer",
+        "params": {},
+        "node": "33333333-4444-5555-6666-777777777777",
+        "schema": {
+          "name": "AudioEqualizer",
+          "dt": 2.0833333333333333e-05,
+          "elements": [
+            {
+              "id": "in",
+              "type": "Gain",
+              "params": {
+                "factor": 1.0
+              }
+            },
+            {
+              "id": "low_db_scale",
+              "type": "Gain",
+              "params": {
+                "factor": 0.11512925464970229
+              }
+            },
+            {
+              "id": "low_gain",
+              "type": "MathFunction",
+              "params": {
+                "function": "exp"
+              }
+            },
+            {
+              "id": "low_allpass",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  -0.9869949626815514,
+                  1.0,
+                  0.9869949626815514
+                ]
+              }
+            },
+            {
+              "id": "low_x1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_y1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_plain",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  -0.5
+                ]
+              }
+            },
+            {
+              "id": "low_scaled",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            {
+              "id": "low_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "low_out",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            {
+              "id": "low_mid_db_scale",
+              "type": "Gain",
+              "params": {
+                "factor": 0.11512925464970229
+              }
+            },
+            {
+              "id": "low_mid_gain",
+              "type": "MathFunction",
+              "params": {
+                "function": "exp"
+              }
+            },
+            {
+              "id": "low_mid_allpass",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.9489645667148798,
+                  -1.94629357851163,
+                  1.0,
+                  1.94629357851163,
+                  -0.9489645667148798
+                ]
+              }
+            },
+            {
+              "id": "low_mid_x1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_mid_x2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_mid_y1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_mid_y2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "low_mid_plain",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            {
+              "id": "low_mid_scaled",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  -0.5
+                ]
+              }
+            },
+            {
+              "id": "low_mid_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "low_mid_out",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            {
+              "id": "mid_db_scale",
+              "type": "Gain",
+              "params": {
+                "factor": 0.11512925464970229
+              }
+            },
+            {
+              "id": "mid_gain",
+              "type": "MathFunction",
+              "params": {
+                "function": "exp"
+              }
+            },
+            {
+              "id": "mid_allpass",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.809784033195007,
+                  -1.7702359099160463,
+                  1.0,
+                  1.7702359099160463,
+                  -0.809784033195007
+                ]
+              }
+            },
+            {
+              "id": "mid_x1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "mid_x2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "mid_y1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "mid_y2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "mid_plain",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            {
+              "id": "mid_scaled",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  -0.5
+                ]
+              }
+            },
+            {
+              "id": "mid_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "mid_out",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            {
+              "id": "high_mid_db_scale",
+              "type": "Gain",
+              "params": {
+                "factor": 0.11512925464970229
+              }
+            },
+            {
+              "id": "high_mid_gain",
+              "type": "MathFunction",
+              "params": {
+                "function": "exp"
+              }
+            },
+            {
+              "id": "high_mid_allpass",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.4142135623730951,
+                  -1.0000000000000002,
+                  1.0,
+                  1.0000000000000002,
+                  -0.4142135623730951
+                ]
+              }
+            },
+            {
+              "id": "high_mid_x1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_mid_x2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_mid_y1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_mid_y2",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_mid_plain",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            {
+              "id": "high_mid_scaled",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  -0.5
+                ]
+              }
+            },
+            {
+              "id": "high_mid_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "high_mid_out",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1.0,
+                  1.0
+                ]
+              }
+            },
+            {
+              "id": "high_db_scale",
+              "type": "Gain",
+              "params": {
+                "factor": 0.11512925464970229
+              }
+            },
+            {
+              "id": "high_gain",
+              "type": "MathFunction",
+              "params": {
+                "function": "exp"
+              }
+            },
+            {
+              "id": "high_allpass",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  -5.551115123125783e-17,
+                  1.0,
+                  5.551115123125783e-17
+                ]
+              }
+            },
+            {
+              "id": "high_x1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_y1",
+              "type": "Delay",
+              "params": {
+                "initial_value": 0.0
+              }
+            },
+            {
+              "id": "high_plain",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            {
+              "id": "high_scaled",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  0.5,
+                  -0.5
+                ]
+              }
+            },
+            {
+              "id": "high_product",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "high_out",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1.0,
+                  1.0
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "low_db_scale",
+              "from_port": 0,
+              "to_element": "low_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "in",
+              "from_port": 0,
+              "to_element": "low_allpass",
+              "to_port": 0
+            },
+            {
+              "from_element": "in",
+              "from_port": 0,
+              "to_element": "low_x1",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_allpass",
+              "from_port": 0,
+              "to_element": "low_y1",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_x1",
+              "from_port": 0,
+              "to_element": "low_allpass",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_y1",
+              "from_port": 0,
+              "to_element": "low_allpass",
+              "to_port": 2
+            },
+            {
+              "from_element": "in",
+              "from_port": 0,
+              "to_element": "low_plain",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_allpass",
+              "from_port": 0,
+              "to_element": "low_plain",
+              "to_port": 1
+            },
+            {
+              "from_element": "in",
+              "from_port": 0,
+              "to_element": "low_scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_allpass",
+              "from_port": 0,
+              "to_element": "low_scaled",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_gain",
+              "from_port": 0,
+              "to_element": "low_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_scaled",
+              "from_port": 0,
+              "to_element": "low_product",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_plain",
+              "from_port": 0,
+              "to_element": "low_out",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_product",
+              "from_port": 0,
+              "to_element": "low_out",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_mid_db_scale",
+              "from_port": 0,
+              "to_element": "low_mid_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_out",
+              "from_port": 0,
+              "to_element": "low_mid_allpass",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_out",
+              "from_port": 0,
+              "to_element": "low_mid_x1",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_allpass",
+              "from_port": 0,
+              "to_element": "low_mid_y1",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_x1",
+              "from_port": 0,
+              "to_element": "low_mid_x2",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_y1",
+              "from_port": 0,
+              "to_element": "low_mid_y2",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_x1",
+              "from_port": 0,
+              "to_element": "low_mid_allpass",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_mid_x2",
+              "from_port": 0,
+              "to_element": "low_mid_allpass",
+              "to_port": 2
+            },
+            {
+              "from_element": "low_mid_y1",
+              "from_port": 0,
+              "to_element": "low_mid_allpass",
+              "to_port": 3
+            },
+            {
+              "from_element": "low_mid_y2",
+              "from_port": 0,
+              "to_element": "low_mid_allpass",
+              "to_port": 4
+            },
+            {
+              "from_element": "low_out",
+              "from_port": 0,
+              "to_element": "low_mid_plain",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_allpass",
+              "from_port": 0,
+              "to_element": "low_mid_plain",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_out",
+              "from_port": 0,
+              "to_element": "low_mid_scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_allpass",
+              "from_port": 0,
+              "to_element": "low_mid_scaled",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_mid_gain",
+              "from_port": 0,
+              "to_element": "low_mid_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_scaled",
+              "from_port": 0,
+              "to_element": "low_mid_product",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_mid_plain",
+              "from_port": 0,
+              "to_element": "low_mid_out",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_product",
+              "from_port": 0,
+              "to_element": "low_mid_out",
+              "to_port": 1
+            },
+            {
+              "from_element": "mid_db_scale",
+              "from_port": 0,
+              "to_element": "mid_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_out",
+              "from_port": 0,
+              "to_element": "mid_allpass",
+              "to_port": 0
+            },
+            {
+              "from_element": "low_mid_out",
+              "from_port": 0,
+              "to_element": "mid_x1",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_allpass",
+              "from_port": 0,
+              "to_element": "mid_y1",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_x1",
+              "from_port": 0,
+              "to_element": "mid_x2",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_y1",
+              "from_port": 0,
+              "to_element": "mid_y2",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_x1",
+              "from_port": 0,
+              "to_element": "mid_allpass",
+              "to_port": 1
+            },
+            {
+              "from_element": "mid_x2",
+              "from_port": 0,
+              "to_element": "mid_allpass",
+              "to_port": 2
+            },
+            {
+              "from_element": "mid_y1",
+              "from_port": 0,
+              "to_element": "mid_allpass",
+              "to_port": 3
+            },
+            {
+              "from_element": "mid_y2",
+              "from_port": 0,
+              "to_element": "mid_allpass",
+              "to_port": 4
+            },
+            {
+              "from_element": "low_mid_out",
+              "from_port": 0,
+              "to_element": "mid_plain",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_allpass",
+              "from_port": 0,
+              "to_element": "mid_plain",
+              "to_port": 1
+            },
+            {
+              "from_element": "low_mid_out",
+              "from_port": 0,
+              "to_element": "mid_scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_allpass",
+              "from_port": 0,
+              "to_element": "mid_scaled",
+              "to_port": 1
+            },
+            {
+              "from_element": "mid_gain",
+              "from_port": 0,
+              "to_element": "mid_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_scaled",
+              "from_port": 0,
+              "to_element": "mid_product",
+              "to_port": 1
+            },
+            {
+              "from_element": "mid_plain",
+              "from_port": 0,
+              "to_element": "mid_out",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_product",
+              "from_port": 0,
+              "to_element": "mid_out",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_mid_db_scale",
+              "from_port": 0,
+              "to_element": "high_mid_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_out",
+              "from_port": 0,
+              "to_element": "high_mid_allpass",
+              "to_port": 0
+            },
+            {
+              "from_element": "mid_out",
+              "from_port": 0,
+              "to_element": "high_mid_x1",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_allpass",
+              "from_port": 0,
+              "to_element": "high_mid_y1",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_x1",
+              "from_port": 0,
+              "to_element": "high_mid_x2",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_y1",
+              "from_port": 0,
+              "to_element": "high_mid_y2",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_x1",
+              "from_port": 0,
+              "to_element": "high_mid_allpass",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_mid_x2",
+              "from_port": 0,
+              "to_element": "high_mid_allpass",
+              "to_port": 2
+            },
+            {
+              "from_element": "high_mid_y1",
+              "from_port": 0,
+              "to_element": "high_mid_allpass",
+              "to_port": 3
+            },
+            {
+              "from_element": "high_mid_y2",
+              "from_port": 0,
+              "to_element": "high_mid_allpass",
+              "to_port": 4
+            },
+            {
+              "from_element": "mid_out",
+              "from_port": 0,
+              "to_element": "high_mid_plain",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_allpass",
+              "from_port": 0,
+              "to_element": "high_mid_plain",
+              "to_port": 1
+            },
+            {
+              "from_element": "mid_out",
+              "from_port": 0,
+              "to_element": "high_mid_scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_allpass",
+              "from_port": 0,
+              "to_element": "high_mid_scaled",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_mid_gain",
+              "from_port": 0,
+              "to_element": "high_mid_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_scaled",
+              "from_port": 0,
+              "to_element": "high_mid_product",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_mid_plain",
+              "from_port": 0,
+              "to_element": "high_mid_out",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_product",
+              "from_port": 0,
+              "to_element": "high_mid_out",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_db_scale",
+              "from_port": 0,
+              "to_element": "high_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_out",
+              "from_port": 0,
+              "to_element": "high_allpass",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_mid_out",
+              "from_port": 0,
+              "to_element": "high_x1",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_allpass",
+              "from_port": 0,
+              "to_element": "high_y1",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_x1",
+              "from_port": 0,
+              "to_element": "high_allpass",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_y1",
+              "from_port": 0,
+              "to_element": "high_allpass",
+              "to_port": 2
+            },
+            {
+              "from_element": "high_mid_out",
+              "from_port": 0,
+              "to_element": "high_plain",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_allpass",
+              "from_port": 0,
+              "to_element": "high_plain",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_mid_out",
+              "from_port": 0,
+              "to_element": "high_scaled",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_allpass",
+              "from_port": 0,
+              "to_element": "high_scaled",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_gain",
+              "from_port": 0,
+              "to_element": "high_product",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_scaled",
+              "from_port": 0,
+              "to_element": "high_product",
+              "to_port": 1
+            },
+            {
+              "from_element": "high_plain",
+              "from_port": 0,
+              "to_element": "high_out",
+              "to_port": 0
+            },
+            {
+              "from_element": "high_product",
+              "from_port": 0,
+              "to_element": "high_out",
+              "to_port": 1
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "in",
+              "type": "F64",
+              "element": "in",
+              "port": 0
+            },
+            {
+              "name": "low_db",
+              "type": "F64",
+              "element": "low_db_scale",
+              "port": 0
+            },
+            {
+              "name": "low_mid_db",
+              "type": "F64",
+              "element": "low_mid_db_scale",
+              "port": 0
+            },
+            {
+              "name": "mid_db",
+              "type": "F64",
+              "element": "mid_db_scale",
+              "port": 0
+            },
+            {
+              "name": "high_mid_db",
+              "type": "F64",
+              "element": "high_mid_db_scale",
+              "port": 0
+            },
+            {
+              "name": "high_db",
+              "type": "F64",
+              "element": "high_db_scale",
+              "port": 0
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "out",
+              "type": "F64",
+              "element": "high_out",
+              "port": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "low_db",
+        "type": "Constant",
+        "params": {
+          "type": "F64",
+          "value": 6.0
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "low_mid_db",
+        "type": "Constant",
+        "params": {
+          "type": "F64",
+          "value": 0.0
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "mid_db",
+        "type": "Constant",
+        "params": {
+          "type": "F64",
+          "value": -9.0
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "high_mid_db",
+        "type": "Constant",
+        "params": {
+          "type": "F64",
+          "value": 3.0
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "high_db",
+        "type": "Constant",
+        "params": {
+          "type": "F64",
+          "value": -6.0
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "record_in",
+        "type": "RecordingSink",
+        "params": {
+          "type": "F64",
+          "file_path": "record_in.s7b",
+          "sample_rate_hz": 48000,
+          "format": "compact-binary",
+          "description": "G2 programme as received by node B"
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      },
+      {
+        "id": "record_out",
+        "type": "RecordingSink",
+        "params": {
+          "type": "F64",
+          "file_path": "record_out.s7b",
+          "sample_rate_hz": 48000,
+          "format": "compact-binary",
+          "description": "G2 AudioEqualizer output"
+        },
+        "node": "33333333-4444-5555-6666-777777777777"
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "sweep",
+        "from_port": 0,
+        "to_element": "sweep_part",
+        "to_port": 0
+      },
+      {
+        "from_element": "sweep_gate",
+        "from_port": 0,
+        "to_element": "sweep_part",
+        "to_port": 1
+      },
+      {
+        "from_element": "tone_100",
+        "from_port": 0,
+        "to_element": "tones",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone_400",
+        "from_port": 0,
+        "to_element": "tones",
+        "to_port": 1
+      },
+      {
+        "from_element": "tone_1600",
+        "from_port": 0,
+        "to_element": "tones",
+        "to_port": 2
+      },
+      {
+        "from_element": "tone_6000",
+        "from_port": 0,
+        "to_element": "tones",
+        "to_port": 3
+      },
+      {
+        "from_element": "tone_12000",
+        "from_port": 0,
+        "to_element": "tones",
+        "to_port": 4
+      },
+      {
+        "from_element": "tones",
+        "from_port": 0,
+        "to_element": "tone_part",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone_gate",
+        "from_port": 0,
+        "to_element": "tone_part",
+        "to_port": 1
+      },
+      {
+        "from_element": "sweep_part",
+        "from_port": 0,
+        "to_element": "programme",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone_part",
+        "from_port": 0,
+        "to_element": "programme",
+        "to_port": 1
+      },
+      {
+        "from_element": "programme",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 0
+      },
+      {
+        "from_element": "low_db",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 1
+      },
+      {
+        "from_element": "low_mid_db",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 2
+      },
+      {
+        "from_element": "mid_db",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 3
+      },
+      {
+        "from_element": "high_mid_db",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 4
+      },
+      {
+        "from_element": "high_db",
+        "from_port": 0,
+        "to_element": "equalizer",
+        "to_port": 5
+      },
+      {
+        "from_element": "programme",
+        "from_port": 0,
+        "to_element": "record_in",
+        "to_port": 0
+      },
+      {
+        "from_element": "equalizer",
+        "from_port": 0,
+        "to_element": "record_out",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "programme",
+      "element": "programme",
+      "port": 0,
+      "unit": ""
+    },
+    {
+      "name": "equalized",
+      "element": "equalizer",
+      "port": 0,
+      "unit": ""
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "sweep",
+        "position": [
+          2,
+          13
+        ],
+        "title": "Sweep 20 Hz-20 kHz, 10 s"
+      },
+      {
+        "id": "sweep_gate",
+        "position": [
+          2,
+          20
+        ],
+        "title": "Sweep off at 10 s"
+      },
+      {
+        "id": "sweep_part",
+        "position": [
+          15,
+          16
+        ],
+        "title": "sweep_part"
+      },
+      {
+        "id": "tone_100",
+        "position": [
+          15,
+          26
+        ],
+        "title": "100 Hz"
+      },
+      {
+        "id": "tone_400",
+        "position": [
+          2,
+          31
+        ],
+        "title": "400 Hz"
+      },
+      {
+        "id": "tone_1600",
+        "position": [
+          15,
+          37
+        ],
+        "title": "1600 Hz"
+      },
+      {
+        "id": "tone_6000",
+        "position": [
+          2,
+          42
+        ],
+        "title": "6000 Hz"
+      },
+      {
+        "id": "tone_12000",
+        "position": [
+          15,
+          47
+        ],
+        "title": "12000 Hz"
+      },
+      {
+        "id": "tones",
+        "position": [
+          28,
+          34
+        ],
+        "title": "Five tones"
+      },
+      {
+        "id": "tone_gate",
+        "position": [
+          28,
+          47
+        ],
+        "title": "Tones on at 10 s"
+      },
+      {
+        "id": "tone_part",
+        "position": [
+          41,
+          38
+        ],
+        "title": "tone_part"
+      },
+      {
+        "id": "programme",
+        "position": [
+          28,
+          26
+        ],
+        "title": "Programme (node A)"
+      },
+      {
+        "id": "equalizer",
+        "position": [
+          67,
+          26
+        ],
+        "title": "AudioEqualizer (node B)"
+      },
+      {
+        "id": "low_db",
+        "position": [
+          54,
+          40
+        ],
+        "title": "low_db = 6 dB"
+      },
+      {
+        "id": "low_mid_db",
+        "position": [
+          41,
+          46
+        ],
+        "title": "low_mid_db = 0 dB"
+      },
+      {
+        "id": "mid_db",
+        "position": [
+          54,
+          51
+        ],
+        "title": "mid_db = -9 dB"
+      },
+      {
+        "id": "high_mid_db",
+        "position": [
+          31,
+          56
+        ],
+        "title": "high_mid_db = 3 dB"
+      },
+      {
+        "id": "high_db",
+        "position": [
+          44,
+          61
+        ],
+        "title": "high_db = -6 dB"
+      },
+      {
+        "id": "record_in",
+        "position": [
+          52,
+          21
+        ],
+        "title": "record_in"
+      },
+      {
+        "id": "record_out",
+        "position": [
+          52,
+          31
+        ],
+        "title": "record_out"
+      },
+      {
+        "id": "scope",
+        "position": [
+          67,
+          42
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "programme",
+            "equalized"
+          ],
+          "channel_units": [
+            "",
+            ""
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "sweep",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sweep_part",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "sweep_gate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sweep_part",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "tone_100",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tones",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "tone_400",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tones",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "tone_1600",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tones",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "tone_6000",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tones",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "tone_12000",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tones",
+            "in",
+            4
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "tones",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tone_part",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "tone_gate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tone_part",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "sweep_part",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "programme",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "tone_part",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "programme",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "programme",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "low_db",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "low_mid_db",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "mid_db",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "high_mid_db",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            4
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "high_db",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "equalizer",
+            "in",
+            5
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "programme",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "record_in",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "equalizer",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "record_out",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "programme",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "equalizer",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "G2 TWO-NODE AUDIO EQUALIZER (48 kHz)\nNode A (source): log sweep 20 Hz-20 kHz for 10 s, then tones at 100, 400, 1600, 6000 and 12000 Hz.\nNode B (equalizer): bundled AudioEqualizer, gains +6/0/-9/+3/-6 dB; records input and output.\nDeploy: tools/run_g2_audio_demo.py (two nodes) or Studio Deploy. Run in Studio = the same graph locally;\nit writes record_in.s7b and record_out.s7b into Studio's working directory. examples/audio/two_node_equalizer.md",
+          "width": 1480,
+          "height": 172,
+          "font_size": 14
+        }
+      }
+    ]
+  },
+  "runtime_nodes": [
+    {
+      "node_uuid": "11111111-2222-3333-4444-555555555555",
+      "name": "source",
+      "endpoint": "wss://127.0.0.1:9201"
+    },
+    {
+      "node_uuid": "33333333-4444-5555-6666-777777777777",
+      "name": "equalizer",
+      "endpoint": "wss://127.0.0.1:9202"
+    }
+  ]
+}

@@ -22,25 +22,20 @@ Example:
       --rates 8000 16000 32000 48000 --seconds 20 --output /tmp/g2-rates.jsonl
 """
 import argparse
-import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import platform
-import random
 import signal
-import socket
-import ssl
-import struct
 import subprocess
 import sys
 import tempfile
 import time
 
-NODE_A = "11111111-2222-3333-4444-555555555555"
-NODE_B = "33333333-4444-5555-6666-777777777777"
-OID = "2.25.4266950079767543379770189370854073200"
+from g2_audio import (NODE_A, NODE_B, cpu_seconds, equalizer_reference, free_port_pair, memory_kib, node_config,
+                      read_recording, studio_fingerprint, wait_port)
+
 TONES = ((0.30, 220.0), (0.20, 1000.0), (0.15, 0.3))  # (amplitude, frequency as Hz or fraction of rate)
 
 
@@ -50,55 +45,6 @@ def tones(rate):
 
 # AudioEqualizer band gains (dB) for the run: low shelf, three peaks, high shelf.
 EQ_GAINS_DB = (6.0, -3.0, -6.0, 3.0, 4.0)
-
-
-def equalizer_reference(x):
-    """The bundled AudioEqualizer, computed here sample by sample from its
-    documented design (Regalia-Mitra bands, coefficients fixed at 48 kHz; at
-    another run rate the band frequencies scale with the rate)."""
-    design = 48000.0
-    signal_in = list(x)
-    for (kind, frequency, bandwidth), gain_db in zip(
-            (("low", 100.0, 0.0), ("peak", 400.0, 400.0), ("peak", 1600.0, 1600.0), ("peak", 6000.0, 6000.0), ("high", 12000.0, 0.0)),
-            EQ_GAINS_DB):
-        k = 10 ** (gain_db / 20)
-        out, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
-        if kind == "peak":
-            t = math.tan(math.pi * bandwidth / design)
-            c, d = (t - 1) / (t + 1), -math.cos(2 * math.pi * frequency / design)
-        else:
-            t = math.tan(math.pi * frequency / design)
-            a = (t - 1) / (t + 1)
-        for v in signal_in:
-            if kind == "peak":   # A(z) = (-c + d(1-c) z^-1 + z^-2) / (1 + d(1-c) z^-1 - c z^-2)
-                ap = -c * v + d * (1 - c) * x1 + x2 - d * (1 - c) * y1 + c * y2
-                x2, y2 = x1, y1
-            else:                # A(z) = (a + z^-1) / (1 + a z^-1)
-                ap = a * v + x1 - a * y1
-            x1, y1 = v, ap
-            if kind == "low":
-                out.append((1 + k) / 2 * v + (k - 1) / 2 * ap)
-            else:
-                out.append((1 + k) / 2 * v + (1 - k) / 2 * ap)
-        signal_in = out
-    return signal_in
-
-
-def node_config(certs, cert_name, port, studio_fp, security):
-    config = {
-        "name": "idle",
-        "elements": [{"id": "idle", "type": "Constant", "params": {"value": 0}}],
-        "connections": [],
-        "dt": 1.0,  # the idle startup graph is not stepped (no execution.step_rate_hz)
-        "websocket": {"server": {"enabled": True, "port": port, "bind_address": "127.0.0.1", "tls": {
-            "enabled": True, "cert_file": str(certs / f"{cert_name}.cert.pem"), "key_file": str(certs / f"{cert_name}.key.pem"),
-            "ca_file": str(certs / "s7_root_ca.cert.pem"), "require_client_cert": True}}},
-        "control": {"studio_key_purpose_oid": OID, "studio_certificate_sha256": studio_fp},
-        "clock": {"assume_synchronized": True},
-    }
-    if security != "shared":
-        config["websocket"]["data_server"] = {"enabled": True, "port": port + 2, "bind_address": "127.0.0.1", "security": security}
-    return config
 
 
 def diagram(rate, ports, security):
@@ -146,23 +92,12 @@ def diagram(rate, ports, security):
             "dt": 1.0 / rate}
 
 
-def read_recording(path):
-    data = path.read_bytes()
-    if data[:4] != b"S7B1" or data[4] != 3:
-        raise ValueError(f"{path.name}: not a compact binary v3 recording")
-    header = struct.unpack_from("<Q", data, 8)[0]
-    payload = memoryview(data)[header:]
-    if len(payload) % 8:
-        raise ValueError(f"{path.name}: truncated sample")
-    return struct.unpack(f"<{len(payload) // 8}d", payload)
-
-
 def check_recordings(work, rate):
     """Independent references; returns (problems, counts)."""
     problems = []
     try:
-        x = read_recording(work / "record_in.s7b")
-        y = read_recording(work / "record_out.s7b")
+        x = read_recording(work / "record_in.s7b")[0]
+        y = read_recording(work / "record_out.s7b")[0]
     except (OSError, ValueError) as error:
         return [str(error)], {}
     counts = {"input_samples": len(x), "output_samples": len(y)}
@@ -176,57 +111,12 @@ def check_recordings(work, rate):
     # The oscillators accumulate phase in binary64: allow its rounding growth.
     if worst_in > 1e-7:
         problems.append(f"B's input differs from the generated tones by {worst_in:.3g} (lost, repeated or reordered samples?)")
-    signal_in = equalizer_reference(x)
+    signal_in = equalizer_reference(x, EQ_GAINS_DB)
     worst_out = max((abs(a - b) for a, b in zip(signal_in, y)), default=math.inf)
     if worst_out > 1e-9:
         problems.append(f"B's output differs from the reference equalizer by {worst_out:.3g}")
     counts.update(input_max_error=worst_in, output_max_error=worst_out)
     return problems, counts
-
-
-def cpu_seconds(pid):
-    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
-    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
-
-
-def memory_kib(pid):
-    values = {}
-    for line in Path(f"/proc/{pid}/status").read_text().splitlines():
-        key, _, rest = line.partition(":")
-        if key in ("VmRSS", "VmHWM"):
-            values[key] = int(rest.split()[0])
-    return values
-
-
-def studio_fingerprint(certs):
-    der = ssl.PEM_cert_to_DER_cert((certs / "s7_studio.cert.pem").read_text())
-    return hashlib.sha256(der).hexdigest()
-
-
-def free_port_pair():
-    for _ in range(100):
-        base = random.randrange(20000, 24990, 4)
-        try:
-            for port in range(base, base + 4):
-                with socket.socket() as s:
-                    s.bind(("127.0.0.1", port))
-            return base, base + 1
-        except OSError:
-            continue
-    raise RuntimeError("no free local ports")
-
-
-def wait_port(port, process, timeout=10.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(f"node on port {port} exited with {process.returncode}")
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return
-        except OSError:
-            time.sleep(0.1)
-    raise RuntimeError(f"node on port {port} did not listen")
 
 
 class Run:
@@ -266,7 +156,7 @@ class Run:
                                        cwd=self.work, stdout=log, stderr=subprocess.STDOUT)
             self.processes.append(process)
         for port, process in zip(self.ports, self.processes):
-            wait_port(port, process)
+            wait_port("127.0.0.1", port, process)
 
     def stop(self):
         # Consumer first: stopping the producer first would underrun node B.

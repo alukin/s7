@@ -19,7 +19,7 @@ SECONDS = [
     ("relay/", 1200), ("pendulum/", 100), ("double_pendulum", 20),
     ("van_der_pol/van_der_pol_mu3", 60), ("van_der_pol/", 40), ("lorenz/lorenz_stable", 10), ("lorenz/", 40),
     ("lotka_volterra/", 40), ("pll/", 6), ("signal_measurement/iq_correlation", 8), ("signal_measurement/", 2),
-    ("spectrum/", 4), ("2int_osc", 10), ("3int_helix", 10), ("symplectic_osc_live", 10), ("demo", 10),
+    ("spectrum/", 4), ("audio/two_node_equalizer", 15), ("2int_osc", 10), ("3int_helix", 10), ("symplectic_osc_live", 10), ("demo", 10),
 ]
 
 
