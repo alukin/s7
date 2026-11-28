@@ -4356,15 +4356,19 @@ private slots:
     void bundledExamplesRunAndRender() {
         if (qEnvironmentVariableIsEmpty("S7_GUI_EXAMPLES")) QSKIP("Bundled examples run in the s7studio_gui_examples tests");
         QFETCH(QString, diagram);
-        if (diagram == "sdr/fm_receiver.s7diagram") QSKIP("FM playback requires a live SDR and audio output");
-        if (diagram.startsWith("audio/")) QSKIP("Audio examples open a real sound device");
         const bool publication = qEnvironmentVariableIsSet("S7_README_SCREENSHOTS");
         const bool lorenzOverview = publication && diagram == "lorenz/lorenz_attractor.s7diagram";
-        const double seconds = documentedSeconds(diagram);
-        QVERIFY2(seconds > 0, "every bundled example needs studio_run.runtime_seconds (tools/example_runs.py for generated ones)");
         const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
         QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
         const auto json = QJsonDocument::fromJson(file.readAll()).object();
+        // Hardware examples run continuously on a real device: never here.
+        for (const auto& element : json["schema"].toObject()["elements"].toArray()) {
+            const auto type = element.toObject()["type"].toString();
+            if (type == "AudioSource" || type == "AudioSink" || type == "SdrSource" || type == "SdrSink")
+                QSKIP("Hardware examples open a real sound device or radio");
+        }
+        const double seconds = documentedSeconds(diagram);
+        QVERIFY2(seconds > 0, "every bundled example needs studio_run.runtime_seconds (tools/example_runs.py for generated ones)");
         for(const auto& element:json["schema"].toObject()["elements"].toArray()){const auto type=element.toObject()["type"].toString();if((type=="FourierCoefficient"||type=="WaveletCoefficient")&&!s7::ElementRegistry::instance().find(type.toStdString()))QSKIP("Optional analysis plugin is not loaded; build/load it to run this graph example");}
         const double dt = json.value("dt").toDouble(); QVERIFY(dt > 0);
         QVERIFY(fileAction("action.open", path));

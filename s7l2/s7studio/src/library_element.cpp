@@ -69,7 +69,7 @@ bool DiagramEditor::addLibraryElement(const QString& identifier, const std::opti
     element.type = type.toStdString();
     // Ordinary parameter defaults are supplied by the existing metadata path
     // when configuring/compiling. Do not create runtime/plugin instances here.
-    if (observer && (type == "Scope" || type == "LiveOscilloscope")) element.params["channel_count"] = 0;
+    if (observer && (type == "Scope" || type == "LiveOscilloscope" || type == "LiveSpectrum")) element.params["channel_count"] = 0;
     if (descriptor && descriptor->metadata().schema_definition) element.schema = *descriptor->metadata().schema_definition;
     // Coefficients are designed at the diagram's current rate; that rate is
     // recorded so a later run at another rate is refused rather than misread.

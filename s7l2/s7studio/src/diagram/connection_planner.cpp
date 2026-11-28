@@ -254,7 +254,7 @@ auto ConnectionPlanner::plan(const WireEnd& a, const WireEnd& b, QVector<QPointF
     wire->userBends = withoutRepeats(bends);
     Result result;
     result.change.addedWires.push_back(std::move(wire));
-    if (const auto target = downstream.node.lock(); target && (target->element().type == "Scope" || target->element().type == "LiveOscilloscope") &&
+    if (const auto target = downstream.node.lock(); target && (target->element().type == "Scope" || target->element().type == "LiveOscilloscope" || target->element().type == "LiveSpectrum") &&
         downstream.index == static_cast<int>(target->inputs().size()) - 1) {
         auto element = target->element();
         element.params["channel_count"] = static_cast<int>(target->inputs().size());

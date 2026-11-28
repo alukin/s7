@@ -145,6 +145,140 @@
       }
     },
     {
+      "type_name": "LiveSpectrum",
+      "display_name": "Live spectrum",
+      "description": "Spectrum of the newest live samples, like a hardware spectrum analyzer: LED bar columns with falling peak caps, or a filled curve with a decaying peak trace. One channel is a real signal (one-sided, log or linear frequency); two channels are I and Q (two-sided, centred on 0 Hz, e.g. an SDR through ComplexToReIm). The viewer runs a small Hann-windowed FFT on a timer; values are in dB relative to full scale (a unit-amplitude sine reads 0 dBFS). Does not record the run. Connect an output to the '+' port to add a channel.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "signal0, signal1, ...",
+          "description": "Observed real-valued outputs: one real signal, or I then Q; '+' adds another input",
+          "type": "F64",
+          "optional": true,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "channel_count",
+          "type": "int",
+          "description": "Number of signal inputs, maintained when wiring the '+' port. Nonnegative; initially no channels. Live acquisition supports up to 8 connected channels.",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "channel_names",
+          "type": "array",
+          "description": "Optional array of channel-name strings in input order, e.g. [\"voltage\",\"current\"]. Missing/non-string entries use signal0, signal1, ... . Use distinct nonempty names for channel identity.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "channel_units",
+          "type": "array",
+          "description": "Optional array of unit-label strings in input order, e.g. [\"V\",\"A\"]. Labels do not convert values. Missing/non-string entries inherit a named signal tap's unit, otherwise the unit is unspecified.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "bars",
+          "type": "int",
+          "description": "Bar count of the bar style, 4..256",
+          "default": 32,
+          "required": false,
+          "min": 4.0,
+          "max": 256.0,
+          "enum_values": []
+        },
+        {
+          "name": "style",
+          "type": "string",
+          "description": "bars (LED columns) or curve; default bars for one real channel, curve for I/Q",
+          "default": "",
+          "required": false,
+          "enum_values": [
+            "bars",
+            "curve"
+          ]
+        },
+        {
+          "name": "frequency_scale",
+          "type": "string",
+          "description": "log or linear frequency axis for a real signal (default log); I/Q is always linear",
+          "default": "",
+          "required": false,
+          "enum_values": [
+            "log",
+            "linear"
+          ]
+        },
+        {
+          "name": "fft_size",
+          "type": "int",
+          "description": "FFT length, a power of two from 512 to 16384 (default 4096); the live window retains at least this many samples",
+          "default": 4096,
+          "required": false,
+          "min": 512.0,
+          "max": 16384.0,
+          "enum_values": []
+        },
+        {
+          "name": "floor_db",
+          "type": "int",
+          "description": "Bottom of the dB scale (default -90 dBFS)",
+          "default": -90,
+          "required": false,
+          "min": -160.0,
+          "max": -20.0,
+          "enum_values": []
+        },
+        {
+          "name": "input",
+          "type": "string",
+          "description": "auto (two or more channels are I/Q), real or iq",
+          "default": "auto",
+          "required": false,
+          "enum_values": [
+            "auto",
+            "real",
+            "iq"
+          ]
+        },
+        {
+          "name": "centre_hz",
+          "type": "real",
+          "description": "Added to frequency labels, e.g. an SDR's tuned frequency (default 0)",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
       "type_name": "PhasePortrait",
       "display_name": "Phase Portrait",
       "description": "Plots one observed signal against another. Observes completed causal steps without changing the model. Double-click opens the full viewer. Channel bindings are prepared at run start; rewiring applies to the next run.",

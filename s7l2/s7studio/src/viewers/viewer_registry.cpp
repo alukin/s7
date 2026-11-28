@@ -7,6 +7,7 @@
 #include "phase_trajectory_3d_view_window.hpp"
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
+#include "viewers/live_spectrum_window.hpp"
 #include "viewers/observer_presentation.hpp"
 #include "viewers/surface_window.hpp"
 #include "viewers/response_window.hpp"
@@ -61,6 +62,7 @@ void registerBuiltinViewers(ViewerRegistry& registry)
     };
     add(ui::ScopeViewWindow::viewerType());
     add(ui::LiveOscilloscopeWindow::viewerType());
+    add(LiveSpectrumWindow::viewerType());
     add(ui::PhasePortraitViewWindow::viewerType());
     add(ui::PhaseTrajectory3DViewWindow::viewerType());
     add(SurfaceWindow::viewerType(false));

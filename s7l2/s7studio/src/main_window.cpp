@@ -31,6 +31,7 @@
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "live_oscilloscope_window.hpp"
+#include "viewers/live_spectrum_window.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/io.hpp>
@@ -270,6 +271,11 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram, std::shared_
     viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
     connect(viewers_, &viewers::ViewerManager::viewerCreated, this,
         [this](const QString& typeId, const QString& instanceId, viewers::ObservationViewer* viewer) {
+            if (auto* spectrum = typeId == QStringLiteral("LiveSpectrum") ? dynamic_cast<viewers::LiveSpectrumWindow*>(viewer->widget()) : nullptr) {
+                const auto node = diagramEditor_ && diagramEditor_->scene() ? diagramEditor_->scene()->elementNode(instanceId.toStdString()) : nullptr;
+                if (node) spectrum->applyParameters(QJsonDocument::fromJson(QByteArray::fromStdString(boost::json::serialize(node->element().params))).object());
+                return;
+            }
             auto* live = typeId == QStringLiteral("LiveOscilloscope") ? dynamic_cast<ui::LiveOscilloscopeWindow*>(viewer->widget()) : nullptr;
             if (!live) return;
             applyTriggerPreset(instanceId, true);
@@ -1572,7 +1578,7 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
             for (const auto& probe : scene->probes()) if (probe.point == connection.from) {
                 unit = probe.unit.toStdString(); break;
             }
-            const bool live = observer && observer->element().type == "LiveOscilloscope";
+            const bool live = observer && (observer->element().type == "LiveOscilloscope" || observer->element().type == "LiveSpectrum");
             if (observer) {
                 const auto* units = json_utils::findObjectValue(observer->element().params, "channel_units");
                 if (units && units->is_array() && connection.to.port >= 0 &&

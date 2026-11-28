@@ -1,0 +1,173 @@
+{
+  "id": "sdr_live_spectrum",
+  "dt": 1.4880952380952381e-06,
+  "document_kind": "s7.diagram",
+  "description": "Live I/Q spectrum of a LibreSDR (ADALM-Pluto compatible) receiver.",
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "studio_run": {
+    "runtime_seconds": -1
+  },
+  "schema": {
+    "name": "sdr_live_spectrum",
+    "elements": [
+      {
+        "id": "receiver",
+        "type": "SdrSource",
+        "params": {
+          "type": "C32",
+          "backend": "soapy",
+          "device": "driver=plutosdr,uri=ip:analog.local",
+          "channels": [
+            "0"
+          ],
+          "frame_rate": [
+            672000,
+            1
+          ],
+          "block_frames": 8192,
+          "queue_frames": 32768,
+          "options": "{\"frequency_hz\":\"88900000\",\"bandwidth_hz\":\"600000\",\"antenna\":\"A_BALANCED\",\"gain_mode\":\"auto\"}"
+        }
+      },
+      {
+        "id": "iq",
+        "type": "ComplexToReIm",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "receiver",
+        "from_port": 0,
+        "to_element": "iq",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "receiver",
+        "position": [
+          3,
+          14
+        ],
+        "title": "LibreSDR receiver (C32 I/Q)"
+      },
+      {
+        "id": "iq",
+        "position": [
+          17,
+          14
+        ],
+        "title": "I and Q"
+      },
+      {
+        "id": "spectrum",
+        "position": [
+          31,
+          14
+        ],
+        "observer": true,
+        "type": "LiveSpectrum",
+        "title": "Live RF spectrum",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "I",
+            "Q"
+          ],
+          "channel_units": [
+            "FS",
+            "FS"
+          ],
+          "style": "curve",
+          "input": "iq",
+          "fft_size": 2048,
+          "floor_db": -110,
+          "centre_hz": 88900000.0
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "receiver",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "iq",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs1",
+        "from": {
+          "port": [
+            "iq",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "spectrum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs2",
+        "from": {
+          "port": [
+            "iq",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "spectrum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "SDR LIVE SPECTRUM  |  LibreSDR / ADALM-Pluto at ip:analog.local, receive only\nSdrSource tuned to 88.9 MHz at 672 kS/s; ComplexToReIm splits I and Q into the Live spectrum curve.\nThe FM station at 88.7 MHz appears 200 kHz left of centre. Run continuously, then double-click \"spectrum\".\nEdit frequency_hz in the receiver options (and centre_hz of the viewer) to look elsewhere.\nGuide: examples/sdr/LIVE_SPECTRUM.md",
+          "width": 760,
+          "height": 172,
+          "font_size": 14
+        }
+      }
+    ]
+  },
+  "probes": []
+}

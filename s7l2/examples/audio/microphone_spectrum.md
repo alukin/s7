@@ -8,7 +8,11 @@ Live Oscilloscope.
    [hardware guide](../../docs/HARDWARE_IO.md)) and open the diagram.
 2. Choose **Run**. The saved run is continuous (`-1`); stop it with **Stop**.
    The run is paced by the sound card, so model time follows the device clock.
-3. Double-click **spectrum** and open the **Spectrum** tab. Pick `left` or
+3. Double-click **analyzer** for a 32-band LED spectrum analyzer of the left
+   channel (the **Live spectrum** viewer). Its radio buttons switch **Bars** /
+   **Curve** and a **Log** / **Linear** frequency axis; set the bar count, FFT
+   size and dB floor in the window or as observer parameters.
+4. For the detailed spectrum, double-click **spectrum** and open the **Spectrum** tab. Pick `left` or
    `right` as Source; use the FFT size, window and dB controls described in the
    [spectrum guide](../../docs/STUDIO_SPECTRUM.md). Music shows its bass and
    voice bands; a whistle or tuning fork shows a single sharp peak.

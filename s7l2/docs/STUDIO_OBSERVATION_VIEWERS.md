@@ -151,6 +151,22 @@ X/Y pairs of the same step go through `StepAligner<2>`. The display retains up t
 
 Triples of the same step go through `StepAligner<3>`. The trajectory is drawn as one continuous line strip (at most 500,000 vertices, thinned like the Phase Portrait). Each data axis is scaled independently into the cube, with tick values at 10 %, 50 % and 90 % of each range and axis titles; data X points right, data Y into the screen, data Z up. Buttons **XY**, **XZ**, **YZ** turn the view to the orthogonal projections the previous viewer showed side by side; **3D** returns to the default view. A red marker shows the newest point. A Qt Graphs 3D scatter was not used: unconnected points do not show a trajectory.
 
+### Live spectrum
+
+`LiveSpectrum` (`live_spectrum_window.*`, computation in
+`analysis/live_spectrum.*`) is a simple live spectrum analyzer. It reads the
+newest samples of its live source (no recording), runs a Hann-windowed FFT in
+place every 50 ms and shows amplitude in dBFS (a unit-amplitude sine reads
+0 dBFS). One channel is a real signal: one-sided, log (default) or linear
+frequency. Two channels are I and Q: two-sided around 0 Hz, linear, for an SDR
+through `ComplexToReIm`. Radio buttons choose **Bars** (LED columns in green,
+yellow and red with falling peak caps, default 32 bars, the strongest bin per
+band) or **Curve** (a filled trace with a decaying peak), and **Log** or
+**Linear** frequency. Observer parameters `bars`, `style`, `frequency_scale`,
+`fft_size`, `floor_db`, `input` and `centre_hz` set the initial view. See
+`examples/audio/microphone_spectrum.s7diagram` and
+`examples/sdr/live_spectrum.s7diagram`.
+
 ## Qt integration
 
 - **QQuickWidget per viewer.** Each viewer owns its widget and QML engine, so instances share no QML state. The scene is created on first show, unparented and stored before it is added to the layout: constructing a `QQuickWidget` as a child of a visible widget processes events and would re-enter `showEvent`.

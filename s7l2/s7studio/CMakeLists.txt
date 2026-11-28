@@ -123,6 +123,7 @@ add_library(s7studio_analysis STATIC
     src/analysis/surface_grid.cpp src/analysis/surface_grid.hpp
     src/analysis/fft.cpp src/analysis/fft.hpp
     src/analysis/spectrum.cpp src/analysis/spectrum.hpp
+    src/analysis/live_spectrum.cpp src/analysis/live_spectrum.hpp
     src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp
     src/analysis/time_view_worker.cpp src/analysis/time_view_worker.hpp)
 target_sources(s7studio_analysis PRIVATE
@@ -166,6 +167,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/trajectory_geometry.hpp
     src/scope_sample.hpp
     src/live_oscilloscope_window.cpp src/live_oscilloscope_window.hpp
+    src/viewers/live_spectrum_window.cpp src/viewers/live_spectrum_window.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
     src/phase_portrait_view_window.cpp
@@ -745,6 +747,12 @@ set_target_properties(s7studio_spectrum_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_spectrum_test)
 add_test(NAME s7studio_spectrum COMMAND s7studio_spectrum_test)
 set_tests_properties(s7studio_spectrum PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_live_spectrum_viewer_test tests/live_spectrum_viewer_test.cpp)
+target_link_libraries(s7studio_live_spectrum_viewer_test PRIVATE s7studio_viewers s7studio_analysis Qt6::Test)
+set_target_properties(s7studio_live_spectrum_viewer_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_live_spectrum_viewer COMMAND s7studio_live_spectrum_viewer_test)
+set_tests_properties(s7studio_live_spectrum_viewer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
 
 s7_add_test_executable(s7studio_pair_analysis_test tests/pair_analysis_test.cpp)
 target_link_libraries(s7studio_pair_analysis_test PRIVATE s7studio_analysis Qt6::Test)

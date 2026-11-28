@@ -70,6 +70,27 @@
             "FS"
           ]
         }
+      },
+      {
+        "id": "analyzer",
+        "position": [
+          18,
+          26
+        ],
+        "observer": true,
+        "type": "LiveSpectrum",
+        "title": "Spectrum analyzer (32 bars)",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "left"
+          ],
+          "channel_units": [
+            "FS"
+          ],
+          "bars": 32,
+          "style": "bars"
+        }
       }
     ],
     "wires": [
@@ -108,6 +129,24 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "obs3",
+        "from": {
+          "port": [
+            "microphone",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "analyzer",
+            "in",
+            0
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": [
@@ -118,7 +157,7 @@
           2
         ],
         "params": {
-          "text": "MICROPHONE SPECTRUM  |  live sound from the default PipeWire input\nAudioSource captures stereo F32 at 48 kHz; the Live Oscilloscope shows the newest samples.\nRun continuously (the saved run is -1), double-click \"spectrum\", then choose the Spectrum tab.\nDevice-paced: model time follows the sound card. Lower the input gain if the trace clips at ±1.\nGuide: examples/audio/microphone_spectrum.md",
+          "text": "MICROPHONE SPECTRUM  |  live sound from the default PipeWire input\nAudioSource captures stereo F32 at 48 kHz. \"analyzer\" is a 32-band LED spectrum analyzer of the left channel;\n\"spectrum\" is the Live Oscilloscope (Time and detailed Spectrum tabs). Run continuously, then double-click one.\nDevice-paced: model time follows the sound card. Lower the input gain if the trace clips at ±1.\nGuide: examples/audio/microphone_spectrum.md",
           "width": 500,
           "height": 172,
           "font_size": 14
