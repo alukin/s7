@@ -272,13 +272,17 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 | [fourier coefficient](analysis_elements/fourier_coefficient.s7diagram) |
 | [wavelet coefficient](analysis_elements/wavelet_coefficient.s7diagram) |
 
-**Total: 121 diagrams: 97 general examples and 24 teaching labs.**
+**Total: 122 diagrams: 98 general examples and 24 teaching labs.**
 
 ## Headless JSON examples
 
 The [runtime example guide](../s7runtime/examples/README.md) covers all twelve
 JSON schemas and libraries, including two-node network pairs, gnuplot output,
 nested schemas, vector wires and optional in-graph analysis plugins.
+
+## Audio
+
+- [Live microphone spectrum](audio/microphone_spectrum.s7diagram) and [run guide](audio/microphone_spectrum.md)
 
 ## Software-defined radio
 

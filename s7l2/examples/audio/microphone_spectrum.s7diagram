@@ -1,0 +1,130 @@
+{
+  "id": "microphone_spectrum",
+  "dt": 2.0833333333333333e-05,
+  "document_kind": "s7.diagram",
+  "description": "Live spectrum of the default microphone input (PipeWire).",
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "studio_run": {
+    "runtime_seconds": -1
+  },
+  "schema": {
+    "name": "microphone_spectrum",
+    "elements": [
+      {
+        "id": "microphone",
+        "type": "AudioSource",
+        "params": {
+          "type": "F32",
+          "backend": "pipewire",
+          "device": "default",
+          "channels": [
+            "0",
+            "1"
+          ],
+          "frame_rate": [
+            48000,
+            1
+          ],
+          "block_frames": 1024,
+          "queue_frames": 16384
+        }
+      }
+    ],
+    "connections": []
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "microphone",
+        "position": [
+          3,
+          14
+        ],
+        "title": "Microphone (default input)"
+      },
+      {
+        "id": "spectrum",
+        "position": [
+          18,
+          14
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "title": "Live time and spectrum",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "left",
+            "right"
+          ],
+          "channel_units": [
+            "FS",
+            "FS"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "obs1",
+        "from": {
+          "port": [
+            "microphone",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "spectrum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs2",
+        "from": {
+          "port": [
+            "microphone",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "spectrum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "MICROPHONE SPECTRUM  |  live sound from the default PipeWire input\nAudioSource captures stereo F32 at 48 kHz; the Live Oscilloscope shows the newest samples.\nRun continuously (the saved run is -1), double-click \"spectrum\", then choose the Spectrum tab.\nDevice-paced: model time follows the sound card. Lower the input gain if the trace clips at ±1.\nGuide: examples/audio/microphone_spectrum.md",
+          "width": 500,
+          "height": 172,
+          "font_size": 14
+        }
+      }
+    ]
+  },
+  "probes": []
+}

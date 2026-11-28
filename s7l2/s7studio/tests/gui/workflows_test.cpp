@@ -4357,6 +4357,7 @@ private slots:
         if (qEnvironmentVariableIsEmpty("S7_GUI_EXAMPLES")) QSKIP("Bundled examples run in the s7studio_gui_examples tests");
         QFETCH(QString, diagram);
         if (diagram == "sdr/fm_receiver.s7diagram") QSKIP("FM playback requires a live SDR and audio output");
+        if (diagram.startsWith("audio/")) QSKIP("Audio examples open a real sound device");
         const bool publication = qEnvironmentVariableIsSet("S7_README_SCREENSHOTS");
         const bool lorenzOverview = publication && diagram == "lorenz/lorenz_attractor.s7diagram";
         const double seconds = documentedSeconds(diagram);
