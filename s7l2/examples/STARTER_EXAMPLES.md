@@ -7,10 +7,8 @@ the run. Observers read the causal graph and do not feed values back into it.
 
 | Diagram | Run and observer | What to inspect |
 |---|---|---|
-| [Two-integrator oscillator](2int_osc.s7diagram) | 10 s at 1 kHz; `scope_1` | The two states form an oscillator. Forward Euler causes slowly growing amplitude; inspect the long trace and compare with the Gauss or symplectic variant. |
+| [Two-integrator oscillator](2int_osc.s7diagram) | 10 s at 1 kHz; `scope_1`, `live_1` | The two states form an oscillator. Forward Euler causes slowly growing amplitude; inspect the recorded trace in `scope_1`, or `v` in the bounded live window of `live_1` (exact sample values; see the [live oscilloscope guide](../docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md)). Compare with the Gauss or symplectic variant. |
 | [Gauss oscillator](2int_osc_gauss.s7diagram) | 10 s at 1 kHz; `scope_1` | The same connected state equations use coupled fourth-order Gauss–Legendre integration. Compare amplitude drift with forward Euler. The temporary solver stages are internal to the integrator, not extra graph states. |
-| [Live oscillator](2int_osc_live.s7diagram) | 10 s at 1 kHz; `live_1` | Inspect the bounded live time window and its exact sample values. See the [live oscilloscope guide](../docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md). |
-| [Two-channel live oscillator](2int_osc_live2.s7diagram) | Saved run 60 s at 1 kHz; `live_1` | Inspect both oscillator states, `v` and `u`, during a continuous run. Stop early if only a short comparison is needed. |
 | [Symplectic live oscillator](symplectic_osc_live.s7diagram) | 10 s at 1 kHz; `live_1` | Euler–Cromer keeps the position/velocity orbit bounded over a longer interval; compare with the forward-Euler live oscillator. |
 | [Editor demonstration](demo1.s7diagram) | 10 s at 1 kHz; `scope_1` | A 2 Hz oscillator, seeded white noise, summation and an explicit Euler integrator show basic element and wire editing. Requires `s7noise`. |
 | [Triggered noise demonstration](demo_diagram2.s7diagram) | 10 s at 1 kHz; `scope_1` | Open the Live Oscilloscope, adjust the rising-edge trigger level and hysteresis, and compare the noisy sum with the separate noise channel. Requires `s7noise`. |

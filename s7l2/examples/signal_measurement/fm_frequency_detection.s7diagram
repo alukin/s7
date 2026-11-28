@@ -373,6 +373,28 @@
         }
       },
       {
+        "id": "message_live",
+        "position": [
+          172,
+          29
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "message",
+            "raw_detected",
+            "smoothed"
+          ],
+          "channel_units": [
+            "1",
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
         "id": "frequency_scope",
         "position": [
           172,
@@ -385,6 +407,26 @@
           "channel_names": [
             "command_Hz",
             "measured_Hz"
+          ]
+        }
+      },
+      {
+        "id": "frequency_live",
+        "position": [
+          172,
+          51
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "command_Hz",
+            "measured_Hz"
+          ],
+          "channel_units": [
+            "Hz",
+            "Hz"
           ]
         }
       },
@@ -404,6 +446,24 @@
         }
       },
       {
+        "id": "waveform_live",
+        "position": [
+          69,
+          73
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "fm_V"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
         "id": "validity_scope",
         "position": [
           135,
@@ -415,6 +475,24 @@
           "channel_count": 1,
           "channel_names": [
             "valid"
+          ]
+        }
+      },
+      {
+        "id": "validity_live",
+        "position": [
+          135,
+          73
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "valid"
+          ],
+          "channel_units": [
+            "1"
           ]
         }
       }
@@ -676,6 +754,60 @@
         "id": "w15",
         "from": {
           "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_live",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "valid_message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_live",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "lowpass",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_live",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
             "frequency",
             "out",
             0
@@ -691,7 +823,7 @@
         "bends": []
       },
       {
-        "id": "w16",
+        "id": "w19",
         "from": {
           "port": [
             "meter",
@@ -709,7 +841,43 @@
         "bends": []
       },
       {
-        "id": "w17",
+        "id": "w20",
+        "from": {
+          "port": [
+            "frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_live",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_live",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
         "from": {
           "port": [
             "fm_signal",
@@ -727,7 +895,25 @@
         "bends": []
       },
       {
-        "id": "w18",
+        "id": "w23",
+        "from": {
+          "port": [
+            "fm_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "waveform_live",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
         "from": {
           "port": [
             "meter",
@@ -738,6 +924,24 @@
         "to": {
           "port": [
             "validity_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "validity_live",
             "in",
             0
           ]

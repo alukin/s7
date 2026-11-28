@@ -16,9 +16,9 @@ Run them at 1024 Hz as described there. Recorded and Live Oscilloscope
 Spectrum both start with a fitted frequency range; **Display → Frequency range →
 Full frequency band** shows DC through Nyquist.
 
-Open `examples/signal_measurement/am_coherent_detection_live.s7diagram`, run
-two model seconds at **12800 Hz**, and double-click `carrier_scope`. Choose
-**Spectrum**, then select `carrier_scope/carrier [1]` as Source. With N=4096
+Open `examples/signal_measurement/am_coherent_detection.s7diagram`, run
+two model seconds at **12800 Hz**, and double-click `carrier_live`. Choose
+**Spectrum**, then select `carrier_live/carrier [1]` as Source. With N=4096
 and the default periodic Hann window, the carrier is at **100 Hz**, bin 32,
 with peak amplitude 1. Choose the AM signal channel to see the carrier and
 modulation sidebands; increasing acquisition retention permits longer FFTs.

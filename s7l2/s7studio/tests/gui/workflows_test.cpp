@@ -485,7 +485,7 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"))));
         QVERIFY(browser->toPlainText().contains("Raw samples / channel"));
-        QVERIFY(browser->toPlainText().contains("fm_frequency_detection_live.s7diagram"));
+        QVERIFY(browser->toPlainText().contains("fm_frequency_detection.s7diagram"));
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("STUDIO_SPECTRUM.md"))));
         QVERIFY(browser->toPlainText().contains("Windows and normalization"));
@@ -1480,7 +1480,7 @@ private slots:
     }
 
     void liveOscilloscopePrototype() {
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"));
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc.s7diagram"));
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
         auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
         QVERIFY(QMetaObject::invokeMethod(editor(), "elementNodeDoubleClicked", Qt::DirectConnection,
@@ -1488,7 +1488,7 @@ private slots:
         auto* viewer = dynamic_cast<s7studio::ui::LiveOscilloscopeWindow*>(manager->find("LiveOscilloscope", "live_1")); QVERIFY(viewer);
         QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
         QVERIFY(configure("action.run", 2)); QTRY_COMPARE(completed.count(), 1);
-        QVERIFY(completed.last()[0].toBool()); QVERIFY(!runner->recordedSource());
+        QVERIFY(completed.last()[0].toBool()); QVERIFY(runner->recordedSource()); // scope_1 records beside live_1
         QTRY_VERIFY(!viewer->displayedFrame().steps.empty());
         QTRY_COMPARE(viewer->displayedFrame().steps.back(), std::int64_t(2000));
         auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
@@ -1593,12 +1593,12 @@ private slots:
     }
     void liveMeasurementExamples_data() {
         QTest::addColumn<QString>("filename"); QTest::addColumn<QString>("observer"); QTest::addColumn<QString>("unit");
-        QTest::newRow("am") << "am_coherent_detection" << "carrier_scope" << "V";
-        QTest::newRow("fm") << "fm_frequency_detection" << "frequency_scope" << "Hz";
+        QTest::newRow("am") << "am_coherent_detection" << "carrier_live" << "V";
+        QTest::newRow("fm") << "fm_frequency_detection" << "frequency_live" << "Hz";
     }
     void liveSpectrumAnalysis() {
         using namespace s7studio;
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/am_coherent_detection_live.s7diagram"));
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/am_coherent_detection.s7diagram"));
         auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner);
         QSignalSpy complete(runner, &LocalSchemaRunner::runCompleted);
         QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
@@ -1609,9 +1609,9 @@ private slots:
             duration->setValue(2); rate->setValue(12800);
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton); return true;
         }));
-        QTRY_COMPARE(complete.count(), 1); QVERIFY(complete.last()[0].toBool()); QVERIFY(!runner->recordedSource());
+        QTRY_COMPARE(complete.count(), 1); QVERIFY(complete.last()[0].toBool());
         auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
-        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "carrier_scope")); QVERIFY(viewer);
+        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "carrier_live")); QVERIFY(viewer);
         viewer->resize(1280, 720); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
         QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier, tabs->tabBar()->tabRect(1).center());
@@ -2124,7 +2124,7 @@ private slots:
     void liveTriggerPresetFromDiagram() {
         using namespace s7studio;
         // A plugin-free copy of the two-integrator oscillator with a saved trigger preset.
-        QFile source(QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"); QVERIFY(source.open(QIODevice::ReadOnly));
+        QFile source(QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc.s7diagram"); QVERIFY(source.open(QIODevice::ReadOnly));
         auto document = QJsonDocument::fromJson(source.readAll()).object();
         auto diagram = document["diagram"].toObject(); auto nodes = diagram["nodes"].toArray();
         for (auto&& value : nodes) {
@@ -2217,7 +2217,7 @@ private slots:
     void liveMeasurementExamples() {
         QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);
         const auto directory = QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/";
-        QVERIFY(fileAction("action.open", directory + filename + "_live.s7diagram"));
+        QVERIFY(fileAction("action.open", directory + filename + ".s7diagram"));
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
         QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
         QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
@@ -2226,12 +2226,12 @@ private slots:
             auto* summary = dialog->findChild<QLabel*>("run.captureSummary");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !rate || !summary || !buttons) return false;
-            if (!summary->text().contains("Live acquisition: 7 channels") || !summary->text().contains("Full-run recording: 0 channels")) return false;
+            if (!summary->text().contains("Live acquisition: 7 channels") || summary->text().contains("Full-run recording: 0 channels")) return false;
             duration->setValue(2); rate->setValue(10000);
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton); return true;
         }));
         QTRY_COMPARE(completed.count(), 1); QVERIFY(completed.last()[0].toBool());
-        QVERIFY(!runner->recordedSource());
+        QVERIFY(runner->recordedSource()); // the Scopes record beside the live observers
         int channels = 0;
         for (const auto& source : runner->liveSources()) {
             const auto frame = source->snapshot(); QVERIFY(frame); QVERIFY(frame->finished);
@@ -4489,10 +4489,10 @@ private slots:
             const int pages = lorenzOverview ? 1 : (tabs ? tabs->count() : 1);
             for (int page = 0; page < pages; ++page) {
                 if (tabs) tabs->setCurrentIndex(page);
-                if (publication && diagram == "signal_measurement/am_coherent_detection_live.s7diagram" &&
-                    name.endsWith("carrier_scope") && tabs && tabs->tabText(page) == "Spectrum") {
+                if (publication && diagram == "signal_measurement/am_coherent_detection.s7diagram" &&
+                    name.endsWith("carrier_live") && tabs && tabs->tabText(page) == "Spectrum") {
                     auto* channel = widget->findChild<QComboBox*>("spectrum.channel"); QVERIFY(channel);
-                    const auto index = channel->findText("carrier_scope/carrier", Qt::MatchStartsWith);
+                    const auto index = channel->findText("carrier_live/carrier", Qt::MatchStartsWith);
                     QVERIFY(index >= 0); channel->setCurrentIndex(index);
                 }
                 QTest::qWait(page ? 1200 : 400);
@@ -4955,7 +4955,7 @@ private slots:
             QTest::newRow(qPrintable(QString("surface") + suffix)) << "surfaces/saddle.s7diagram" << "Surface3D" << "surface" << click << run;
             QTest::newRow(qPrintable(QString("complex") + suffix)) << "complex_functions/inverse.s7diagram" << "ComplexSurface3D" << "surface" << click << run;
             QTest::newRow(qPrintable(QString("scope") + suffix)) << "2int_osc.s7diagram" << "Scope" << "scope_1" << click << run;
-            QTest::newRow(qPrintable(QString("live") + suffix)) << "2int_osc_live.s7diagram" << "LiveOscilloscope" << "live_1" << click << run;
+            QTest::newRow(qPrintable(QString("live") + suffix)) << "2int_osc.s7diagram" << "LiveOscilloscope" << "live_1" << click << run;
         }
     }
     void analysisViewerDoesNotModifyDiagram() {

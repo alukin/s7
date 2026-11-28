@@ -95,10 +95,10 @@ def am():
     d.element('recovered', 'Adder', dict(weights=[1/.6, -1/.6]), 134, 18, '(Filtered envelope - 1)/0.6')
     d.wire('lowpass', 'recovered')
     d.wire('bias', 'recovered', input_=1)
-    d.scope('message_scope', [('message', 'message', 0, '1'), ('recovered', 'recovered', 0, '1')], 170, 18)
-    d.scope('carrier_scope', [('am_V', 'am_signal', 0, 'V'), ('envelope_V', 'envelope', 0, 'V'),
-                             ('carrier', 'carrier', 0, '1')], 170, 42)
-    d.scope('detector_scope', [('mixer_V', 'twice_mixer', 0, 'V'), ('filtered_V', 'lowpass', 0, 'V')], 112, 58)
+    d.observe('message', [('message', 'message', 0, '1'), ('recovered', 'recovered', 0, '1')], 170, 18)
+    d.observe('carrier', [('am_V', 'am_signal', 0, 'V'), ('envelope_V', 'envelope', 0, 'V'),
+                          ('carrier', 'carrier', 0, '1')], 170, 42)
+    d.observe('detector', [('mixer_V', 'twice_mixer', 0, 'V'), ('filtered_V', 'lowpass', 0, 'V')], 112, 58)
     d.save()
 
 
@@ -123,12 +123,12 @@ def fm():
     d.wire('raw_message', 'valid_message', input_=1)
     d.wire('meter', 'valid_message', output=1, input_=2)
     lag(d, 'lowpass', 'valid_message', .02, 135, 18)
-    d.scope('message_scope', [('message', 'message', 0, '1'), ('raw_detected', 'valid_message', 0, '1'),
-                             ('smoothed', 'lowpass', 0, '1')], 172, 18)
-    d.scope('frequency_scope', [('command_Hz', 'frequency', 0, 'Hz'),
-                               ('measured_Hz', 'meter', 0, 'Hz')], 172, 42)
-    d.scope('waveform_scope', [('fm_V', 'fm_signal', 0, 'V')], 69, 66)
-    d.scope('validity_scope', [('valid', 'meter', 1, '1')], 135, 66)
+    d.observe('message', [('message', 'message', 0, '1'), ('raw_detected', 'valid_message', 0, '1'),
+                          ('smoothed', 'lowpass', 0, '1')], 172, 18)
+    d.observe('frequency', [('command_Hz', 'frequency', 0, 'Hz'),
+                            ('measured_Hz', 'meter', 0, 'Hz')], 172, 42)
+    d.observe('waveform', [('fm_V', 'fm_signal', 0, 'V')], 69, 66)
+    d.observe('validity', [('valid', 'meter', 1, '1')], 135, 66)
     d.save()
 
 

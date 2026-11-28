@@ -120,6 +120,21 @@
             "v"
           ]
         }
+      },
+      {
+        "id": "live_1",
+        "position": [
+          44,
+          24
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "v"
+          ]
+        }
       }
     ],
     "wires": [
@@ -207,6 +222,24 @@
         "to": {
           "port": [
             "scope_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs6",
+        "from": {
+          "wire": "w3",
+          "at": [
+            41,
+            16
+          ]
+        },
+        "to": {
+          "port": [
+            "live_1",
             "in",
             0
           ]

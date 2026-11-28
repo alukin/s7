@@ -53,6 +53,20 @@ class Diagram:
             self.probes.append(dict(name=label, element=element, port=port, unit=unit))
             self.wire(element, ident, port, channel, True)
 
+    def live(self, ident, signals, x, y):
+        """A LiveOscilloscope on the same signals as a Scope: bounded live view, no recording."""
+        self.nodes.append(dict(id=ident, position=[x, y], observer=True, type='LiveOscilloscope',
+                               params=dict(channel_count=len(signals),
+                                           channel_names=[s[0] for s in signals],
+                                           channel_units=[s[3] for s in signals])))
+        for channel, (label, element, port, unit) in enumerate(signals):
+            self.wire(element, ident, port, channel, True)
+
+    def observe(self, ident, signals, x, y):
+        """A recording Scope and, below it, a LiveOscilloscope on the same signals."""
+        self.scope(ident + '_scope', signals, x, y)
+        self.live(ident + '_live', signals, x, y + max(5, 2 * (len(signals) + 1) + 1) + 2)
+
     def save(self):
         document = dict(id=self.name, dt=self.dt, document_kind='s7.diagram',
                         sheet=dict(orientation='landscape', width_mm=1000, height_mm=450),

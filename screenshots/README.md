@@ -135,8 +135,8 @@ same **100 Hz** carrier used by the transmitter, then applies a low-pass
 filter. Startup, a small delay and residual carrier ripple in the recovered
 trace show the filter's behavior.
 
-**Try it:** open `signal_measurement/am_coherent_detection_live.s7diagram`,
-open `message_scope`, and run **2 seconds at 10,000 Hz**, its bundled rate. For this capture,
+**Try it:** open `signal_measurement/am_coherent_detection.s7diagram`,
+open `message_live`, and run **2 seconds at 10,000 Hz**, its bundled rate. For this capture,
 **Analysis retention → Raw samples / channel** was set to **32,768 before
 starting**. The example uses seven bounded live channels and no full-run
 recording channels. The Time view also supports continuous runs and freezing
@@ -200,7 +200,7 @@ python3 tools/run_gui_test.py --artifacts /tmp/s7-readme-artifacts \
   -- build-release/s7studio/s7studio_gui_workflows_test \
   bundledExamplesRunAndRender:lorenz/lorenz_attractor.s7diagram \
   bundledExamplesRunAndRender:buck/buck_pid_load_step.s7diagram \
-  bundledExamplesRunAndRender:signal_measurement/am_coherent_detection_live.s7diagram \
+  bundledExamplesRunAndRender:signal_measurement/am_coherent_detection.s7diagram \
   helpAndAbout
 ```
 

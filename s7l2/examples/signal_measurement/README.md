@@ -1,14 +1,15 @@
 # AM/FM generation, detection and RMS measurement
 
 Run the recording diagrams for **2 seconds at 10 kHz**, dt = 0.0001 s.
-The live variants below also support continuous inspection:
+Each Scope in the AM and FM diagrams has a LiveOscilloscope below it on the
+same signals, for bounded continuous inspection:
 
-- [Live coherent AM detection](am_coherent_detection_live.s7diagram): seven bounded
-  channels across `message_scope`, `carrier_scope` and `detector_scope`. Use 0.02 s
-  to inspect carrier cycles, or 0.5–1 s for the envelope/message.
-- [Live FM frequency detection](fm_frequency_detection_live.s7diagram): seven
-  bounded channels across `message_scope`, `frequency_scope`, `waveform_scope` and
-  `validity_scope`. Use 0.02–0.05 s for the waveform and 0.5 s for frequency tracking.
+- [Coherent AM detection](am_coherent_detection.s7diagram): seven live channels
+  across `message_live`, `carrier_live` and `detector_live`. Use 0.02 s to inspect
+  carrier cycles, or 0.5–1 s for the envelope/message.
+- [FM frequency detection](fm_frequency_detection.s7diagram): seven live channels
+  across `message_live`, `frequency_live`, `waveform_live` and `validity_live`. Use
+  0.02–0.05 s for the waveform and 0.5 s for frequency tracking.
 
 The live variants keep the same functional graphs, replace recording observers with
 Live Oscilloscope, and remove standalone recorded probes. Units are supplied by

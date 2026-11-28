@@ -10,11 +10,11 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
 ## Try it
 
 1. Build Studio and open `examples/symplectic_osc_live.s7diagram` for a stable
-   two-channel oscillator. The Euler examples `2int_osc_live.s7diagram` and
-   `2int_osc_live2.s7diagram` remain available. For multichannel
-   work, use `examples/signal_measurement/am_coherent_detection_live.s7diagram`
-   or `fm_frequency_detection_live.s7diagram` at 10 kHz. Both use seven live
-   channels and zero full-recording channels.
+   two-channel oscillator; the forward-Euler `2int_osc.s7diagram` has a
+   `live_1` beside its recording Scope. For multichannel work, use
+   `examples/signal_measurement/am_coherent_detection.s7diagram` or
+   `fm_frequency_detection.s7diagram` at 10 kHz: each Scope there has a
+   LiveOscilloscope (`*_live`) on the same seven channels.
 2. Double-click the `live_1` observer. Alternatively, add **Observers → Live
    oscilloscope (prototype)** to a diagram and wire signals to its `+` input.
 3. Start a run. Run Configuration offers **Run continuously until stopped** and

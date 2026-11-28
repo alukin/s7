@@ -32,14 +32,9 @@ are explicit integrator and function/state networks.
 - [Gauss–Legendre oscillator](../examples/2int_osc_gauss.s7diagram): the same
   connected ideal-integrator equations with the production coupled
   fourth-order method. Its two temporary stages are not diagram states.
-- `2int_osc_live.s7diagram`: the bounded live oscilloscope prototype; change
-  acquisition length and inspect exact samples. See [prototype usage](LIVE_OSCILLOSCOPE_PROTOTYPE.md).
-- `2int_osc_live2.s7diagram`: the same oscillator with both states, `v` and
-  `u`, on a two-channel Live Oscilloscope; its saved run lasts 600 seconds for
-  long continuous inspection. Stop it at any time.
 - `symplectic_osc_live.s7diagram`: an Euler–Cromer oscillator showing
   position and velocity on a two-channel Live Oscilloscope; its amplitude
-  stays bounded, while forward Euler in `2int_osc_live2` slowly grows.
+  stays bounded, while forward Euler in `2int_osc` (its `live_1`) slowly grows.
 - `demo_diagram2.s7diagram`: a 2 Hz sine plus white noise from the `s7noise`
   plugin on a Live Oscilloscope with an automatic rising-edge trigger. Run 10
   seconds at 1 kHz and adjust the trigger level and hysteresis.
@@ -111,10 +106,10 @@ are explicit integrator and function/state networks.
   and frequency estimates. The detector receives phase directly.
 - [Live AM/FM oscilloscope examples](../examples/signal_measurement/README.md):
   bounded continuous inspection, duration changes, freeze and raw hover values.
-  Choose the `_live.s7diagram` variants for zero full-run recording channels.
+  Each Scope has a LiveOscilloscope (`*_live`) on the same signals for bounded continuous inspection.
 - **Live FFT demonstration:** open
-  `signal_measurement/am_coherent_detection_live.s7diagram`, run **2 seconds at
-  12800 Hz**, and open `carrier_scope`. In Spectrum, select `carrier_scope/carrier [1]`;
+  `signal_measurement/am_coherent_detection.s7diagram`, run **2 seconds at
+  12800 Hz**, and open `carrier_live`. In Spectrum, select `carrier_live/carrier [1]`;
   N=4096 and the default Hann window give a **100 Hz**, amplitude **1** carrier.
   See [FFT controls and interpretation](STUDIO_SPECTRUM.md).
 - **Live XY and delay demonstration:** open

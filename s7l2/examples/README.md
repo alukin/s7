@@ -60,8 +60,6 @@ New diagrams designed specifically for teaching; see the
 |---|---|
 | [Two-integrator oscillator](2int_osc.s7diagram) | [Starter guide](STARTER_EXAMPLES.md) |
 | [Gauss–Legendre oscillator](2int_osc_gauss.s7diagram) | [Starter guide](STARTER_EXAMPLES.md) |
-| [Live oscillator](2int_osc_live.s7diagram) | [Starter guide](STARTER_EXAMPLES.md) |
-| [Two-channel live oscillator](2int_osc_live2.s7diagram) | [Starter guide](STARTER_EXAMPLES.md) |
 | [2D phase portrait](2int_osc_phase_portrait.s7diagram) | [Experiment notes](2int_osc_phase_portrait.md) |
 | [3D helix](3int_helix_phase_trajectory.s7diagram) | [Experiment notes](3int_helix_phase_trajectory.md) |
 | [Editor demonstration](demo1.s7diagram) | [Starter guide](STARTER_EXAMPLES.md) |
@@ -199,9 +197,7 @@ Coherent AM, FM, RMS steps and bounded live I/Q analysis. [Experiment guide](sig
 | Diagram |
 |---|
 | [am coherent detection](signal_measurement/am_coherent_detection.s7diagram) |
-| [am coherent detection live](signal_measurement/am_coherent_detection_live.s7diagram) |
 | [fm frequency detection](signal_measurement/fm_frequency_detection.s7diagram) |
-| [fm frequency detection live](signal_measurement/fm_frequency_detection_live.s7diagram) |
 | [iq correlation live](signal_measurement/iq_correlation_live.s7diagram) |
 | [rms dc step](signal_measurement/rms_dc_step.s7diagram) |
 | [rms sine step](signal_measurement/rms_sine_step.s7diagram) |
@@ -276,7 +272,7 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 | [fourier coefficient](analysis_elements/fourier_coefficient.s7diagram) |
 | [wavelet coefficient](analysis_elements/wavelet_coefficient.s7diagram) |
 
-**Total: 125 diagrams: 101 general examples and 24 teaching labs.**
+**Total: 121 diagrams: 97 general examples and 24 teaching labs.**
 
 ## Headless JSON examples
 
