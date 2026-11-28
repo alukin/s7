@@ -10,6 +10,7 @@ import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
 from example_runs import with_run
+from diagram_layout import compact, fit
 
 ROOT = Path(__file__).resolve().parent
 
@@ -106,4 +107,5 @@ if __name__ == '__main__':
         for mode in ('slow', 'fast', 'mixed'):
             diagram = make(method, mode)
             path = ROOT / (diagram['id'] + '.s7diagram')
+            fit(compact(diagram, scale_x=0.75, scale_y=0.85), note_id='model_notes')
             path.write_text(json.dumps(with_run(diagram, path), indent=2, ensure_ascii=False) + '\n')

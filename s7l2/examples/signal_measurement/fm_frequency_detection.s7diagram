@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 690.0,
+    "height_mm": 310.0
   },
   "studio_run": {
     "runtime_seconds": 2,
@@ -278,88 +278,88 @@
       {
         "id": "message",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "message"
       },
       {
         "id": "carrier_frequency",
         "position": [
-          3,
-          36
+          2,
+          24
         ],
         "title": "carrier_frequency"
       },
       {
         "id": "frequency",
         "position": [
-          25,
-          18
+          15,
+          13
         ],
         "title": "100 + 20*message (Hz)"
       },
       {
         "id": "fm_signal",
         "position": [
-          47,
-          18
+          28,
+          13
         ],
         "title": "fm_signal"
       },
       {
         "id": "meter",
         "position": [
-          69,
-          18
+          41,
+          13
         ],
         "title": "meter"
       },
       {
         "id": "raw_message",
         "position": [
-          91,
-          18
+          55,
+          13
         ],
         "title": "(Measured Hz - 100)/20"
       },
       {
         "id": "zero",
         "position": [
-          69,
-          50
+          41,
+          33
         ],
         "title": "zero"
       },
       {
         "id": "valid_message",
         "position": [
-          113,
-          18
+          68,
+          13
         ],
         "title": "Suppress estimate until meter valid"
       },
       {
         "id": "lowpass",
         "position": [
-          135,
-          18
+          81,
+          13
         ],
         "title": "lowpass"
       },
       {
         "id": "lowpass_tau",
         "position": [
-          135,
-          32
+          81,
+          22
         ],
         "title": "lowpass_tau"
       },
       {
         "id": "message_scope",
         "position": [
-          172,
-          18
+          103,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -375,8 +375,8 @@
       {
         "id": "message_live",
         "position": [
-          172,
-          29
+          116,
+          20
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -397,8 +397,8 @@
       {
         "id": "frequency_scope",
         "position": [
-          172,
-          42
+          103,
+          28
         ],
         "observer": true,
         "type": "Scope",
@@ -413,8 +413,8 @@
       {
         "id": "frequency_live",
         "position": [
-          172,
-          51
+          116,
+          34
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -433,8 +433,8 @@
       {
         "id": "waveform_scope",
         "position": [
-          69,
-          66
+          41,
+          44
         ],
         "observer": true,
         "type": "Scope",
@@ -448,8 +448,8 @@
       {
         "id": "waveform_live",
         "position": [
-          69,
-          73
+          54,
+          48
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -466,8 +466,8 @@
       {
         "id": "validity_scope",
         "position": [
-          135,
-          66
+          81,
+          44
         ],
         "observer": true,
         "type": "Scope",
@@ -481,8 +481,8 @@
       {
         "id": "validity_live",
         "position": [
-          135,
-          73
+          94,
+          48
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -958,9 +958,9 @@
         ],
         "params": {
           "text": "FM_FREQUENCY_DETECTION\n100 Hz carrier, +/-20 Hz deviation, 2 Hz message; crossing-period detection and 0.02 s smoothing.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 2460,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

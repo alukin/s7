@@ -83,7 +83,7 @@ and queue occupancy over a longer run to expose RF/audio clock drift. See the
 - No targeted concurrency audit or deterministic stress suite covers graph
   replacement, stream ownership, endpoint shutdown and the Studio worker/UI
   handoff; existing tests are smoke-level.
-- `s7studio_window_lifecycle` (`closeAndDestruct(destruct-paused)`) fails under heavy host load (load average 30+ on 16 cores) and passes in isolation; diagnose the paused-worker shutdown timing before treating it as flaky.
+- `s7studio_window_lifecycle` (`closeAndDestruct(destruct-paused)`) and `s7studio_live_oscilloscope` failed once each under heavy host load (load average 30+ on 16 cores) and pass in isolation; diagnose their timing assumptions before treating them as flaky.
 - Two-node integration (`s7_two_node_deployment`) covers deployment, a restart
   gap and recovery; clean standalone shutdown and multi-cycle restart remain
   untested.

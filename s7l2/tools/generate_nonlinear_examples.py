@@ -6,6 +6,7 @@
 import json
 from pathlib import Path
 from example_runs import with_run
+from diagram_layout import compact, fit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,6 +51,8 @@ class Diagram:
                                      nodes=self.nodes, wires=self.wires,
                                      text_frames=[dict(id='notes', position=[2, 2], params=dict(
                                          text=self.notes, width=3000, height=200, font_size=10))]))
+        # The hand-chosen columns are far apart; compact them more than the default.
+        fit(compact(document, scale_x=0.45, scale_y=0.55))
         folder = ROOT / 'examples' / self.folder
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f'{self.name}.s7diagram'

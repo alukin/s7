@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 630.0,
+    "height_mm": 330.0
   },
   "studio_run": {
     "runtime_seconds": 6,
@@ -554,160 +554,160 @@
       {
         "id": "reference_frequency",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "reference_frequency"
       },
       {
         "id": "reference_rate",
         "position": [
-          24,
-          18
+          15,
+          13
         ],
         "title": "2*pi*f_ref (rad/s)"
       },
       {
         "id": "reference_phase",
         "position": [
-          46,
-          18
+          28,
+          13
         ],
         "title": "Reference phase (rad)"
       },
       {
         "id": "phase_step",
         "position": [
-          24,
-          36
+          14,
+          24
         ],
         "title": "phase_step"
       },
       {
         "id": "reference_angle",
         "position": [
-          66,
-          18
+          41,
+          13
         ],
         "title": "reference_angle"
       },
       {
         "id": "phase_error",
         "position": [
-          88,
-          18
+          54,
+          13
         ],
         "title": "wrap(reference - VCO) (rad)"
       },
       {
         "id": "controller",
         "position": [
-          110,
-          18
+          67,
+          13
         ],
         "title": "PI loop filter: kp=0.1, ki=1, u in [-1,1]"
       },
       {
         "id": "kp",
         "position": [
-          88,
-          36
+          53,
+          24
         ],
         "title": "kp"
       },
       {
         "id": "ki",
         "position": [
-          110,
-          36
+          66,
+          24
         ],
         "title": "ki"
       },
       {
         "id": "nominal_frequency",
         "position": [
-          132,
-          36
+          79,
+          24
         ],
         "title": "nominal_frequency"
       },
       {
         "id": "vco_frequency",
         "position": [
-          132,
-          18
+          80,
+          13
         ],
         "title": "18 + 10*u (Hz)"
       },
       {
         "id": "vco_rate",
         "position": [
-          154,
-          18
+          93,
+          13
         ],
         "title": "2*pi*f_vco (rad/s)"
       },
       {
         "id": "vco_phase",
         "position": [
-          154,
-          48
+          92,
+          32
         ],
         "title": "VCO phase (rad)"
       },
       {
         "id": "reference_wrapped",
         "position": [
-          24,
-          50
+          14,
+          33
         ],
         "title": "reference_wrapped"
       },
       {
         "id": "reference_signal",
         "position": [
-          24,
-          63
+          14,
+          42
         ],
         "title": "reference waveform"
       },
       {
         "id": "reference_meter",
         "position": [
-          46,
-          63
+          28,
+          42
         ],
         "title": "reference_meter"
       },
       {
         "id": "vco_wrapped",
         "position": [
-          88,
-          50
+          53,
+          33
         ],
         "title": "vco_wrapped"
       },
       {
         "id": "vco_signal",
         "position": [
-          88,
-          63
+          53,
+          42
         ],
         "title": "vco waveform"
       },
       {
         "id": "vco_meter",
         "position": [
-          110,
-          63
+          66,
+          42
         ],
         "title": "vco_meter"
       },
       {
         "id": "frequency_scope",
         "position": [
-          175,
-          18
+          106,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -723,8 +723,8 @@
       {
         "id": "phase_scope",
         "position": [
-          175,
-          38
+          105,
+          26
         ],
         "observer": true,
         "type": "Scope",
@@ -740,8 +740,8 @@
       {
         "id": "waveform_scope",
         "position": [
-          175,
-          56
+          105,
+          37
         ],
         "observer": true,
         "type": "Scope",
@@ -756,8 +756,8 @@
       {
         "id": "measurement_scope",
         "position": [
-          175,
-          72
+          105,
+          48
         ],
         "observer": true,
         "type": "Scope",
@@ -1322,9 +1322,9 @@
         ],
         "params": {
           "text": "PLL_FREQUENCY_STEP\nIdeal phase-domain detector; reference 20 Hz, VCO 18+10*u Hz, initial phase error 0.8 rad.\nRun 6 s at 1000 Hz; open the scopes.\nEquations, experiments and limits: examples/pll/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 2260,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 600,
-    "height_mm": 350
+    "width_mm": 360.0,
+    "height_mm": 210.0
   },
   "studio_run": {
     "runtime_seconds": 4,
@@ -35,15 +35,15 @@
       {
         "id": "tone_32_5",
         "position": [
-          5,
-          36
+          3,
+          14
         ]
       },
       {
         "id": "scope",
         "position": [
-          90,
-          18
+          54,
+          3
         ],
         "observer": true,
         "type": "Scope",
@@ -60,8 +60,8 @@
       {
         "id": "live",
         "position": [
-          90,
-          56
+          54,
+          26
         ],
         "observer": true,
         "type": "LiveOscilloscope",

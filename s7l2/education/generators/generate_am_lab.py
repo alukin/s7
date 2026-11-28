@@ -8,6 +8,18 @@ from generate_foundations import diagram_path, Drawing
 from generate_control_labs import COMPONENTS, wire
 
 
+def note_height(text, points, width_px):
+    # Wrapped lines (about 0.56 em per character; markdown links count by their
+    # label) at 1.6 spacing, points at 96/72 px, plus padding.
+    import math, re
+    em = points * 96 / 72
+    lines = 0
+    for line in text.split('\n'):
+        visible = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', line).replace('**', '').replace('`', '')
+        lines += max(1, math.ceil(len(visible) * 0.56 * em / (width_px - 24)))
+    return int(lines * em * 1.6 + 48)
+
+
 def make():
     d=Drawing();h=1/256
     for ident,amplitude,frequency,phase,x,y,title in [
@@ -52,6 +64,6 @@ def make():
         studio_run=dict(runtime_seconds=4,clear_scope_traces=True),sheet=dict(orientation='landscape',width_mm=475,height_mm=365),
         schema=dict(name='SP14 — AM sidebands and coherent detection',dt=h,elements=d.elements,connections=d.connections),probes=[],
         diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=d.nodes,wires=d.wires,
-            text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1680,height=420,font_size=20))]))
+            text_frames=[dict(id='notes',position=[2,1],params=dict(text=notes,text_format='markdown',width=1680,height=max(420,note_height(notes,20,1680)),font_size=20))]))
 
 if __name__=='__main__':diagram_path('sp14_coherent_am.s7diagram').write_text(json.dumps(make(),indent=2)+'\n')

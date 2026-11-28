@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 680.0,
+    "height_mm": 300.0
   },
   "studio_run": {
     "runtime_seconds": 2,
@@ -278,88 +278,88 @@
       {
         "id": "message",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "message"
       },
       {
         "id": "bias",
         "position": [
-          3,
-          34
+          2,
+          23
         ],
         "title": "bias"
       },
       {
         "id": "envelope",
         "position": [
-          24,
-          18
+          15,
+          13
         ],
         "title": "1 + 0.6*message"
       },
       {
         "id": "carrier",
         "position": [
-          24,
-          50
+          14,
+          33
         ],
         "title": "carrier"
       },
       {
         "id": "am_signal",
         "position": [
-          46,
-          18
+          28,
+          13
         ],
         "title": "am_signal"
       },
       {
         "id": "mixer",
         "position": [
-          68,
-          18
+          41,
+          13
         ],
         "title": "Received signal * coherent carrier"
       },
       {
         "id": "twice_mixer",
         "position": [
-          90,
-          18
+          54,
+          13
         ],
         "title": "twice_mixer"
       },
       {
         "id": "lowpass",
         "position": [
-          112,
-          18
+          67,
+          13
         ],
         "title": "lowpass"
       },
       {
         "id": "lowpass_tau",
         "position": [
-          112,
-          32
+          67,
+          22
         ],
         "title": "lowpass_tau"
       },
       {
         "id": "recovered",
         "position": [
-          134,
-          18
+          80,
+          13
         ],
         "title": "(Filtered envelope - 1)/0.6"
       },
       {
         "id": "message_scope",
         "position": [
-          170,
-          18
+          102,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -374,8 +374,8 @@
       {
         "id": "message_live",
         "position": [
-          170,
-          27
+          115,
+          19
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -394,8 +394,8 @@
       {
         "id": "carrier_scope",
         "position": [
-          170,
-          42
+          102,
+          28
         ],
         "observer": true,
         "type": "Scope",
@@ -411,8 +411,8 @@
       {
         "id": "carrier_live",
         "position": [
-          170,
-          53
+          115,
+          35
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -433,8 +433,8 @@
       {
         "id": "detector_scope",
         "position": [
-          112,
-          58
+          67,
+          39
         ],
         "observer": true,
         "type": "Scope",
@@ -449,8 +449,8 @@
       {
         "id": "detector_live",
         "position": [
-          112,
-          67
+          80,
+          45
         ],
         "observer": true,
         "type": "LiveOscilloscope",
@@ -928,9 +928,9 @@
         ],
         "params": {
           "text": "AM_COHERENT_DETECTION\n100 Hz carrier, 2 Hz message, modulation index 0.6; coherent detection, tau=0.02 s.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 2440,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

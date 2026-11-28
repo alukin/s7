@@ -156,7 +156,7 @@
           "text": "**CT03 \u2014 Can a slow sample rate invent growth?**  \n**Can the sample interval change a correct model into an unstable calculation?** Run **10 s at 2 Hz**, then open Scope.  \nAt 2 Hz: 1, 0.5, 0.25 V. Physical decay is always positive; Euler pole = 1\u2212h.  \nSet Run Configuration frequency to 0.4 Hz, keep 10 s. Predict 1, \u22121.5, 2.25, \u22123.375 V.  \n[Open CT03 student lab](qrc:/s7studio/help/education/labs/CT03-sample-time/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
           "text_format": "markdown",
           "width": 1241,
-          "height": 260,
+          "height": 278,
           "font_size": 18
         }
       }

@@ -126,7 +126,7 @@ def make(lab):
     return dict(id=ident, description=f'Original S7 lab {lab}. Start with the yellow instructions and linked student guide.',
                 dt=.1, studio_run=dict(runtime_seconds=2, clear_scope_traces=True),
                 document_kind='s7.diagram',
-                sheet=dict(orientation='landscape', width_mm=width, height_mm=height),
+                sheet=dict(orientation='landscape' if width >= height else 'portrait', width_mm=width, height_mm=height),
                 schema=dict(name=f'{lab} — {title}', dt=.1, elements=d.elements, connections=d.connections),
                 probes=[], diagram=dict(grid=dict(step=20, mm_per_step=5.291666666666667),
                                         nodes=d.nodes, wires=d.wires, text_frames=[dict(id='notes', position=[2, 1],

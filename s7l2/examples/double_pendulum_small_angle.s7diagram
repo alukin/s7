@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 490.0,
-    "height_mm": 210.0
+    "width_mm": 480.0,
+    "height_mm": 230.0
   },
   "studio_run": {
     "runtime_seconds": 20,
@@ -176,7 +176,7 @@
         "id": "theta1",
         "position": [
           49,
-          7
+          12
         ],
         "title": "Angle 1 (rad)"
       },
@@ -184,7 +184,7 @@
         "id": "omega1",
         "position": [
           63,
-          7
+          12
         ],
         "title": "Angular velocity 1 (rad/s)"
       },
@@ -192,7 +192,7 @@
         "id": "theta2",
         "position": [
           49,
-          25
+          30
         ],
         "title": "Angle 2 (rad)"
       },
@@ -200,7 +200,7 @@
         "id": "omega2",
         "position": [
           63,
-          25
+          30
         ],
         "title": "Angular velocity 2 (rad/s)"
       },
@@ -208,7 +208,7 @@
         "id": "theta1_accel_from_theta1",
         "position": [
           7,
-          12
+          17
         ],
         "title": "-2g × θ1"
       },
@@ -216,7 +216,7 @@
         "id": "theta1_accel_from_theta2",
         "position": [
           21,
-          12
+          17
         ],
         "title": "g × θ2"
       },
@@ -224,7 +224,7 @@
         "id": "theta1_acceleration",
         "position": [
           35,
-          12
+          17
         ],
         "title": "θ1 acceleration"
       },
@@ -232,7 +232,7 @@
         "id": "theta2_accel_from_theta1",
         "position": [
           7,
-          29
+          34
         ],
         "title": "2g × θ1"
       },
@@ -240,7 +240,7 @@
         "id": "theta2_accel_from_theta2",
         "position": [
           21,
-          29
+          34
         ],
         "title": "-2g × θ2"
       },
@@ -248,7 +248,7 @@
         "id": "theta2_acceleration",
         "position": [
           35,
-          29
+          34
         ],
         "title": "θ2 acceleration"
       },
@@ -256,7 +256,7 @@
         "id": "scope_angles",
         "position": [
           76,
-          16
+          21
         ],
         "observer": true,
         "type": "Scope",
@@ -536,9 +536,9 @@
           "line_color": "#58738a",
           "fill_color": "#eef6fb",
           "font_family": "Sans Serif",
-          "font_size": 10,
-          "width": 500.0,
-          "height": 96.0
+          "font_size": 14,
+          "width": 1660,
+          "height": 144
         }
       }
     ]

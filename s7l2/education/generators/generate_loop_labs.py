@@ -51,7 +51,9 @@ def make(lab):
            f'[Open {lab} student lab](qrc:/s7studio/help/education/labs/{slug}/README.md)'
            f' · [MIT root locus]({MIT.format(11)}) · [MIT stability margins]({MIT.format(23)})')
     for node in d.nodes: node['position']=[.65*node['position'][0],.65*node['position'][1]+5]
-    for w in d.wires:w['bends']=[[.65*x,.65*y+5] for x,y in w['bends']]
+    # Bends stay on the grid; the last one is dropped so the router enters the
+    # target port on its own row (a scaled last bend made it loop around).
+    for w in d.wires:w['bends']=[[round(.65*x),round(.65*y+5)] for x,y in w['bends'][:-1]]
     return dict(id=name,document_kind='s7.diagram',dt=.1,
         studio_run=dict(runtime_seconds=seconds,clear_scope_traces=True),sheet=dict(orientation='landscape',width_mm=515,height_mm=455 if margins else 355),
         schema=dict(name=f'{lab} — {title}',dt=.1,elements=d.elements,connections=d.connections),probes=[],

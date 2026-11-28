@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 870.0,
+    "height_mm": 270.0
   },
   "studio_run": {
     "runtime_seconds": 1,
@@ -250,112 +250,112 @@
       {
         "id": "switch_24V",
         "position": [
-          88,
-          18
+          59,
+          13
         ],
         "title": "switch_24V"
       },
       {
         "id": "inductor_voltage",
         "position": [
-          100,
-          18
+          72,
+          13
         ],
         "title": "inductor_voltage"
       },
       {
         "id": "inverse_L",
         "position": [
-          112,
-          18
+          85,
+          13
         ],
         "title": "inverse_L"
       },
       {
         "id": "inductor_current",
         "position": [
-          124,
-          18
+          98,
+          13
         ],
         "title": "inductor_current"
       },
       {
         "id": "winding_drop",
         "position": [
-          112,
-          31
+          85,
+          21
         ],
         "title": "winding_drop"
       },
       {
         "id": "capacitor_current",
         "position": [
-          136,
-          18
+          111,
+          13
         ],
         "title": "capacitor_current"
       },
       {
         "id": "inverse_C",
         "position": [
-          148,
-          18
+          124,
+          13
         ],
         "title": "inverse_C"
       },
       {
         "id": "output_voltage",
         "position": [
-          160,
-          18
+          137,
+          13
         ],
         "title": "output_voltage"
       },
       {
         "id": "load_current",
         "position": [
-          148,
-          37
+          98,
+          25
         ],
         "title": "load_current"
       },
       {
         "id": "reference",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "reference"
       },
       {
         "id": "load_resistance",
         "position": [
-          130,
-          58
+          78,
+          39
         ],
         "title": "load_resistance"
       },
       {
         "id": "controller",
         "position": [
-          54,
-          18
+          32,
+          13
         ],
         "title": "controller"
       },
       {
         "id": "pwm",
         "position": [
-          76,
-          18
+          46,
+          13
         ],
         "title": "pwm"
       },
       {
         "id": "voltage_scope",
         "position": [
-          179,
-          18
+          150,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -370,8 +370,8 @@
       {
         "id": "current_scope",
         "position": [
-          179,
-          38
+          111,
+          26
         ],
         "observer": true,
         "type": "Scope",
@@ -386,8 +386,8 @@
       {
         "id": "switching_scope",
         "position": [
-          76,
-          60
+          46,
+          40
         ],
         "observer": true,
         "type": "Scope",
@@ -402,8 +402,8 @@
       {
         "id": "load_scope",
         "position": [
-          155,
-          60
+          93,
+          40
         ],
         "observer": true,
         "type": "Scope",
@@ -804,9 +804,9 @@
         ],
         "params": {
           "text": "BUCK_OPEN_LOOP_LOAD_STEP\n24 V synchronous buck; R: 8 -> 4 ohm at 0.5 s; PWM 1 kHz.\nRun 1 s at 100000 Hz; open the scopes.\nEquations, experiments and limits: examples/buck/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 3140,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

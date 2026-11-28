@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 520.0,
+    "height_mm": 260.0
   },
   "studio_run": {
     "runtime_seconds": 2,
@@ -258,48 +258,48 @@
       {
         "id": "amplitude",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "amplitude"
       },
       {
         "id": "signal",
         "position": [
-          47,
-          18
+          28,
+          13
         ],
         "title": "Signed DC voltage (V)"
       },
       {
         "id": "rms",
         "position": [
-          91,
-          18
+          55,
+          13
         ],
         "title": "sqrt(exponentially filtered mean square)"
       },
       {
         "id": "rms_tau",
         "position": [
-          69,
-          42
+          41,
+          28
         ],
         "title": "rms_tau"
       },
       {
         "id": "expected",
         "position": [
-          91,
-          58
+          55,
+          39
         ],
         "title": "Steady RMS target (V)"
       },
       {
         "id": "rms_scope",
         "position": [
-          140,
-          18
+          84,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -314,8 +314,8 @@
       {
         "id": "source_scope",
         "position": [
-          140,
-          48
+          84,
+          32
         ],
         "observer": true,
         "type": "Scope",
@@ -483,9 +483,9 @@
         ],
         "params": {
           "text": "RMS_DC_STEP\nExponential RMS tau=0.05 s; source step at 1 s; initial mean-square state is zero.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 1820,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

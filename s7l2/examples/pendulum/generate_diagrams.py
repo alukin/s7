@@ -9,6 +9,7 @@ import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
 from example_runs import with_run
+from diagram_layout import compact, fit
 
 ROOT = Path(__file__).resolve().parent
 
@@ -73,4 +74,5 @@ if __name__ == '__main__':
     for method in ('euler', 'symplectic', 'trapezoid'):
         diagram = make(method)
         path = ROOT/(diagram['id']+'.s7diagram')
+        fit(diagram, note_id='model_notes')
         path.write_text(json.dumps(with_run(diagram, path), indent=2) + '\n')

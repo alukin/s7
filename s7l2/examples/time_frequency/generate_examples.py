@@ -10,6 +10,7 @@ import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / 'tools'))
 from example_runs import with_run
+from diagram_layout import content_bounds, fit
 p=root/'s7core/resources/schema_elements.s7library';library=json.loads(p.read_text())
 nodes=[];connections=[]
 def node(id,type,params=None):nodes.append(dict(id=id,type=type,params=params or {}));return id
@@ -51,7 +52,10 @@ for name in ['tone','tone_bursts','overlapping_tones','chirp','impulse','ring_do
 base=json.loads((root/'examples/pll/pll_frequency_step.s7diagram').read_text())
 probe=next((v for v in base.get('probes',[]) if 'error' in v['name']),base.get('probes',[{}])[0])
 if probe:
- base['id']='pll_acquisition_time_frequency';base['diagram']['nodes'].append(dict(id='wavelet_map',position=[100,60],observer=True,type='TimeFrequency',params={}))
+ base['id']='pll_acquisition_time_frequency'
+ right,_=content_bounds(base);top=min(n['position'][1] for n in base['diagram']['nodes'])
+ base['diagram']['nodes'].append(dict(id='wavelet_map',position=[right+4,top],observer=True,type='TimeFrequency',params={}))
  base['diagram']['wires'].append(dict(id='wavelet_observation',**{'from':dict(port=[probe['element'],'out',probe.get('port',0)]),'to':dict(port=['wavelet_map','in',0])},bends=[]))
+ fit(base)  # the sheet grows to include the added observer
  (folder/'pll_acquisition.s7diagram').write_text(json.dumps(with_run(base,folder/'pll_acquisition.s7diagram'),indent=2)+'\n')
  refine(folder/'pll_acquisition.s7diagram')

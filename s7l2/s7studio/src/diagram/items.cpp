@@ -279,7 +279,13 @@ bool paintBasicSymbol(const ElementNode& node, QPainter* painter, const QRectF& 
     glyphFont.setPointSizeF(std::clamp(radius*.65,6.,22.)); painter->setFont(glyphFont);
     painter->setPen(colors.title);
     QRectF glyphRect = body.adjusted(3,2,-3,-2);
-    if (kind == BasicSymbol::Gain) glyphRect.setRight(body.left()+body.width()*.7);
+    if (kind == BasicSymbol::Gain) {
+        glyphRect.setRight(body.left()+body.width()*.7);
+        // A gain shows its whole factor: shrink the number (to 6 pt) before eliding it.
+        while (glyphFont.pointSizeF() > 6. && QFontMetricsF(glyphFont).horizontalAdvance(glyph) > glyphRect.width())
+            glyphFont.setPointSizeF(std::max(6., glyphFont.pointSizeF()-.5));
+        painter->setFont(glyphFont);
+    }
     painter->drawText(glyphRect, Qt::AlignCenter, QFontMetricsF(glyphFont).elidedText(glyph,Qt::ElideRight,glyphRect.width()));
     if (kind == BasicSymbol::Integral && radius >= 12 && node.element().type != "SymplecticIntegrator") {
         QFont methodFont = glyphFont; methodFont.setPointSizeF(7.); painter->setFont(methodFont);

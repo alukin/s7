@@ -430,7 +430,7 @@
           "text": "**FN05 \u2014 Three rules for the same decay**  \n**Which approximation follows exp(\u2212t) most closely?** Run **6 s at 2 Hz**, then open Scope.  \nAfter one update: forward 0.5, backward 2/3, trapezoid 0.6 V; exact \u2248 0.60653 V.  \nAt the saved rate, change forward_pole factor 0.5 \u2192 0.75. Why is this no longer the stated method?  \n[Open FN05 student lab](qrc:/s7studio/help/education/labs/FN05-integration-rules/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
           "text_format": "markdown",
           "width": 1241,
-          "height": 260,
+          "height": 278,
           "font_size": 18
         }
       }

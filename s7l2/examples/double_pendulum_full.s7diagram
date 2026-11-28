@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 650.0,
-    "height_mm": 560.0
+    "width_mm": 720.0,
+    "height_mm": 400.0
   },
   "studio_run": {
     "runtime_seconds": 20,
@@ -692,24 +692,24 @@
       {
         "id": "theta1",
         "position": [
-          102,
-          5
+          123,
+          15
         ],
         "title": "θ1 angle (rad)"
       },
       {
         "id": "omega1",
         "position": [
-          102,
-          17
+          108,
+          27
         ],
         "title": "ω1 angular velocity"
       },
       {
         "id": "theta2",
         "position": [
-          102,
-          31
+          103,
+          41
         ],
         "title": "θ2 angle (rad)"
       },
@@ -717,31 +717,31 @@
         "id": "omega2",
         "position": [
           102,
-          43
+          53
         ],
         "title": "ω2 angular velocity"
       },
       {
         "id": "angle_difference",
         "position": [
-          12,
-          3
+          15,
+          13
         ],
         "title": "δ = θ1 − θ2"
       },
       {
         "id": "sin_delta",
         "position": [
-          21,
-          3
+          27,
+          13
         ],
         "title": "sin(δ)"
       },
       {
         "id": "cos_delta",
         "position": [
-          21,
-          13
+          24,
+          23
         ],
         "title": "cos(δ)"
       },
@@ -749,7 +749,7 @@
         "id": "sin_theta1",
         "position": [
           12,
-          13
+          23
         ],
         "title": "sin(θ1)"
       },
@@ -757,7 +757,7 @@
         "id": "sin_theta2",
         "position": [
           12,
-          23
+          33
         ],
         "title": "sin(θ2)"
       },
@@ -765,7 +765,7 @@
         "id": "omega1_squared",
         "position": [
           12,
-          33
+          43
         ],
         "title": "ω1²"
       },
@@ -773,23 +773,23 @@
         "id": "omega2_squared",
         "position": [
           12,
-          43
+          53
         ],
         "title": "ω2²"
       },
       {
         "id": "sin_delta_squared",
         "position": [
-          30,
-          3
+          39,
+          13
         ],
         "title": "sin²(δ)"
       },
       {
         "id": "m2_sin_delta_squared",
         "position": [
-          39,
-          3
+          51,
+          13
         ],
         "title": "m2 sin²(δ)"
       },
@@ -797,175 +797,175 @@
         "id": "mass1_constant",
         "position": [
           3,
-          3
+          13
         ],
         "title": "m1 = 1 kg"
       },
       {
         "id": "mass_denominator",
         "position": [
-          48,
-          3
+          63,
+          13
         ],
         "title": "m1 + m2 sin²(δ)"
       },
       {
         "id": "denominator1",
         "position": [
-          57,
-          3
+          75,
+          13
         ],
         "title": "l1 × denominator"
       },
       {
         "id": "denominator2",
         "position": [
-          57,
-          13
+          72,
+          23
         ],
         "title": "l2 × denominator"
       },
       {
         "id": "theta1_term1_product",
         "position": [
-          30,
-          13
+          36,
+          23
         ],
         "title": "sin(θ2) cos(δ)"
       },
       {
         "id": "theta1_term1",
         "position": [
-          39,
-          13
+          48,
+          23
         ],
         "title": "m2 g sin(θ2) cos(δ)"
       },
       {
         "id": "omega1_cos_delta",
         "position": [
-          30,
-          23
+          36,
+          33
         ],
         "title": "ω1² cos(δ)"
       },
       {
         "id": "omega1_length_term",
         "position": [
-          39,
-          23
+          48,
+          33
         ],
         "title": "l1 ω1² cos(δ)"
       },
       {
         "id": "omega2_length_term",
         "position": [
-          21,
-          23
+          24,
+          33
         ],
         "title": "l2 ω2²"
       },
       {
         "id": "centripetal_sum",
         "position": [
-          48,
-          13
+          60,
+          23
         ],
         "title": "l1 ω1² cos(δ) + l2 ω2²"
       },
       {
         "id": "theta1_term2_product",
         "position": [
-          57,
-          23
+          72,
+          33
         ],
         "title": "sin(δ) × centripetal sum"
       },
       {
         "id": "theta1_term2",
         "position": [
-          66,
-          3
+          87,
+          13
         ],
         "title": "−m2 sin(δ)(...)"
       },
       {
         "id": "theta1_term3",
         "position": [
-          21,
-          33
+          24,
+          43
         ],
         "title": "−(m1+m2)g sin(θ1)"
       },
       {
         "id": "theta1_numerator",
         "position": [
-          75,
-          3
+          99,
+          13
         ],
         "title": "θ1 acceleration numerator"
       },
       {
         "id": "alpha1",
         "position": [
-          84,
-          3
+          111,
+          13
         ],
         "title": "α1 = θ1″"
       },
       {
         "id": "omega1_sin_delta",
         "position": [
-          30,
-          33
+          36,
+          43
         ],
         "title": "ω1² sin(δ)"
       },
       {
         "id": "omega1_rotational_term",
         "position": [
-          39,
-          33
+          48,
+          43
         ],
         "title": "l1 ω1² sin(δ)"
       },
       {
         "id": "gravity_theta2",
         "position": [
-          21,
-          43
+          24,
+          53
         ],
         "title": "−g sin(θ2)"
       },
       {
         "id": "sin_theta1_cos_delta",
         "position": [
-          30,
-          43
+          36,
+          53
         ],
         "title": "sin(θ1) cos(δ)"
       },
       {
         "id": "gravity_theta1",
         "position": [
-          39,
-          43
+          48,
+          53
         ],
         "title": "g sin(θ1) cos(δ)"
       },
       {
         "id": "theta2_inner_sum",
         "position": [
-          48,
-          23
+          60,
+          33
         ],
         "title": "θ2 numerator inner sum"
       },
       {
         "id": "theta2_main_term",
         "position": [
-          57,
-          33
+          60,
+          43
         ],
         "title": "(m1+m2)(...)"
       },
@@ -973,31 +973,31 @@
         "id": "omega2_cross_term",
         "position": [
           30,
-          53
+          63
         ],
         "title": "ω2² sin(δ) cos(δ)"
       },
       {
         "id": "theta2_rotation_term",
         "position": [
-          39,
-          53
+          42,
+          63
         ],
         "title": "m2 l2 ω2² sin(δ) cos(δ)"
       },
       {
         "id": "theta2_numerator",
         "position": [
-          66,
-          13
+          84,
+          23
         ],
         "title": "θ2 acceleration numerator"
       },
       {
         "id": "alpha2",
         "position": [
-          75,
-          13
+          96,
+          23
         ],
         "title": "α2 = θ2″"
       },
@@ -1005,7 +1005,7 @@
         "id": "scope_states",
         "position": [
           91,
-          23
+          33
         ],
         "observer": true,
         "type": "Scope",
@@ -2142,8 +2142,8 @@
       {
         "id": "equation_notes",
         "position": [
-          3,
-          74
+          2,
+          2
         ],
         "params": {
           "text": "FULL NONLINEAR DOUBLE PENDULUM  |  m1=m2=1 kg, l1=l2=1 m, g=9.81 m/s²\nAngles are measured from the downward vertical; δ = θ1 − θ2.\nα1 = [m2 g sinθ2 cosδ − m2 sinδ(l1 ω1² cosδ + l2 ω2²) − (m1+m2)g sinθ1] / [l1(m1+m2 sin²δ)]\nα2 = [(m1+m2)(l1 ω1² sinδ − g sinθ2 + g sinθ1 cosδ) + m2 l2 ω2² sinδ cosδ] / [l2(m1+m2 sin²δ)]\nForward Euler integration, dt=1 ms. Initial state: θ1=2 rad, θ2=1.5 rad, ω1=ω2=0. Scope plots both angles and angular velocities.",
@@ -2151,9 +2151,9 @@
           "line_color": "#58738a",
           "fill_color": "#eef6fb",
           "font_family": "Sans Serif",
-          "font_size": 10,
-          "width": 980.0,
-          "height": 170.0
+          "font_size": 14,
+          "width": 2600,
+          "height": 172
         }
       }
     ]

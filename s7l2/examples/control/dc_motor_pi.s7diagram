@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 630.0,
+    "height_mm": 290.0
   },
   "studio_run": {
     "runtime_seconds": 12,
@@ -474,128 +474,128 @@
       {
         "id": "reference_step",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "reference_step"
       },
       {
         "id": "overload",
         "position": [
-          3,
-          30
+          2,
+          21
         ],
         "title": "overload"
       },
       {
         "id": "release",
         "position": [
-          3,
-          42
+          2,
+          28
         ],
         "title": "release"
       },
       {
         "id": "reference",
         "position": [
-          24,
-          18
+          15,
+          13
         ],
         "title": "reference"
       },
       {
         "id": "load",
         "position": [
-          84,
-          56
+          50,
+          37
         ],
         "title": "load"
       },
       {
         "id": "error",
         "position": [
-          43,
-          18
+          28,
+          13
         ],
         "title": "error"
       },
       {
         "id": "controller",
         "position": [
-          64,
-          18
+          41,
+          13
         ],
         "title": "controller"
       },
       {
         "id": "kp",
         "position": [
-          44,
-          34
+          26,
+          23
         ],
         "title": "kp"
       },
       {
         "id": "ki",
         "position": [
-          44,
-          44
+          26,
+          30
         ],
         "title": "ki"
       },
       {
         "id": "armature_voltage",
         "position": [
-          85,
-          18
+          54,
+          13
         ],
         "title": "Va = 4*u V"
       },
       {
         "id": "current_rate",
         "position": [
-          104,
-          18
+          67,
+          13
         ],
         "title": "i' = (Va - i - 0.5*omega)/0.1"
       },
       {
         "id": "current",
         "position": [
-          126,
-          18
+          80,
+          13
         ],
         "title": "Current (A)"
       },
       {
         "id": "speed_rate",
         "position": [
-          126,
-          40
+          76,
+          27
         ],
         "title": "omega' = (0.5*i - 0.1*omega - load)/0.1"
       },
       {
         "id": "speed",
         "position": [
-          148,
-          40
+          89,
+          27
         ],
         "title": "Speed (rad/s)"
       },
       {
         "id": "output",
         "position": [
-          148,
-          18
+          93,
+          13
         ],
         "title": "Normalized speed = omega / 5"
       },
       {
         "id": "motor_scope",
         "position": [
-          170,
-          40
+          102,
+          27
         ],
         "observer": true,
         "type": "Scope",
@@ -610,8 +610,8 @@
       {
         "id": "response_scope",
         "position": [
-          170,
-          18
+          106,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -627,8 +627,8 @@
       {
         "id": "actuator_scope",
         "position": [
-          170,
-          62
+          102,
+          41
         ],
         "observer": true,
         "type": "Scope",
@@ -1121,9 +1121,9 @@
         ],
         "params": {
           "text": "DC_MOTOR_PI\nReference: 0 -> 0.6 at 0.5 s, 2 at 2 s, 0.6 at 4 s; load step at 6 s.\nRun 12 s at 1000 Hz; open the scopes.\nEquations, experiments and limits: examples/control/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 2260,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

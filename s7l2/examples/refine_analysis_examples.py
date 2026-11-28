@@ -8,6 +8,10 @@ without changing their computational graphs. Positions are drawing-grid steps.
 """
 import json
 from pathlib import Path
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / 'tools'))
+from diagram_layout import fit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,7 +23,6 @@ def refine(path):
     if name == 'pll_acquisition':
         for node in diagram['nodes']:
             if node['id'] == 'wavelet_map':
-                node['position'] = [132, 74]
                 node['title'] = 'Phase-error scalogram'
         diagram['text_frames'] = [dict(id='notes', position=[2, 2], params=dict(
             text='PLL frequency step: control-loop settling in time and frequency\n'
@@ -28,6 +31,7 @@ def refine(path):
                  'Relate transient phase-error energy to the frequency overshoot and subsequent lock.\n'
                  'Ideal phase-domain detector; inspect the existing time scopes too. Model details: examples/pll/README.md.',
             width=2600, height=220, font_size=16))]
+        fit(doc, font_size=16)  # note and sheet follow the compact PLL layout
         path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + '\n')
         return
 

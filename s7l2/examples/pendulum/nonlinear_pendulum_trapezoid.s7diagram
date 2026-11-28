@@ -258,9 +258,9 @@
         ],
         "params": {
           "text": "NONLINEAR SINGLE PENDULUM / TRAPEZOID\ntheta'' = -9.81*sin(theta), theta(0)=1.5 rad, omega(0)=0 rad/s.\nRun Configuration: 100 model seconds at 1 and 10 kHz; default dt=0.001 s.\nE = omega^2/2 + 9.81*(1-cos(theta)); exact period from complete elliptic integral.\nReference and predeclared quality budgets: examples/pendulum/README.md. Euler is a drift baseline, expected to FAIL the long-run accuracy budgets.\nTrapezoid solves the nonlinear endpoint jointly; reduce dt on nonconvergence.\nState after runtime step k is z[k-1], observation timestamp is k*dt.",
-          "width": 1450.0,
-          "height": 200.0,
-          "font_size": 10
+          "width": 1440,
+          "height": 228,
+          "font_size": 14
         }
       }
     ]

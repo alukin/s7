@@ -49,7 +49,9 @@ def make():
     d.nodes.append(dict(id='response',position=[100,90],observer=True,type='FrequencyResponse',title='Lead open-loop Bode / Nyquist',params=dict(channel_units=['1','1'])))
     wire(d,'pulse','response',observer=True);wire(d,'open_y','response',1,observer=True)
     for node in d.nodes:node['position']=[.65*node['position'][0],.65*node['position'][1]+5]
-    for w in d.wires:w['bends']=[[.65*x,.65*y+5] for x,y in w['bends']]
+    # Bends stay on the grid; the last one is dropped so the router enters the
+    # target port on its own row (a scaled last bend made it loop around).
+    for w in d.wires:w['bends']=[[round(.65*x),round(.65*y+5)] for x,y in w['bends'][:-1]]
     notes=('**CT08 — Can a lead network improve settling without changing DC gain?**  \n'
            '**Predict → Run → Inspect → Change the zero. Run 64 s at 10 Hz.** P gain 4 and lead C(z)=16(z−0.8)/(z−0.2) both have DC gain 4.  \n'
            'Compare output settling and initial command: lead demands 8, P demands 2 for a 0.5 step. No actuator limiter is present. '

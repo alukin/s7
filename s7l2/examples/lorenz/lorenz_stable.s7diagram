@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 600
+    "width_mm": 610.0,
+    "height_mm": 350.0
   },
   "studio_run": {
     "runtime_seconds": 10,
@@ -442,72 +442,72 @@
       {
         "id": "base_x",
         "position": [
-          96,
-          20
+          43,
+          14
         ],
         "title": "x"
       },
       {
         "id": "base_y",
         "position": [
-          96,
-          32
+          62,
+          21
         ],
         "title": "y"
       },
       {
         "id": "base_z",
         "position": [
-          96,
-          44
+          75,
+          27
         ],
         "title": "z"
       },
       {
         "id": "base_dx",
         "position": [
-          22,
-          20
+          10,
+          14
         ],
         "title": "x' = 10*(y-x)"
       },
       {
         "id": "base_xz",
         "position": [
-          22,
-          32
+          10,
+          21
         ],
         "title": "x*z"
       },
       {
         "id": "base_dy",
         "position": [
-          60,
-          32
+          36,
+          21
         ],
         "title": "y' = rho*x - y - x*z"
       },
       {
         "id": "base_xy",
         "position": [
-          22,
-          44
+          23,
+          27
         ],
         "title": "x*y"
       },
       {
         "id": "base_dz",
         "position": [
-          60,
-          44
+          49,
+          27
         ],
         "title": "z' = x*y - (8/3)*z"
       },
       {
         "id": "base_scope",
         "position": [
-          124,
-          20
+          75,
+          14
         ],
         "observer": true,
         "type": "Scope",
@@ -523,8 +523,8 @@
       {
         "id": "base_trajectory",
         "position": [
-          146,
-          32
+          88,
+          21
         ],
         "observer": true,
         "type": "PhaseTrajectory3D",
@@ -533,72 +533,72 @@
       {
         "id": "nearby_x",
         "position": [
-          96,
-          60
+          43,
+          36
         ],
         "title": "x"
       },
       {
         "id": "nearby_y",
         "position": [
-          96,
-          72
+          62,
+          43
         ],
         "title": "y"
       },
       {
         "id": "nearby_z",
         "position": [
-          96,
-          84
+          75,
+          49
         ],
         "title": "z"
       },
       {
         "id": "nearby_dx",
         "position": [
-          22,
-          60
+          10,
+          36
         ],
         "title": "x' = 10*(y-x)"
       },
       {
         "id": "nearby_xz",
         "position": [
-          22,
-          72
+          10,
+          43
         ],
         "title": "x*z"
       },
       {
         "id": "nearby_dy",
         "position": [
-          60,
-          72
+          36,
+          43
         ],
         "title": "y' = rho*x - y - x*z"
       },
       {
         "id": "nearby_xy",
         "position": [
-          22,
-          84
+          23,
+          49
         ],
         "title": "x*y"
       },
       {
         "id": "nearby_dz",
         "position": [
-          60,
-          84
+          49,
+          49
         ],
         "title": "z' = x*y - (8/3)*z"
       },
       {
         "id": "nearby_scope",
         "position": [
-          124,
-          60
+          75,
+          36
         ],
         "observer": true,
         "type": "Scope",
@@ -614,8 +614,8 @@
       {
         "id": "nearby_trajectory",
         "position": [
-          146,
-          72
+          88,
+          43
         ],
         "observer": true,
         "type": "PhaseTrajectory3D",
@@ -624,32 +624,32 @@
       {
         "id": "delta_x",
         "position": [
-          166,
-          26
+          101,
+          17
         ],
         "title": "nearby x - base x"
       },
       {
         "id": "delta_y",
         "position": [
-          166,
-          46
+          101,
+          28
         ],
         "title": "nearby y - base y"
       },
       {
         "id": "delta_z",
         "position": [
-          166,
-          66
+          101,
+          39
         ],
         "title": "nearby z - base z"
       },
       {
         "id": "difference_scope",
         "position": [
-          166,
-          90
+          88,
+          53
         ],
         "observer": true,
         "type": "Scope",
@@ -1556,9 +1556,9 @@
         ],
         "params": {
           "text": "LORENZ_STABLE\nsigma=10, rho=10, beta=8/3; initial (1,1,1) and (1.000001,1,1).\nRun 10 model seconds at 4000 Hz. Double-click Scope and phase viewers.\nEquations, experiments and numerical limits: examples/lorenz/README.md.\nState at step k represents (k-1)*dt; observation label is k*dt.\nExperimental teaching model; manual Studio workflow remains unqualified.",
-          "width": 3000,
+          "width": 2160,
           "height": 200,
-          "font_size": 10
+          "font_size": 14
         }
       }
     ]

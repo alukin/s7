@@ -111,7 +111,9 @@ def make(lab):
         edit='Double-click aw; select i_rate, F4: weights [1,6] → [1,0]. Return to the root tab, save/reopen/rerun. Both paths should now match.'
     # Compact the worksheet while keeping default node bodies and port rows clear.
     for node in d.nodes: node['position']=[.75*node['position'][0],.75*node['position'][1]+5]
-    for w in d.wires: w['bends']=[[.75*x,.75*y+5] for x,y in w['bends']]
+    # Bends stay on the grid; the last one is dropped so the router enters the
+    # target port on its own row (a scaled last bend made it loop around).
+    for w in d.wires: w['bends']=[[round(.75*x),round(.75*y+5)] for x,y in w['bends'][:-1]]
     notes=(f'**{lab} — {title}**  \n**Predict → Run → Inspect → Change one thing.** {question}  \n'
            f'{prediction}  \n{edit}  \n'
            'Source/state index n is observed at Scope time (n+1)/100 s. States update afterward; no extra feedback delay is needed.  \n'

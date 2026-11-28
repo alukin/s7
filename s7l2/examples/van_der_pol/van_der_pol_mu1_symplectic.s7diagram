@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 600
+    "width_mm": 560.0,
+    "height_mm": 340.0
   },
   "studio_run": {
     "runtime_seconds": 40,
@@ -363,56 +363,56 @@
       {
         "id": "small_state",
         "position": [
-          102,
-          20
+          53,
+          14
         ],
         "title": "Euler-Cromer x / v"
       },
       {
         "id": "small_one",
         "position": [
-          3,
-          20
+          1,
+          14
         ],
         "title": "1"
       },
       {
         "id": "small_square",
         "position": [
-          24,
-          30
+          14,
+          19
         ],
         "title": "x squared"
       },
       {
         "id": "small_damping",
         "position": [
-          44,
-          20
+          27,
+          14
         ],
         "title": "mu*(1-x*x)"
       },
       {
         "id": "small_drive",
         "position": [
-          64,
-          20
+          40,
+          14
         ],
         "title": "mu*(1-x*x)*v"
       },
       {
         "id": "small_acceleration",
         "position": [
-          84,
-          32
+          38,
+          21
         ],
         "title": "Nonlinear drive - x"
       },
       {
         "id": "small_scope",
         "position": [
-          140,
-          20
+          66,
+          14
         ],
         "observer": true,
         "type": "Scope",
@@ -427,8 +427,8 @@
       {
         "id": "small_phase",
         "position": [
-          140,
-          32
+          79,
+          21
         ],
         "observer": true,
         "type": "PhasePortrait",
@@ -437,56 +437,56 @@
       {
         "id": "cycle_state",
         "position": [
-          102,
-          50
+          66,
+          31
         ],
         "title": "Euler-Cromer x / v"
       },
       {
         "id": "cycle_one",
         "position": [
-          3,
-          50
+          1,
+          31
         ],
         "title": "1"
       },
       {
         "id": "cycle_square",
         "position": [
-          24,
-          60
+          14,
+          36
         ],
         "title": "x squared"
       },
       {
         "id": "cycle_damping",
         "position": [
-          44,
-          50
+          27,
+          31
         ],
         "title": "mu*(1-x*x)"
       },
       {
         "id": "cycle_drive",
         "position": [
-          64,
-          50
+          40,
+          31
         ],
         "title": "mu*(1-x*x)*v"
       },
       {
         "id": "cycle_acceleration",
         "position": [
-          84,
-          62
+          53,
+          37
         ],
         "title": "Nonlinear drive - x"
       },
       {
         "id": "cycle_scope",
         "position": [
-          140,
-          50
+          79,
+          31
         ],
         "observer": true,
         "type": "Scope",
@@ -501,8 +501,8 @@
       {
         "id": "cycle_phase",
         "position": [
-          140,
-          62
+          92,
+          37
         ],
         "observer": true,
         "type": "PhasePortrait",
@@ -511,56 +511,56 @@
       {
         "id": "large_state",
         "position": [
-          102,
-          80
+          53,
+          47
         ],
         "title": "Euler-Cromer x / v"
       },
       {
         "id": "large_one",
         "position": [
-          3,
-          80
+          1,
+          47
         ],
         "title": "1"
       },
       {
         "id": "large_square",
         "position": [
-          24,
-          90
+          14,
+          53
         ],
         "title": "x squared"
       },
       {
         "id": "large_damping",
         "position": [
-          44,
-          80
+          27,
+          47
         ],
         "title": "mu*(1-x*x)"
       },
       {
         "id": "large_drive",
         "position": [
-          64,
-          80
+          40,
+          47
         ],
         "title": "mu*(1-x*x)*v"
       },
       {
         "id": "large_acceleration",
         "position": [
-          84,
-          92
+          38,
+          54
         ],
         "title": "Nonlinear drive - x"
       },
       {
         "id": "large_scope",
         "position": [
-          140,
-          80
+          66,
+          47
         ],
         "observer": true,
         "type": "Scope",
@@ -575,8 +575,8 @@
       {
         "id": "large_phase",
         "position": [
-          140,
-          92
+          79,
+          54
         ],
         "observer": true,
         "type": "PhasePortrait",
@@ -1296,9 +1296,9 @@
         ],
         "params": {
           "text": "VAN_DER_POL_MU1_SYMPLECTIC\nx'' = 1*(1-x*x)*v - x; x(0) = 0.1, 2, 4; v(0) = 0.\nRun 40 model seconds at 1000 Hz. Double-click Scope and phase viewers.\nEquations, experiments and numerical limits: examples/van_der_pol/README.md.\nState at step k represents (k-1)*dt; observation label is k*dt.\nExperimental teaching model; manual Studio workflow remains unqualified.",
-          "width": 3000,
+          "width": 1980,
           "height": 200,
-          "font_size": 10
+          "font_size": 14
         }
       }
     ]

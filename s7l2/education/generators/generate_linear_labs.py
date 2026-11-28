@@ -6,6 +6,18 @@ import json
 import math
 from generate_foundations import diagram_path, Drawing
 
+
+def note_height(text, points, width_px):
+    # Wrapped lines (about 0.56 em per character; markdown links count by their
+    # label) at 1.6 spacing, points at 96/72 px, plus padding.
+    import math, re
+    em = points * 96 / 72
+    lines = 0
+    for line in text.split('\n'):
+        visible = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', line).replace('**', '').replace('`', '')
+        lines += max(1, math.ceil(len(visible) * 0.56 * em / (width_px - 24)))
+    return int(lines * em * 1.6 + 48)
+
 MIT = 'https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec{}/'
 LABS = {
     'FN04': ('fn04_impulse_transfer', 'FN04-impulse-transfer', 'From one pulse to a transfer function', .05, 10),
@@ -123,7 +135,7 @@ def make(lab):
                 probes=[], diagram=dict(grid=dict(step=20, mm_per_step=5.291666666666667),
                                         nodes=d.nodes, wires=d.wires, text_frames=[dict(id='notes', position=[2,1],
                                         params=dict(text=notes, text_format='markdown', width=frame_width,
-                                                    height=260, font_size=18))]))
+                                                    height=max(260, note_height(notes, 18, frame_width)), font_size=18))]))
 
 
 if __name__ == '__main__':

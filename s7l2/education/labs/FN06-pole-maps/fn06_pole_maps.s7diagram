@@ -571,7 +571,7 @@
           "text": "**FN06 \u2014 Stable does not mean accurate**  \n**Does a stable discrete pole guarantee a faithful transient?** Run **30 s at 0.333333 Hz**, then open Scope.  \nPoles: forward \u22122, backward 0.25, trapezoid \u22120.2, exact exp(\u22123). Separate plots prevent hidden curves.  \nChange backward initial_value 1 \u2192 2. Does the pole change, or only the amplitude?  \n[Open FN06 student lab](qrc:/s7studio/help/education/labs/FN06-pole-maps/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
           "text_format": "markdown",
           "width": 1298,
-          "height": 260,
+          "height": 316,
           "font_size": 18
         }
       }

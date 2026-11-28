@@ -349,7 +349,7 @@
           "text": "**FN04 \u2014 From one pulse to a transfer function**  \n**Can one pulse predict the response at every frequency?** Run **10 s at 20 Hz**, then open Scope.  \nPulse response: 0.5, 0.25, 0.125 V; DC gain 1, Nyquist gain 1/3.  \nChange feedback_gain factor 0.5 \u2192 0.8; predict DC gain 2.5. Inspect Scope at 0\u20131 s.  \n[Open FN04 student lab](qrc:/s7studio/help/education/labs/FN04-impulse-transfer/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec09/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
           "text_format": "markdown",
           "width": 1241,
-          "height": 260,
+          "height": 278,
           "font_size": 18
         }
       }

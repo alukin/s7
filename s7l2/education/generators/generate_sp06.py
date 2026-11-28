@@ -46,7 +46,7 @@ def make():
     nodes.append(dict(id='scope', position=[81, 29], title='Input and filtered output',
                       observer=True, type='Scope', params=dict(channel_count=2,
                       channel_names=['input', 'filtered'], channel_units=['V', 'V'])))
-    wire('source', 'scope', observer=True, bends=([27, 31], [27, 16], [78, 16], [78, 31]))
+    wire('source', 'scope', observer=True)
     wire('filtered', 'scope', 1, observer=True)
     notes = ('**SP06: three-tap FIR / moving average**  \n'
              '**Predict → Run → Inspect → Break → Explain.** Run 4 s at 300 Hz; double-click Scope.  \n'

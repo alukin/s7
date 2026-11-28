@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 600,
-    "height_mm": 350
+    "width_mm": 360.0,
+    "height_mm": 220.0
   },
   "studio_run": {
     "runtime_seconds": 4,
@@ -81,36 +81,36 @@
       {
         "id": "tone_32",
         "position": [
-          5,
-          12
+          3,
+          3
         ]
       },
       {
         "id": "tone_96",
         "position": [
-          5,
-          36
+          3,
+          18
         ]
       },
       {
         "id": "dc",
         "position": [
-          5,
-          60
+          3,
+          32
         ]
       },
       {
         "id": "sum",
         "position": [
-          45,
-          36
+          27,
+          18
         ]
       },
       {
         "id": "scope",
         "position": [
-          90,
-          18
+          54,
+          7
         ],
         "observer": true,
         "type": "Scope",
@@ -127,8 +127,8 @@
       {
         "id": "live",
         "position": [
-          90,
-          56
+          54,
+          30
         ],
         "observer": true,
         "type": "LiveOscilloscope",

@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 490,
-    "height_mm": 210
+    "width_mm": 490.0,
+    "height_mm": 210.0
   },
   "studio_run": {
     "runtime_seconds": 10,
@@ -129,7 +129,7 @@
         "id": "source",
         "position": [
           3,
-          18
+          19
         ],
         "title": "Applied voltage (V)"
       },
@@ -137,7 +137,7 @@
         "id": "velocity",
         "position": [
           37,
-          18
+          19
         ],
         "title": "Current (A)"
       },
@@ -145,7 +145,7 @@
         "id": "position",
         "position": [
           51,
-          18
+          19
         ],
         "title": "Charge (C)"
       },
@@ -153,7 +153,7 @@
         "id": "derivative",
         "position": [
           21,
-          18
+          19
         ],
         "title": "q'' = Vs - q' - 4q"
       },
@@ -161,7 +161,7 @@
         "id": "capacitor_voltage",
         "position": [
           65,
-          12
+          13
         ],
         "title": "Vc = q/C (V)"
       },
@@ -169,7 +169,7 @@
         "id": "scope",
         "position": [
           78,
-          20
+          21
         ],
         "observer": true,
         "type": "Scope",
@@ -375,9 +375,9 @@
         ],
         "params": {
           "text": "RLC_STEP / GAUSS\nDefault dt=0.001 s (1 kHz); run 10 s, resonance 30 s. Open Scope.\nEquations, units, experiments and limits: examples/linear/README.md.\nState at runtime step k represents (k-1)*dt; Scope labels k*dt.\nExperimental teaching model; manual Studio workflow not yet qualified.",
-          "width": 1650,
-          "height": 200,
-          "font_size": 10
+          "width": 1700,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

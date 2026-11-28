@@ -755,7 +755,7 @@
           "text": "**SP14 \u2014 Which parts of an AM signal survive coherent detection?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change local phase. Run 4 s at 256 Hz.** Envelope=1+0.6cos(2\u03c04t) V; sine carrier=32 Hz. Expect RF peaks at 28,32,36 Hz: 0.3,1,0.3 V.  \nOpen the separate RF, baseband and mixer Scopes. For steady spectra select From 2.002 s to 4 s, Rectangular, no mean removal. The 512 selected samples give \u0394f=0.5 Hz. Use Peak amplitude (V).  \nTwo forward-Euler low-pass states settle from zero; the 4 Hz message is attenuated/delayed and 60/64/68 Hz images are finite. Select local, F4: phase 0 \u2192 1.0471975511965976 (\u03c0/3); DC/message halve, RF stays unchanged.  \nSample n is observed at Scope time (n+1)/256 s. Carrier/local use unit 1; RF and baseband use V.  \n[Open SP14 student lab](qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md) \u00b7 [MIT modulation](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/08c6a7bc7e56eda548248c354886dc37_MIT6_003F11_lec23.pdf) \u00b7 [MIT synchronous detection](https://ocw.mit.edu/courses/res-6-007-signals-and-systems-spring-2011/a774c49855ba6bfe7266943eb8b5bc41_MITRES_6_007S11_lec13.pdf)",
           "text_format": "markdown",
           "width": 1680,
-          "height": 420,
+          "height": 432,
           "font_size": 20
         }
       }

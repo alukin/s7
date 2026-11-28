@@ -4,8 +4,8 @@
   "document_kind": "s7.diagram",
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 1000,
-    "height_mm": 450
+    "width_mm": 570.0,
+    "height_mm": 270.0
   },
   "studio_run": {
     "runtime_seconds": 1200,
@@ -198,72 +198,72 @@
       {
         "id": "setpoint",
         "position": [
-          3,
-          18
+          2,
+          13
         ],
         "title": "setpoint"
       },
       {
         "id": "ambient",
         "position": [
-          94,
-          58
+          56,
+          39
         ],
         "title": "ambient"
       },
       {
         "id": "error",
         "position": [
-          23,
-          18
+          15,
+          13
         ],
         "title": "Setpoint - temperature (K)"
       },
       {
         "id": "relay",
         "position": [
-          44,
-          18
+          28,
+          13
         ],
         "title": "relay"
       },
       {
         "id": "heater_rate",
         "position": [
-          66,
-          18
+          41,
+          13
         ],
         "title": "P' = (2000*relay - P)/10 W/s"
       },
       {
         "id": "heater_power",
         "position": [
-          88,
-          18
+          54,
+          13
         ],
         "title": "Heater power (W)"
       },
       {
         "id": "thermal_rate",
         "position": [
-          110,
-          18
+          67,
+          13
         ],
         "title": "T' = (P - 100*(T-Ta))/10000 K/s"
       },
       {
         "id": "temperature",
         "position": [
-          132,
-          18
+          80,
+          13
         ],
         "title": "Temperature (degC)"
       },
       {
         "id": "temperature_scope",
         "position": [
-          157,
-          18
+          94,
+          13
         ],
         "observer": true,
         "type": "Scope",
@@ -279,8 +279,8 @@
       {
         "id": "heater_scope",
         "position": [
-          111,
-          58
+          69,
+          39
         ],
         "observer": true,
         "type": "Scope",
@@ -294,8 +294,8 @@
       {
         "id": "relay_scope",
         "position": [
-          52,
-          58
+          31,
+          39
         ],
         "observer": true,
         "type": "Scope",
@@ -607,9 +607,9 @@
         ],
         "params": {
           "text": "THERMOSTAT\nHeater lag 10 s; setpoint 20 degC; hysteresis +/-1 K; ambient 15 -> 10 at 600 s.\nRun 1200 s at 10 Hz; open the scopes.\nEquations, experiments and limits: examples/relay/README.md.\nExperimental: manual Studio workflow has not been qualified.",
-          "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "width": 2020,
+          "height": 172,
+          "font_size": 14
         }
       }
     ]

@@ -7,6 +7,7 @@ import copy
 import json
 from pathlib import Path
 from example_runs import with_run
+from diagram_layout import compact, fit
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCE = ROOT / 's7core/resources/schema_elements.s7library'
@@ -76,6 +77,7 @@ class Diagram:
                                      nodes=self.nodes, wires=self.wires,
                                      text_frames=[dict(id='notes', position=[2, 2],
                                          params=dict(text=self.note, width=2600, height=200, font_size=10))]))
+        fit(compact(document))
         folder = ROOT / 'examples' / self.directory
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / (self.name + '.s7diagram')
