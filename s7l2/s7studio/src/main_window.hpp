@@ -15,6 +15,7 @@
 #include <QHash>
 #include <QList>
 #include <QMainWindow>
+#include <QPageLayout>
 #include <QPointer>
 #include <QVector>
 
@@ -22,6 +23,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <functional>
 #include <vector>
 
@@ -95,6 +97,11 @@ private slots:
     void closeCurrentDiagram();
     void saveDocument();
     void saveDocumentAs();
+    // File > Print / Print Preview / Export as PDF (0 = print, 1 = preview,
+    // 2 = PDF) and File > Page Setup for the active diagram tab.
+    void printDiagram(int action);
+    void diagramPageSetup();
+    [[nodiscard]] QString documentDisplayName() const;
     void loadElementLibrary();
     void saveSchemaLibrary();
     void loadDemoDiagram();
@@ -253,6 +260,9 @@ private:
     QAction* lineColorAction_ = nullptr;
     QAction* fillColorAction_ = nullptr;
     QAction* undoAction_ = nullptr;
+    // Page Setup's paper for diagram printing; empty: the diagram's sheet.
+    // Cleared when another diagram is loaded.
+    std::optional<QPageLayout> diagramPrintPaper_;
     QAction* redoAction_ = nullptr;
 
     diagram::DiagramEditor* diagramEditor_ = nullptr;

@@ -64,6 +64,8 @@
 #include <QOffscreenSurface>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QStatusBar>
 #include <QQuickWidget>
 #include <QSettings>
 #include <QSpinBox>
@@ -525,6 +527,41 @@ private slots:
         about->close();
         QCOMPARE(boost::json::serialize(window_->currentDocument()), boost::json::serialize(before));
         QVERIFY(!window_->documentModified());
+    }
+    // File > Export as PDF (P01/P07): the print dialog offers the nested
+    // subsystems, counts pages, writes the PDF through the file dialog and
+    // leaves the diagram unchanged; a cancelled file dialog writes nothing.
+    void printDiagramToPdf() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/double_pendulum_full.s7diagram"));
+        for (const char* name : {"action.print", "action.printPreview", "action.exportPdf", "action.pageSetup"}) QVERIFY2(action(name), name);
+        QCOMPARE(action("action.print")->shortcut(), QKeySequence(QKeySequence::Print));
+        const auto before = window_->currentDocument();
+        const auto path = temporary_.filePath("double_pendulum.pdf");
+        QString summary;
+        const bool exported = dialogAction("action.exportPdf", [&](QDialog* dialog) {
+            auto* subsystems = dialog->findChild<QCheckBox*>("print.subsystems");
+            auto* pages = dialog->findChild<QLabel*>("print.summary");
+            auto* paper = dialog->findChild<QLabel*>("print.paper");
+            auto* pdf = dialog->findChild<QPushButton*>("print.pdf");
+            if (!subsystems || !pages || !paper || !pdf || !subsystems->isEnabled() || pages->text() != "1 page") return false;
+            if (!paper->text().contains("diagram sheet")) return false;
+            subsystems->setChecked(true);
+            summary = pages->text();
+            capture(dialog, "print-diagram");
+            // A cancelled file dialog keeps the print dialog open and writes nothing.
+            if (!modalWorkflow([pdf] { pdf->click(); }, [](QDialog* file) { file->reject(); return true; }) || !dialog->isVisible() || QFile::exists(path))
+                return false;
+            return modalWorkflow([pdf] { pdf->click(); }, [&path](QDialog* file) { return selectFile(file, path); });
+        });
+        QVERIFY(exported);
+        QCOMPARE(summary, QStringLiteral("5 pages"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto pdf = QString::fromLatin1(file.readAll());
+        QCOMPARE(pdf.count(QRegularExpression(QStringLiteral("/Type\\s*/Page(?![s\\w])"))), 5);
+        QCOMPARE(window_->currentDocument(), before);
+        QVERIFY(!window_->documentModified());
+        QVERIFY(window_->statusBar()->currentMessage().contains(path));
     }
     void fractionalRunDuration() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rc_charge_euler.s7diagram"));

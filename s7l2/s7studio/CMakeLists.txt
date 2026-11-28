@@ -8,7 +8,21 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 find_package(Qt6 6.9 REQUIRED COMPONENTS Qml Quick QuickWidgets Graphs Quick3D)
 
 # Diagram model, scene, router and file format: shared by Studio and its tests.
+# Printing and PDF export (docs/STUDIO_PRINTING_0.2.0.md): shared page
+# rendering for diagrams and viewers.
+add_library(s7studio_print STATIC
+    src/printing/print_document.cpp src/printing/print_document.hpp
+    src/printing/print_actions.cpp src/printing/print_actions.hpp
+)
+target_include_directories(s7studio_print PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(s7studio_print PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::PrintSupport)
+s7_enable_project_warnings(s7studio_print)
+
 add_library(s7studio_diagram STATIC
+    src/diagram_print.cpp
+    src/diagram_print.hpp
+    src/diagram_print_dialog.cpp
+    src/diagram_print_dialog.hpp
     src/diagram/items.cpp
     src/diagram/items.hpp
     src/diagram/element_ports.cpp
@@ -55,6 +69,7 @@ target_include_directories(s7studio_diagram PUBLIC
     ${PROJECT_SOURCE_DIR}/s7transport/include
 )
 target_link_libraries(s7studio_diagram PUBLIC
+    s7studio_print
     s7io
     Qt6::Core
     Qt6::Gui
@@ -401,6 +416,13 @@ target_sources(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7r
 target_include_directories(s7studio_array_persistence_test PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
 target_compile_definitions(s7studio_array_persistence_test PRIVATE S7_ARRAY_VIEW_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
 target_link_libraries(s7studio_array_persistence_test PRIVATE s7studio_diagram s7studio_local_runner s7studio_viewers s7audio)
+s7_add_test_executable(s7studio_diagram_print_test tests/diagram_print_test.cpp)
+target_compile_definitions(s7studio_diagram_print_test PRIVATE S7_PRINT_TEST_EXAMPLES="${PROJECT_SOURCE_DIR}/examples")
+target_link_libraries(s7studio_diagram_print_test PRIVATE s7studio_diagram s7studio_print)
+s7_enable_project_warnings(s7studio_diagram_print_test)
+add_test(NAME s7studio_diagram_print COMMAND s7studio_diagram_print_test)
+set_tests_properties(s7studio_diagram_print PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_test(NAME s7studio_array_persistence COMMAND s7studio_array_persistence_test)
 set_tests_properties(s7studio_array_persistence PROPERTIES TIMEOUT 30 ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 # Waterfall PSD and audio block PSD need the s7spectral plugin, which

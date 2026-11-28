@@ -109,6 +109,46 @@ Keep a test matrix with IDs P01–P09, test commands, platform/Qt
 renderer, candidate commit SHA, expected vs. actual, PDF artifacts
 or appropriately retained check evidence, results and limitations.
 
+## Implementation status
+
+Implemented in stages; the matrix stays open until every row has evidence.
+
+| ID | Status | Implementation | Automated evidence |
+| --- | --- | --- | --- |
+| **P01** | Implemented (Linux) | `src/diagram_print.*`, `src/diagram_print_dialog.*`; File → Print / Print Preview / Export as PDF / Page Setup | `s7studio_diagram_print`, `s7studio_gui_workflows` (`printDiagramToPdf`) |
+| **P02–P06** | Not started | Planned: one vector renderer for `LinePlotView` views; high-resolution snapshots for Qt Quick 3D | — |
+| **P07** | Diagram only | `src/printing/print_actions.*`: preview, page setup, cancel and failure results | as P01 |
+| **P08/P09** | Implemented separately | `src/viewers/array_print.*`; to move onto the shared page layer | `s7studio_array_persistence` |
+
+Shared page layer (`src/printing/print_document.*`): every page has a
+provenance header (title, file, level or range, area and scale) and a footer
+(Studio version and revision, print time, page n of m), and the content is
+clipped to the area between them. Jobs are built for the page layout actually
+used (PDF writer, chosen printer or preview printer).
+
+**Coordinate system.** Pages paint in 1/96 inch (the scene unit) on a device
+set to 96 dpi. Diagram items draw text with point-size fonts, which a painter
+resolves against the device resolution; measured on a 300 and 600 dpi device,
+such text grew relative to the drawing. `setResolution(96)` changes only the
+coordinate system: PDF output stays vector and printers print at their own
+resolution. A device that does not accept 96 dpi is refused with an error
+instead of printing distorted text.
+
+**P01 checks** (`s7studio_diagram_print`, on `double_pendulum_full.s7diagram`:
+custom 490 × 320 mm sheet, four nested subsystems, Greek and math text):
+building a job leaves the scene and undo stack unchanged; the default paper is
+the diagram sheet; one fit page whose PDF MediaBox is the sheet; every element
+lies inside the printed region and is drawn at its mapped position inside the
+content area; `pdftotext` finds the title, footer and `δ = θ1 − θ2` as text
+(skipped when poppler is absent); five Letter portrait pages with subsystems,
+none blank; the same through a PDF `QPrinter` and through `QPrintPreviewWidget`;
+tile count at 200 % on A4 matches an independent count; a selection prints as
+"Selection"; a later edit leaves a built job's page unchanged; an empty job, an
+unwritable path and a 300 dpi device fail without a file or false success.
+
+Not yet covered: physical printer output, Windows/Wine runs and installed
+package checks (acceptance items 5 and 6).
+
 ## Release decision and exclusions
 
 All P01–P09 supported profiles and documented mandatory checks

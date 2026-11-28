@@ -46,6 +46,7 @@
 #include <qschematic/scene.hpp>
 
 #include <QDateTime>
+#include <QDir>
 #include <QJsonDocument>
 #include <QTimer>
 #include <QAction>
@@ -91,6 +92,10 @@
 #include <QStatusBar>
 #include <QSplitter>
 #include <QTabWidget>
+#include "diagram_print.hpp"
+#include "diagram_print_dialog.hpp"
+#include "printing/print_actions.hpp"
+#include "s7studio_build_identity.hpp"
 #include <QToolBar>
 #include <QToolButton>
 #include <QSettings>
@@ -634,6 +639,23 @@ void MainWindow::buildUi()
     recentDiagramsMenu_->setObjectName(QStringLiteral("menu.recentDiagrams"));
     findChild<QMenu*>(QStringLiteral("menu.file"))->insertMenu(closeDiagramAction_, recentDiagramsMenu_);
     refreshRecentDiagrams();
+
+    {
+        auto* fileMenu = findChild<QMenu*>(QStringLiteral("menu.file"));
+        auto* libraries = findChild<QMenu*>(QStringLiteral("menu.libraries"));
+        const auto add = [this, fileMenu, libraries](const QString& text, const char* name, auto slot) {
+            auto* action = new QAction(text, this);
+            action->setObjectName(QString::fromLatin1(name));
+            fileMenu->insertAction(libraries->menuAction(), action);
+            connect(action, &QAction::triggered, this, slot);
+            return action;
+        };
+        add(QStringLiteral("Page Setup…"), "action.pageSetup", [this] { diagramPageSetup(); });
+        add(QStringLiteral("Print Preview…"), "action.printPreview", [this] { printDiagram(1); });
+        add(QStringLiteral("Export as PDF…"), "action.exportPdf", [this] { printDiagram(2); });
+        add(QStringLiteral("Print…"), "action.print", [this] { printDiagram(0); })->setShortcut(QKeySequence::Print);
+        fileMenu->insertSeparator(libraries->menuAction());
+    }
 
     diagramDrawToolBar_ = addToolBar(QStringLiteral("Diagram Drawing"));
     diagramDrawToolBar_->setObjectName(QStringLiteral("toolbar.drawing"));
@@ -1929,13 +1951,65 @@ bool MainWindow::documentModified() const
     return document_.modified(currentDocument());
 }
 
-void MainWindow::refreshDocumentTitle()
+QString MainWindow::documentDisplayName() const
 {
     auto name = schemaDisplayName(document_.schema(), {}).trimmed();
     if (name.isEmpty() || name.compare(QStringLiteral("untitled"), Qt::CaseInsensitive) == 0) {
         name = QFileInfo(document_.sourceLabel()).completeBaseName();
         if (name.isEmpty()) name = QStringLiteral("Untitled");
     }
+    return name;
+}
+
+void MainWindow::diagramPageSetup()
+{
+    auto* editor = activeDiagramEditor();
+    if (!editor) return;
+    const auto sheet = editor->pageLayout();
+    const auto current = diagramPrintPaper_.value_or(printing::sheetLayout(sheet.widthMm, sheet.heightMm, sheet.orientation == diagram::PageOrientation::Landscape));
+    if (const auto chosen = printing::pageSetup(this, current)) diagramPrintPaper_ = *chosen;
+}
+
+void MainWindow::printDiagram(const int action)
+{
+    auto* editor = activeDiagramEditor();
+    if (!editor) return;
+    QString levelPath;
+    if (editor != diagramEditor_) {
+        if (auto* tabs = findChild<QTabWidget*>(QStringLiteral("diagram.tabs"))) levelPath = tabs->tabText(tabs->indexOf(editor));
+    }
+    std::shared_ptr<diagram::DiagramPrintJob> job;
+    try {
+        job = std::make_shared<diagram::DiagramPrintJob>(*editor->scene(), editor->pageLayout(), documentDisplayName(), levelPath,
+                                                         QDir::toNativeSeparators(document_.path()));
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("Print Diagram"), QString::fromUtf8(error.what()));
+        return;
+    }
+    const auto revision = QString::fromLatin1(S7_BUILD_REVISION).left(10);
+    const auto footer = QStringLiteral("S7 Studio %1 (%2%3) · printed %4")
+        .arg(QString::fromLatin1(S7_BUILD_VERSION), revision, S7_BUILD_DIRTY ? QStringLiteral(", modified") : QString(),
+             QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+    const auto base = document_.path().isEmpty() ? QDir::home().filePath(documentDisplayName())
+                                                 : QFileInfo(document_.path()).absolutePath() + QLatin1Char('/') + QFileInfo(document_.path()).completeBaseName();
+    const auto suggested = base + (levelPath.isEmpty() ? QString() : QLatin1Char('_') + QString(levelPath).replace(QLatin1Char('/'), QLatin1Char('_'))) + QStringLiteral(".pdf");
+    const auto preferred = action == 1 ? DiagramPrintDialog::Action::Preview : action == 2 ? DiagramPrintDialog::Action::Pdf : DiagramPrintDialog::Action::Print;
+    DiagramPrintDialog dialog(job, job->sheetLayout(), diagramPrintPaper_, footer, suggested, preferred, this);
+    dialog.exec();
+    diagramPrintPaper_ = dialog.paper();
+    const auto& result = dialog.result();
+    if (result.outcome == printing::PrintResult::Outcome::Done) {
+        statusBar()->showMessage(action == 2 || result.message.endsWith(QStringLiteral(".pdf"), Qt::CaseInsensitive)
+            ? QStringLiteral("Saved %1").arg(result.message) : QStringLiteral("Sent the diagram to %1").arg(result.message), 8000);
+        appendLog(QStringLiteral("[studio] printed diagram: %1").arg(result.message));
+    } else if (result.outcome == printing::PrintResult::Outcome::Failed) {
+        appendLog(QStringLiteral("[studio] printing failed: %1").arg(result.message));
+    }
+}
+
+void MainWindow::refreshDocumentTitle()
+{
+    const auto name = documentDisplayName();
     setWindowTitle(QStringLiteral("s7studio - %1[*]").arg(name));
     if (diagramEditor_) if (auto* tabs = findChild<QTabWidget*>(QStringLiteral("diagram.tabs"))) {
         const int index = tabs->indexOf(diagramEditor_);
@@ -2394,6 +2468,7 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
 
 bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
+    diagramPrintPaper_.reset();
     auto candidateSession = document_;
     candidateSession.openSchema(schemaJson, sourceLabel);
     const auto elementCheck = prepareElementTypes(schemaJson);
@@ -2431,6 +2506,7 @@ bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 
 bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
+    diagramPrintPaper_.reset();
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
     auto candidateSession = document_;
     candidateSession.openDiagram(document, sourceLabel);

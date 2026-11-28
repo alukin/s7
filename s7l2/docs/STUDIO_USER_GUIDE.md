@@ -144,6 +144,30 @@ Toolbar colors follow the Qt application palette supplied by the desktop
 (including KDE's Qt integration). Icons update with palette changes; disabled
 icons use the palette's disabled text color.
 
+### Printing and PDF export
+
+**File → Print…** (Ctrl+P), **Print Preview…** and **Export as PDF…** print
+the diagram tab you are looking at: the top level, or the nested subsystem open
+in its tab. A dialog chooses what to print:
+
+- **Whole diagram** (the sheet and anything drawn outside it) or
+  **Selection** (the selected elements, wires and text frames).
+- **Fit to one page**, with the scale printed in the page header, or
+  **Tile pages at** a chosen scale: 100 % prints the diagram at its sheet size,
+  and neighbouring tiles overlap by 10 mm. Each tile names its row and column.
+- **Include subsystems** appends every nested subsystem level, each on its own
+  page(s), titled with its path (for example `Double pendulum ▸ angle_functions`).
+
+The paper is the diagram's own sheet (**Diagram → Page**) unless **Page
+Setup…** chooses another; **Use Diagram Sheet** returns to it. The dialog shows
+the page count. Every page carries the diagram name, file and level, and a
+footer with the S7 Studio version, the print time and the page number.
+
+Printing works on a copy of the diagram taken when the dialog opens: it never
+changes the diagram, its undo history or a running model. PDF export needs no
+printer. A cancelled dialog writes nothing; an unwritable file or a printer
+failure is reported in the dialog.
+
 ## Running and observing
 
 **Run → Keep Previous Scope Traces** and the identically labelled setting in
