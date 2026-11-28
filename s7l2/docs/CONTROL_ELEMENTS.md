@@ -103,8 +103,8 @@ available headlessly and in installed applications without a source-tree path.
 The original file is also installed under `share/s7/` in the SDK.
 `register_builtin_elements()` registers the components after their primitives.
 
-All bundled templates currently expose F64 ports and default to 1 kHz
-(`dt=0.001`). Each instance is an independent `Schema` containing its own internal
+All bundled templates currently expose F64 ports. They default to 1 kHz
+(`dt=0.001`), except `AudioEqualizer`, which is designed for 48 kHz. Each instance is an independent `Schema` containing its own internal
 element instances and their states. Registry templates remain unchanged when an instance
 is edited. Generic arithmetic primitives remain available for other signal types.
 
@@ -116,6 +116,7 @@ is edited. Generic arithmetic primitives remain available for other signal types
 | `FirstOrderLag` | input, tau | output | `tau*y' = input-y`, initial y=0 |
 | `RMSDetector` | input, tau | rms | `tau*q' = input^2-q`, output sqrt(q), initial q=0 |
 | `PhaseDifference` | phase_a, phase_b | difference | Adder followed by PhaseWrap, radians in [-pi,pi) |
+| `AudioEqualizer` | in, low_db, low_mid_db, mid_db, high_mid_db, high_db | out | 5-band IIR equalizer at 48 kHz; band gains in dB (see below) |
 
 Controller equations with normalized control u:
 
@@ -146,6 +147,33 @@ A pole/zero cancellation in the transfer does not remove the stored state;
 internal stability and closed-loop stability need their own checks. There is
 no output saturation. Fixed coefficients have a different physical response
 when the model rate changes; they are not continuous pole/time-constant inputs.
+
+`AudioEqualizer` is a 5-band audio equalizer designed for 48 kHz:
+- **Bands:** low shelf at 100 Hz; peaks at 400 Hz, 1.6 kHz and 6 kHz, each
+  with a bandwidth equal to its centre frequency (Q 1); high shelf at 12 kHz.
+- **Gains:** the band gains are F64 inputs in dB. Connect constants for fixed
+  settings; 0 dB leaves a band transparent.
+- **Structure:** each band is a Regalia–Mitra section. A fixed allpass `A(z)`,
+  built from an `Adder` and `Delay`s, is mixed with the band gain
+  `K = 10^(gain/20)`:
+  - `H = (1+K)/2 + (1-K)/2·A` for the peaks and the high shelf;
+  - `H = (1+K)/2 + (K-1)/2·A` for the low shelf.
+- **Changing gains:** `K` only scales the mix after the allpass, so gains may
+  change while running without making the filter unstable.
+- **Cut versus boost:** a cut is narrower than a boost of the same size.
+- **Gain accuracy:** a peak's centre frequency gets exactly its gain. Shelves
+  reach about ±9 dB of a ±12 dB setting at their corner frequency.
+- **Other run rates:** the schema declares 48 kHz, so validation refuses the
+  element in a graph at another rate, rather than shifting the bands. A tool
+  that re-seeds the embedded schema's `dt` (see below) keeps the
+  coefficients, so every band frequency then scales by rate / 48000.
+- **Source and verification:**
+  - `tools/generate_audio_equalizer.py` generates the element, and
+    `--check` verifies the bundled copy.
+  - `s7core_schema_elements_smoke` measures the response against the band
+    transfer functions to 0.001 dB.
+  - It also checks that the element is transparent at 0 dB and stays bounded
+    when a gain jumps from +12 to −12 dB while running.
 
 Validation and compilation flatten same-node nested schemas under
 [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024), so feedback through an
@@ -195,7 +223,7 @@ unchanged. It does not change update equations or execution order.
 
 ```bash
 cmake --build build --target s7core_control_elements_smoke s7core_schema_elements_smoke s7studio_schema_elements_test
-ctest --test-dir build -R '^(s7core_control_elements_smoke|s7core_schema_elements_smoke|s7studio_schema_elements)$' --output-on-failure
+ctest --test-dir build -R '^(s7core_control_elements_smoke|s7core_schema_elements_smoke|s7core_audio_equalizer_resource|s7studio_schema_elements)$' --output-on-failure
 ```
 
 Primitive tests cover all four floating types, integer switching, thresholds,

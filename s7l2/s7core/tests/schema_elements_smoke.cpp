@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include <s7/core.hpp>
+#include <array>
 #include <cmath>
+#include <complex>
+#include <numbers>
 #include <filesystem>
 #include <fstream>
 #include <chrono>
@@ -178,6 +181,127 @@ void lead_lag() {
     s7::configure_schema_discretization(direct,.001);
     require(!s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(direct)).ok(),"Lead/lag direct error path cannot close an algebraic loop");
 }
+
+// AudioEqualizer (tools/generate_audio_equalizer.py): the measured response of
+// the bundled graph against the documented band transfer functions, evaluated
+// here in the frequency domain, independently of the graph's wiring.
+struct EqualizerBand { bool shelf, low; double frequency, bandwidth; };
+constexpr std::array<EqualizerBand,5> equalizer_bands{{{true,true,100,0},{false,false,400,400},{false,false,1600,1600},
+                                                     {false,false,6000,6000},{true,false,12000,0}}};
+constexpr double audio_rate=48000;
+double equalizer_response(double frequency,const std::array<double,5>& gains_db) {
+    using std::numbers::pi;
+    const auto z1=std::polar(1.0,-2*pi*frequency/audio_rate);
+    std::complex<double> h=1;
+    for(std::size_t b=0;b<equalizer_bands.size();++b) {
+        const auto& band=equalizer_bands[b];
+        const double k=std::pow(10.0,gains_db[b]/20);
+        std::complex<double> allpass;
+        if(band.shelf) {
+            const double t=std::tan(pi*band.frequency/audio_rate),a=(t-1)/(t+1);
+            allpass=(a+z1)/(1.0+a*z1);
+        } else {
+            const double t=std::tan(pi*band.bandwidth/audio_rate),c=(t-1)/(t+1),d=-std::cos(2*pi*band.frequency/audio_rate);
+            allpass=(-c+d*(1-c)*z1+z1*z1)/(1.0+d*(1-c)*z1-c*z1*z1);
+        }
+        h*=band.low ? (1+k)/2+(k-1)/2*allpass : (1+k)/2+(1-k)/2*allpass;
+    }
+    return std::abs(h);
+}
+boost::json::value equalizer_model(double frequency,const std::array<double,5>& gains_db) {
+    auto json=model("AudioEqualizer",{0,gains_db[0],gains_db[1],gains_db[2],gains_db[3],gains_db[4]});
+    auto& input=json.as_object().at("elements").as_array()[1].as_object();
+    input["type"]="AnalogOscillator";
+    input["params"]=boost::json::object{{"type","F64"},{"amplitude",.5},{"frequency_hz",frequency}};
+    return json;
+}
+// Gain of the component at `frequency`: output and input projected on the
+// tone over whole periods after the transient has decayed.
+double measured_gain(s7::NodeRuntime& runtime,double frequency,int settle,int samples,double* peak=nullptr) {
+    using std::numbers::pi;
+    std::complex<double> in{},out{};
+    for(int n=0;n<settle+samples;++n) {
+        runtime.step();
+        const double y=runtime.real_output_of("component",0);
+        if(peak) *peak=std::max(*peak,std::abs(y));
+        if(n<settle) continue;
+        const auto tone=std::polar(1.0,-2*pi*frequency*n/audio_rate);
+        in+=runtime.real_output_of("input0",0)*tone;
+        out+=y*tone;
+    }
+    return std::abs(out)/std::abs(in);
+}
+void audio_equalizer() {
+    const auto compile=[](boost::json::value json) {
+        require(s7::configure_schema_discretization(json,1/audio_rate),"Configure the equalizer at 48 kHz");
+        auto schema=s7::SchemaLibraryLoader::build_schema(json);
+        const auto checked=s7::Validator::validate(schema);
+        for(const auto& error : checked.errors) std::cerr<<error<<'\n';
+        require(checked.ok(),"AudioEqualizer validates with its exposed ports");
+        return s7::NodeRuntime(s7::Compiler::compile(schema));
+    };
+    {   // 0 dB everywhere: transparent, sample by sample.
+        auto runtime=compile(equalizer_model(1000,{}));
+        for(int n=0;n<2000;++n) {
+            runtime.step();
+            require(std::abs(runtime.real_output_of("component",0)-runtime.real_output_of("input0",0))<1e-12,"AudioEqualizer at 0 dB is transparent");
+        }
+    }
+    for(std::size_t b=0;b<equalizer_bands.size();++b) {
+        for(double db : {12.0,-12.0}) {
+            std::array<double,5> gains{};gains[b]=db;
+            for(double frequency : {20.0,equalizer_bands[b].frequency,1000.0,12000.0}) {
+                auto runtime=compile(equalizer_model(frequency,gains));
+                const double gain=measured_gain(runtime,frequency,2400,4800),expected=equalizer_response(frequency,gains);
+                if(std::abs(20*std::log10(gain/expected))>1e-3) {
+                    std::cerr<<"band "<<b<<' '<<db<<" dB at "<<frequency<<" Hz: "<<20*std::log10(gain)<<" dB, expected "<<20*std::log10(expected)<<'\n';
+                    throw std::runtime_error("AudioEqualizer response differs from the band transfer functions");
+                }
+                // A peak's own centre frequency gets exactly its gain.
+                if(!equalizer_bands[b].shelf && frequency==equalizer_bands[b].frequency)
+                    require(std::abs(20*std::log10(gain)-db)<1e-3,"AudioEqualizer peak centre gain equals its dB input");
+            }
+        }
+    }
+    {   // A gain input jumping from +12 to -12 dB while running stays bounded
+        // and settles to the new response.
+        auto json=equalizer_model(400,{});
+        auto& gain=json.as_object().at("elements").as_array()[3].as_object();
+        gain["type"]="StepGenerator";
+        gain["params"]=boost::json::object{{"initial_value",12},{"final_value",-12},{"start_time",.05}};
+        auto runtime=compile(json);
+        double peak=0;
+        for(int n=0;n<2400;++n) {runtime.step();peak=std::max(peak,std::abs(runtime.real_output_of("component",0)));}
+        const double settled=measured_gain(runtime,400,2400,4800,&peak);
+        require(peak<.5*4.5,"AudioEqualizer stays bounded when a gain changes while running");
+        require(std::abs(20*std::log10(settled)+12)<1e-3,"AudioEqualizer settles to the changed gain");
+    }
+    {   // The schema declares its 48 kHz design rate: a graph at another
+        // rate is refused instead of silently shifting the bands.
+        auto json=equalizer_model(1000,{});
+        json.as_object().at("elements").as_array().push_back(boost::json::object{{"id","downstream"},{"type","IirFilter"},
+            {"params",{{"design_rate_hz",44100}}}});
+        json.as_object().at("connections").as_array().push_back(boost::json::object{{"from_element","component"},{"from_port",0},
+            {"to_element","downstream"},{"to_port",0}});
+        bool conflict=false;
+        try {
+            const auto checked=s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(json));
+            for(const auto& error : checked.errors) conflict=conflict || error.find("48000 Hz")!=std::string::npos;
+            if(!conflict) for(const auto& error : checked.errors) std::cerr<<error<<'\n';
+        } catch(const std::exception& error) {
+            conflict=std::string(error.what()).find("48000")!=std::string::npos;
+            if(!conflict) std::cerr<<error.what()<<'\n';
+        }
+        require(conflict,"AudioEqualizer at 44.1 kHz is refused with its design rate");
+    }
+    {   // Every band gain is a required input.
+        boost::json::array elements{boost::json::object{{"id","component"},{"type","AudioEqualizer"}},constant("input0",0)};
+        boost::json::array connections{boost::json::object{{"from_element","input0"},{"from_port",0},{"to_element","component"},{"to_port",0}}};
+        boost::json::value json=boost::json::object{{"name","unconnected"},{"elements",elements},{"connections",connections}};
+        s7::configure_schema_discretization(json,1/audio_rate);
+        require(!s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(json)).ok(),"AudioEqualizer without gain inputs is rejected");
+    }
+}
 }
 int main() {
     try {
@@ -185,7 +309,7 @@ int main() {
         const auto count=registry.element_count();s7::register_builtin_elements(registry);
         require(registry.element_count()==count,"Core and bundled resource registration is idempotent");
         corrupt_gzip_library();
-        references();controller_transients();independence_and_limits();lead_lag();
-        std::cout<<"Schema resource: PI/PID, lead/lag, plant lag, RMS, phase difference, independent instances and nested rates passed\n";
+        references();controller_transients();independence_and_limits();lead_lag();audio_equalizer();
+        std::cout<<"Schema resource: PI/PID, lead/lag, plant lag, RMS, phase difference, independent instances, nested rates and the audio equalizer passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

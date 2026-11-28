@@ -578,6 +578,9 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                 {"type", "NetSource"},
                 {"params", json::object{{"stream_id", wire::to_string(stream.stream_id)},
                                         {"type", std::string(signal_type_name(stream.data_type))},
+                                        // The consumer rejects packets larger than its limit:
+                                        // it must be the producer's.
+                                        {"max_elements_per_packet", stream.max_elements_per_packet},
                                         {"max_wait_ms", stream.max_wait_ms},
                                         {"producer_node", stream.producer.node_uuid},
                                         {"timestamps", timestamps_param(stream)}}},

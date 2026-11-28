@@ -82,12 +82,12 @@ keys must be supplied even when metadata provides a suggested value.
 | Convert | from, to, mode, rounding, overflow | mode required; explicit conversion, no implicit wire conversion |
 | Resampler | order, stopband_attenuation_db | Joins two rates; pass-through at equal rates; orders 0/1/2, anti-aliasing when lowering the rate |
 
-Schema library entries PhaseDifference, FirstOrderLag, RMSDetector, PIController
-PIDController and LeadLagController have **no wrapper parameter keys**. The source is
+Schema library entries PhaseDifference, FirstOrderLag, RMSDetector, PIController,
+PIDController, LeadLagController and AudioEqualizer have **no wrapper parameter keys**. The source is
 `s7core/resources/schema_elements.s7library` and `schema_library.cpp`.
 Descriptions identify exposed signals, units, initial states and timing;
-information also lists internal element settings and schema dt. Controller gains
-and lag/filter time constants are signal inputs. Internal parameters belong to
+information also lists internal element settings and schema dt. Controller gains,
+lag/filter time constants and equalizer band gains (dB) are signal inputs. Internal parameters belong to
 the nested elements and are documented there. Existing linear, pendulum and
 signal-measurement examples were used to check these conventions; no numerical
 research or new method is part of this increment.

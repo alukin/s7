@@ -208,7 +208,8 @@ throughput, lag, CPU, RSS and queue occupancy; the recorded input and output
 are played back afterwards for listening. The sustained per-step rate was
 measured on one host (two local nodes): 8–192 kHz held in real time with exact
 equalizer output, and 48 kHz still held with each node limited to 20 % of one
-CPU. The recommendation is 48 kHz, to be confirmed on the two G2 hosts with
+CPU. Decided: **48 kHz**, buffered streams (100 ms packets) and the bundled
+`AudioEqualizer` schema element; confirm on the two G2 hosts with
 `tools/measure_g2_audio_rate.py`; see [G2 audio chain](G2_AUDIO_CHAIN.md).
 
 A live round trip (microphone on host A → equalizer on host B → speakers on

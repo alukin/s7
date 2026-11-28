@@ -270,6 +270,12 @@ add_test(NAME s7core_control_elements_smoke COMMAND s7core_control_elements_smok
 s7_add_test_executable(s7core_schema_elements_smoke tests/schema_elements_smoke.cpp)
 target_link_libraries(s7core_schema_elements_smoke PRIVATE s7core)
 add_test(NAME s7core_schema_elements_smoke COMMAND s7core_schema_elements_smoke)
+# The bundled AudioEqualizer matches its generator (tools/generate_audio_equalizer.py).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME s7core_audio_equalizer_resource
+        COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/generate_audio_equalizer.py --check)
+endif()
 
 s7_add_test_executable(s7core_model_time_smoke tests/model_time_smoke.cpp)
 target_link_libraries(s7core_model_time_smoke PRIVATE s7core)

@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Generate the bundled AudioEqualizer schema element (5-band IIR, 48 kHz).
+
+Each band is a Regalia-Mitra section: a fixed allpass A(z) and the band gain K
+mixed as H = (1+K)/2 + (1-K)/2 * A (peak, high shelf) or
+H = (1+K)/2 + (K-1)/2 * A (low shelf). K = 10^(gain_db/20) enters only as a
+multiplier after the allpass, so the gain inputs may change while running
+without making the filter unstable, and 0 dB makes a band transparent. The
+allpass coefficients depend only on the band frequencies and bandwidths,
+designed for 48 kHz; the schema declares that rate, so validation refuses
+the element in a graph running at another rate.
+
+Usage:
+  python3 tools/generate_audio_equalizer.py           # update the resource
+  python3 tools/generate_audio_equalizer.py --check   # fail if it is stale
+"""
+import argparse
+import json
+import math
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+RESOURCE = ROOT / "s7core" / "resources" / "schema_elements.s7library"
+TYPE_NAME = "AudioEqualizer"
+DESIGN_RATE = 48000.0
+# (port, kind, frequency Hz, bandwidth Hz for peaks)
+BANDS = (
+    ("low_db", "low_shelf", 100.0, None),
+    ("low_mid_db", "peak", 400.0, 400.0),
+    ("mid_db", "peak", 1600.0, 1600.0),
+    ("high_mid_db", "peak", 6000.0, 6000.0),
+    ("high_db", "high_shelf", 12000.0, None),
+)
+
+
+def allpass(kind, frequency, bandwidth, rate=DESIGN_RATE):
+    """Adder weights over (x, x1[, x2], y1[, y2]) of the band's allpass."""
+    if kind in ("low_shelf", "high_shelf"):
+        # A(z) = (a + z^-1) / (1 + a z^-1): y = a x + x1 - a y1
+        t = math.tan(math.pi * frequency / rate)
+        a = (t - 1) / (t + 1)
+        return [a, 1.0, -a]
+    # A(z) = (-c + d(1-c) z^-1 + z^-2) / (1 + d(1-c) z^-1 - c z^-2)
+    t = math.tan(math.pi * bandwidth / rate)
+    c = (t - 1) / (t + 1)
+    d = -math.cos(2 * math.pi * frequency / rate)
+    return [-c, d * (1 - c), 1.0, -d * (1 - c), c]
+
+
+def element():
+    elements, connections, inputs = [], [], []
+
+    def add(id, kind, **params):
+        elements.append({"id": id, "type": kind, "params": params})
+
+    def wire(src, dst, port=0):
+        connections.append({"from_element": src, "from_port": 0, "to_element": dst, "to_port": port})
+
+    add("in", "Gain", factor=1.0)
+    inputs.append({"name": "in", "type": "F64", "element": "in", "port": 0})
+    previous = "in"
+    for port, kind, frequency, bandwidth in BANDS:
+        band = port[:-3]
+        # gain_db -> K = exp(gain_db * ln(10) / 20)
+        add(f"{band}_db_scale", "Gain", factor=math.log(10) / 20)
+        add(f"{band}_gain", "MathFunction", function="exp")
+        wire(f"{band}_db_scale", f"{band}_gain")
+        inputs.append({"name": port, "type": "F64", "element": f"{band}_db_scale", "port": 0})
+        weights = allpass(kind, frequency, bandwidth)
+        order = 1 if len(weights) == 3 else 2
+        add(f"{band}_allpass", "Adder", weights=weights)
+        taps = ["x1", "y1"] if order == 1 else ["x1", "x2", "y1", "y2"]
+        for tap in taps:
+            add(f"{band}_{tap}", "Delay", initial_value=0.0)
+        wire(previous, f"{band}_allpass", 0)
+        wire(previous, f"{band}_x1")
+        wire(f"{band}_allpass", f"{band}_y1")
+        if order == 1:
+            wire(f"{band}_x1", f"{band}_allpass", 1)
+            wire(f"{band}_y1", f"{band}_allpass", 2)
+        else:
+            wire(f"{band}_x1", f"{band}_x2")
+            wire(f"{band}_y1", f"{band}_y2")
+            for index, tap in enumerate(taps, start=1):
+                wire(f"{band}_{tap}", f"{band}_allpass", index)
+        # plain + K * scaled, both mixes of the band input x and A x
+        low = kind == "low_shelf"
+        add(f"{band}_plain", "Adder", weights=[0.5, -0.5] if low else [0.5, 0.5])
+        add(f"{band}_scaled", "Adder", weights=[0.5, 0.5] if low else [0.5, -0.5])
+        add(f"{band}_product", "Multiply")
+        add(f"{band}_out", "Adder", weights=[1.0, 1.0])
+        for mix in ("plain", "scaled"):
+            wire(previous, f"{band}_{mix}", 0)
+            wire(f"{band}_allpass", f"{band}_{mix}", 1)
+        wire(f"{band}_gain", f"{band}_product", 0)
+        wire(f"{band}_scaled", f"{band}_product", 1)
+        wire(f"{band}_plain", f"{band}_out", 0)
+        wire(f"{band}_product", f"{band}_out", 1)
+        previous = f"{band}_out"
+    description = (
+        "5-band IIR audio equalizer designed for 48 kHz: low shelf 100 Hz, peaks at 400 Hz, 1.6 kHz and 6 kHz "
+        "(bandwidth equal to the centre frequency, Q 1), high shelf 12 kHz. Band gains are F64 inputs in dB "
+        "(connect constants; 0 dB leaves a band transparent). Each band is a fixed allpass mixed with its gain "
+        "(Regalia-Mitra), so gains may change while running without instability; cuts are narrower than boosts. "
+        "The schema declares 48 kHz: a graph at another rate is refused. Zero initial state. "
+        "Generated by tools/generate_audio_equalizer.py.")
+    return {
+        "type_name": TYPE_NAME,
+        "display_name": "Audio Equalizer",
+        "description": description,
+        "category": "signal_processing",
+        "version": "1.0.0",
+        "schema": {
+            "name": TYPE_NAME,
+            "dt": 1 / DESIGN_RATE,
+            "elements": elements,
+            "connections": connections,
+            "exposed_inputs": inputs,
+            "exposed_outputs": [{"name": "out", "type": "F64", "element": previous, "port": 0}],
+        },
+    }
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--check", action="store_true", help="exit 1 if the resource differs from the generated element")
+    p.add_argument("--resource", type=Path, default=RESOURCE, help="element library to update or check")
+    args = p.parse_args()
+    library = json.loads(args.resource.read_text())
+    generated = element()
+    entries = library["elements"]
+    index = next((n for n, e in enumerate(entries) if e["type_name"] == TYPE_NAME), None)
+    if args.check:
+        if index is None or entries[index] != generated:
+            print(f"{args.resource}: {TYPE_NAME} is missing or stale; run {Path(__file__).name}", file=sys.stderr)
+            return 1
+        print(f"{TYPE_NAME} is current")
+        return 0
+    if index is None:
+        entries.append(generated)
+    else:
+        entries[index] = generated
+    args.resource.write_text(json.dumps(library, indent=2) + "\n")
+    print(f"{'updated' if index is not None else 'added'} {TYPE_NAME} in {args.resource}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

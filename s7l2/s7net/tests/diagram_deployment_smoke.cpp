@@ -193,6 +193,13 @@ void test_node_parts()
     expect(params_of(a, sink).at("consumer_nodes") == json::array{kB, kC}, "the NetSink serves only the consumer nodes");
     expect(params_of(b, source).at("producer_node") == kA, "the NetSource accepts only the producer node");
 
+    // Both ends get the packet size: a consumer with a smaller limit would
+    // reject the producer's packets as malformed.
+    auto large = diagram;
+    large["streams"].as_array()[0].as_object()["max_elements_per_packet"] = 4800;
+    expect(params_of(deployment::extract_node_schema(large, kA), sink).at("max_elements_per_packet") == 4800, "the NetSink gets the packet size");
+    expect(params_of(deployment::extract_node_schema(large, kB), source).at("max_elements_per_packet") == 4800, "the NetSource gets the packet size");
+
     // A latency limit reaches the consumer end.
     auto limited = diagram;
     limited["streams"].as_array()[0].as_object()["max_latency_ms"] = 20;

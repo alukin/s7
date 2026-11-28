@@ -4,12 +4,13 @@
 """Measure which audio sample rates a one-way two-node S7 chain sustains (G2).
 
 For each requested rate, starts two fresh local s7runtime nodes, deploys with
-s7ctl: two tones on node A -> stream -> 3-band biquad equalizer on node B,
-recording B's input and output. Measures real-time step rate, grid lag, stream
+s7ctl: three tones on node A -> buffered stream -> the bundled 5-band
+AudioEqualizer schema element on node B, recording B's input and output. Measures real-time step rate, grid lag, stream
 latency, CPU and peak RSS while the nodes run, then stops them and checks:
   * B's recorded input equals the tones computed here (no lost or reordered
     sample),
-  * B's recorded output equals an independent biquad cascade of that input.
+  * B's recorded output equals an independent sample-level implementation of
+    the equalizer's documented design applied to that input.
 
 One step is one audio sample (scalar F64 stream); the nodes pace on a shared
 UTC grid. This is a capacity measurement on this host, not a guarantee: the
@@ -47,30 +48,40 @@ def tones(rate):
     return [(a, f * rate if f < 1 else f) for a, f in TONES]
 
 
-def biquads(rate):
-    """RBJ audio-EQ cookbook: low shelf +6 dB, peak -6 dB, high shelf +4 dB."""
-    def shelf(f0, gain_db, high):
-        a = 10 ** (gain_db / 40)
-        w = 2 * math.pi * f0 / rate
-        cw, alpha = math.cos(w), math.sin(w) / 2 * math.sqrt(2)
-        s = 2 * math.sqrt(a) * alpha
-        sign = -1 if high else 1
-        b0 = a * ((a + 1) - sign * (a - 1) * cw + s)
-        b1 = sign * 2 * a * ((a - 1) - sign * (a + 1) * cw)
-        b2 = a * ((a + 1) - sign * (a - 1) * cw - s)
-        a0 = (a + 1) + sign * (a - 1) * cw + s
-        a1 = -sign * 2 * ((a - 1) + sign * (a + 1) * cw)
-        a2 = (a + 1) + sign * (a - 1) * cw - s
-        return [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0]
+# AudioEqualizer band gains (dB) for the run: low shelf, three peaks, high shelf.
+EQ_GAINS_DB = (6.0, -3.0, -6.0, 3.0, 4.0)
 
-    def peak(f0, gain_db, q):
-        a = 10 ** (gain_db / 40)
-        w = 2 * math.pi * f0 / rate
-        alpha = math.sin(w) / (2 * q)
-        a0 = 1 + alpha / a
-        return [(1 + alpha * a) / a0, -2 * math.cos(w) / a0, (1 - alpha * a) / a0, -2 * math.cos(w) / a0, (1 - alpha / a) / a0]
 
-    return [shelf(200.0, 6.0, False), peak(1000.0, -6.0, 1.0), shelf(0.3 * rate, 4.0, True)]
+def equalizer_reference(x):
+    """The bundled AudioEqualizer, computed here sample by sample from its
+    documented design (Regalia-Mitra bands, coefficients fixed at 48 kHz; at
+    another run rate the band frequencies scale with the rate)."""
+    design = 48000.0
+    signal_in = list(x)
+    for (kind, frequency, bandwidth), gain_db in zip(
+            (("low", 100.0, 0.0), ("peak", 400.0, 400.0), ("peak", 1600.0, 1600.0), ("peak", 6000.0, 6000.0), ("high", 12000.0, 0.0)),
+            EQ_GAINS_DB):
+        k = 10 ** (gain_db / 20)
+        out, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
+        if kind == "peak":
+            t = math.tan(math.pi * bandwidth / design)
+            c, d = (t - 1) / (t + 1), -math.cos(2 * math.pi * frequency / design)
+        else:
+            t = math.tan(math.pi * frequency / design)
+            a = (t - 1) / (t + 1)
+        for v in signal_in:
+            if kind == "peak":   # A(z) = (-c + d(1-c) z^-1 + z^-2) / (1 + d(1-c) z^-1 - c z^-2)
+                ap = -c * v + d * (1 - c) * x1 + x2 - d * (1 - c) * y1 + c * y2
+                x2, y2 = x1, y1
+            else:                # A(z) = (a + z^-1) / (1 + a z^-1)
+                ap = a * v + x1 - a * y1
+            x1, y1 = v, ap
+            if kind == "low":
+                out.append((1 + k) / 2 * v + (k - 1) / 2 * ap)
+            else:
+                out.append((1 + k) / 2 * v + (1 - k) / 2 * ap)
+        signal_in = out
+    return signal_in
 
 
 def node_config(certs, cert_name, port, studio_fp, security):
@@ -102,17 +113,21 @@ def diagram(rate, ports, security):
         elements.append(element(f"tone{i}", "AnalogOscillator", NODE_A, type="F64", amplitude=amplitude, frequency_hz=frequency))
         connections.append(wire(f"tone{i}", "mix", i))
     elements.append(element("mix", "Adder", NODE_A, weights=[1.0] * len(TONES)))
-    previous = "mix"
-    # Direct form I biquad from causal primitives: y = b0 x + b1 x1 + b2 x2 - a1 y1 - a2 y2.
-    for band, (b0, b1, b2, a1, a2) in enumerate(biquads(rate)):
-        p = f"eq{band}_"
-        elements += [element(p + "sum", "Adder", NODE_B, weights=[b0, b1, b2, -a1, -a2])]
-        elements += [element(p + name, "Delay", NODE_B, initial_value=0.0) for name in ("x1", "x2", "y1", "y2")]
-        connections += [wire(previous, p + "sum", 0), wire(previous, p + "x1"), wire(p + "x1", p + "x2"),
-                        wire(p + "x1", p + "sum", 1), wire(p + "x2", p + "sum", 2),
-                        wire(p + "sum", p + "y1"), wire(p + "y1", p + "y2"),
-                        wire(p + "y1", p + "sum", 3), wire(p + "y2", p + "sum", 4)]
-        previous = p + "sum"
+    # The bundled schema element on node B; its band gains are constants.
+    eq = element("eq", "AudioEqualizer", NODE_B)
+    if rate != 48000:
+        # The element declares its 48 kHz design rate, so validation refuses
+        # it at another rate. For a capacity measurement, embed its schema
+        # re-timed to this rate (as Studio's run configuration does): the
+        # coefficients stay, the band frequencies scale by rate / 48000.
+        library = json.loads((Path(__file__).resolve().parents[1] / "s7core" / "resources" / "schema_elements.s7library").read_text())
+        eq["schema"] = dict(next(e["schema"] for e in library["elements"] if e["type_name"] == "AudioEqualizer"), dt=1.0 / rate)
+    elements.append(eq)
+    connections.append(wire("mix", "eq", 0))
+    for band, gain_db in enumerate(EQ_GAINS_DB, start=1):
+        elements.append(element(f"gain{band}", "Constant", NODE_B, type="F64", value=gain_db))
+        connections.append(wire(f"gain{band}", "eq", band))
+    previous = "eq"
     for name in ("record_in", "record_out"):
         elements.append(element(name, "RecordingSink", NODE_B, type="F64", file_path=f"{name}.s7b", sample_rate_hz=rate,
                                 format="compact-binary"))
@@ -161,14 +176,7 @@ def check_recordings(work, rate):
     # The oscillators accumulate phase in binary64: allow its rounding growth.
     if worst_in > 1e-7:
         problems.append(f"B's input differs from the generated tones by {worst_in:.3g} (lost, repeated or reordered samples?)")
-    signal_in = list(x)
-    for b0, b1, b2, a1, a2 in biquads(rate):
-        out, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
-        for v in signal_in:
-            r = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-            out.append(r)
-            x2, x1, y2, y1 = x1, v, y1, r
-        signal_in = out
+    signal_in = equalizer_reference(x)
     worst_out = max((abs(a - b) for a, b in zip(signal_in, y)), default=math.inf)
     if worst_out > 1e-9:
         problems.append(f"B's output differs from the reference equalizer by {worst_out:.3g}")
@@ -289,6 +297,7 @@ class Run:
         for stream in planned["streams"]:
             stream["max_batch_latency_ms"] = self.args.batch_ms
             stream["max_elements_per_packet"] = self.args.packet
+            stream["max_wait_ms"] = self.args.max_wait_ms
         (self.work / "planned.json").write_text(json.dumps(planned))
         deployed = self.ctl("deploy", str(self.work / "planned.json"))
         activate = next(int(line.split()[1]) for line in deployed.splitlines() if line.startswith("activate_at_ns "))
@@ -335,19 +344,23 @@ class Run:
         # Sustained: both nodes keep the nominal rate, their lag does not grow
         # and stays below the bound, no fault, exact recordings.
         for node in nodes:
+            # The consumer steps as each batch arrives: it may trail by one
+            # batch (a packet fills after packet/rate seconds at most).
+            allowance = 0.0 if node["node"] == "a" else min(self.args.batch_ms, 1000 * self.args.packet / self.rate)
             if abs(node["rate_ratio"] - 1) > self.args.rate_tolerance:
                 problems.append(f"node {node['node']} stepped at {node['step_rate_hz']:.0f} Hz")
-            if node["lag_ms_end"] > self.args.max_lag_ms or node["lag_ms_end"] - node["lag_ms_start"] > self.args.max_lag_ms / 2:
+            if node["lag_ms_end"] > self.args.max_lag_ms + allowance or node["lag_ms_end"] - node["lag_ms_start"] > self.args.max_lag_ms / 2 + allowance:
                 problems.append(f"node {node['node']} lag {node['lag_ms_start']:.1f} -> {node['lag_ms_end']:.1f} ms")
             # A stall longer than this would need that much playback buffer
             # (max_lag counts from activation, so it includes the start).
-            if node["max_lag_ms"] > self.args.max_lag_ms:
+            if node["max_lag_ms"] > self.args.max_lag_ms + allowance:
                 problems.append(f"node {node['node']} fell {node['max_lag_ms']:.0f} ms behind its grid")
             if node["stopped_on_error"]:
                 problems.append(f"node {node['node']} stopped on an error")
         return {
             "rate_hz": self.rate, "sustained": not problems, "problems": problems, "window_s": wall,
             "data_security": self.args.data_security, "batch_ms": self.args.batch_ms, "packet": self.args.packet,
+            "max_wait_ms": self.args.max_wait_ms, "eq_gains_db": EQ_GAINS_DB,
             "cpu_quota_percent": self.args.cpu_quota, "cpus": self.args.cpus, "nodes": nodes,
             "stream": {"elements_b": consumer.get("elements"), "latency_p50_ms": latency.get("p50_ns", math.nan) / 1e6,
                        "latency_p99_ms": latency.get("p99_ns", math.nan) / 1e6, "latency_max_ms": latency.get("max_ns", math.nan) / 1e6,
@@ -372,12 +385,14 @@ def main():
     p.add_argument("--warmup", type=float, default=3.0, help="seconds after activation before measuring")
     p.add_argument("--data-security", choices=("shared", "mtls", "trusted_plaintext"), default="shared",
                    help="shared: data on the mTLS control listener; otherwise a separate data listener")
-    p.add_argument("--batch-ms", type=int, default=10, help="stream max_batch_latency_ms")
-    p.add_argument("--packet", type=int, default=1024, help="stream max_elements_per_packet")
+    # Buffered by default: latency does not matter for G2, gaps would.
+    p.add_argument("--batch-ms", type=int, default=100, help="stream max_batch_latency_ms (default 100)")
+    p.add_argument("--packet", type=int, default=4800, help="stream max_elements_per_packet (default 4800: 100 ms at 48 kHz)")
+    p.add_argument("--max-wait-ms", type=int, default=5000, help="how long node B waits for late data before faulting")
     p.add_argument("--cpus", type=int, nargs=2, metavar=("A", "B"), help="pin node A and node B to these CPUs")
     p.add_argument("--cpu-quota", type=int, metavar="PERCENT", help="limit each node with systemd-run --user CPUQuota (emulate a slower host)")
     p.add_argument("--rate-tolerance", type=float, default=0.005, help="allowed step-rate deviation (fraction)")
-    p.add_argument("--max-lag-ms", type=float, default=100.0, help="bound on the grid lag, at any time since activation")
+    p.add_argument("--max-lag-ms", type=float, default=100.0, help="bound on the grid lag at any time since activation, beyond one batch on node B")
     p.add_argument("--output", type=Path, help="JSON Lines results (must not exist)")
     p.add_argument("--keep", action="store_true", help="keep each run's directory (logs, diagrams, recordings)")
     p.add_argument("--dry-run", action="store_true", help="print the first rate's diagram and exit")
