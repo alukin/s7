@@ -102,7 +102,7 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     hardwareStop_ = std::stop_source{};
     state_.store(RunState::Preparing);
     configuration_ = std::make_shared<const RunConfiguration>(
-        RunConfiguration{id, schemaJson, dt, ticks, std::move(probes), recordingOverflow_});
+        RunConfiguration{id, schemaJson, dt, ticks, std::move(probes), recordingOverflow_, std::exchange(keepSdrActive_, false)});
     totalTicks_ = ticks;
     probes_.clear();
     for (const auto& probe : configuration_->probes)
@@ -321,7 +321,7 @@ void LocalSchemaRunner::executeHardwareRun(const RunConfiguration& configuration
     auto run = std::move(hardwareRun_);
     const auto stop = hardwareStop_.get_token();
     if (!configuration.ticks || stop.stop_requested()) return;
-    const auto description = QString::fromStdString(run->prepare());
+    const auto description = QString::fromStdString(run->prepare(configuration.keepSdrActive));
     const auto id = configuration.id;
     postRunEvent(id, [this, description] {
         emit logMessage(QStringLiteral("[runtime] device-paced run using %1").arg(description));

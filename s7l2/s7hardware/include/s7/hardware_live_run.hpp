@@ -13,14 +13,14 @@ class LiveRun {
 public:
     virtual ~LiveRun() = default;
     virtual NodeRuntime& runtime() noexcept = 0;
-    virtual std::string prepare() = 0;
+    virtual std::string prepare(bool keep_sdr_active = false) = 0;
     virtual void execute(std::uint64_t frames, std::stop_token, const Run::StepObserver&) = 0;
 };
 
 // Returns null and leaves graph intact for a graph without hardware.
 // Otherwise consumes the graph, validates its profile and creates an offline
 // run. Call prepare, execute and destroy on the same execution thread.
-inline constexpr auto live_run_symbol = "s7_create_live_run_v1";
+inline constexpr auto live_run_symbol = "s7_create_live_run_v2";
 using CreateLiveRun = LiveRun* (*)(ExecutableGraph&, Rate);
 
 struct AudioInputDevice {

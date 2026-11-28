@@ -4,9 +4,9 @@ The public implementation consists of `s7hardware` (contract, scalar boundary
 and device-paced run owner), `s7audio` (independent PortAudio and native
 PipeWire implementations), and `s7sdr` (common SDR elements and optional
 SoapySDR provider). The private AD936x provider is maintained and built outside
-this repository against the installed SDK. Public builds never fetch or bundle
-that provider or its dependency. No GNU Radio or private audio implementation
-was copied into these modules.
+this repository against the installed SDK. Public builds use system libiio 0.x
+(0.24 or newer) when available for the Soapy PlutoSDR idle controls. No GNU
+Radio or private audio implementation was copied into these modules.
 
 The [hardware contract](../../doc/S7_Hardware_IO_Contract.md) and ADR-026 describe
 the direction. This guide identifies the implemented first profile and its
@@ -182,6 +182,19 @@ time. Discrete settings (`antenna`, `gain_mode`) must read back exactly, or
 preparation fails. Receivers can still opt into a strict sample-rate check with
 `rate_tolerance_ppm`. A transfer respects the driver's reported stream MTU when
 available.
+
+At completion, Stop, or Studio shutdown, the run deactivates and closes its
+Soapy stream and releases the device. With libiio 0.24 or newer in the 0.x series,
+the public `plutosdr` driver path also powers down both AD936x local oscillators,
+disables the FPGA DDS outputs, and sets the transceiver to `alert`. Use a
+device-specific `uri` or `hostname` in the Soapy selector. Starting an SDR run
+on an idle PlutoSDR returns it to FDD for streaming. Cleanup is scoped to the
+radio used by the run. For PlutoSDR reception, Studio's **Run** dialog defaults
+to **Set SDR to idle**. Choose **Keep SDR active with current settings** to
+keep the radio configured and its oscillator on. Both choices release the
+sample stream. With `s7hw --run`, use `--keep-sdr-active` to opt in for either
+reception or transmission. On transmit, this keeps the TX oscillator on after
+sample playback ends.
 
 `Descriptor` records the accepted request, randomized session ID, segment and
 configuration/timing revisions, startup prefill, amplitude interpretation and

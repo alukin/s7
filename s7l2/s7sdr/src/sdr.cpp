@@ -7,7 +7,10 @@
 
 namespace s7::sdr {
 #if S7_HAVE_SOAPYSDR
-std::unique_ptr<hardware::Provider> soapy_provider();
+std::unique_ptr<hardware::Provider> soapy_provider(bool keep_sdr_active);
+#endif
+#if !defined(S7_HAVE_IIO)
+bool can_keep_sdr_active(std::string_view) { return false; }
 #endif
 std::vector<std::string> backends() {
 #if S7_HAVE_SOAPYSDR
@@ -16,9 +19,9 @@ std::vector<std::string> backends() {
     return {};
 #endif
 }
-std::unique_ptr<hardware::Provider> provider(std::string_view name) {
+std::unique_ptr<hardware::Provider> provider(std::string_view name, [[maybe_unused]] bool keep_sdr_active) {
 #if S7_HAVE_SOAPYSDR
-    if (name=="soapy") return soapy_provider();
+    if (name=="soapy") return soapy_provider(keep_sdr_active);
 #endif
     throw std::invalid_argument("SDR backend unavailable: "+std::string(name));
 }

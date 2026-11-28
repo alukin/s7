@@ -6,16 +6,29 @@
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Constants.h>
 #include <SoapySDR/Errors.h>
+#include <SoapySDR/Logger.hpp>
 #include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <cstring>
 #include <format>
 #include <optional>
+#ifdef S7_HAVE_IIO
+#include <iio.h>
+#include <atomic>
+#include <cerrno>
+#include <system_error>
+#endif
 
 namespace s7::sdr {
 using namespace hardware;
 namespace {
+#ifdef S7_HAVE_IIO
+bool is_pluto(const SoapySDR::Kwargs& selector) {
+    const auto driver = selector.find("driver");
+    return driver != selector.end() && driver->second == "plutosdr";
+}
+#endif
 Status status(int code) {
     switch (code) {
     case SOAPY_SDR_TIMEOUT: return Status::Timeout;
@@ -38,6 +51,95 @@ double number(const std::string& text) {
     if (p.ec!=std::errc{} || p.ptr!=text.data()+text.size() || !std::isfinite(value)) throw std::invalid_argument("invalid SDR numeric option");
     return value;
 }
+
+#ifdef S7_HAVE_IIO
+// SoapyPlutoSDR shares its IIO context across device instances. Serialize
+// ownership so one run cannot idle the radio while another is using it.
+class Ad936xSession {
+public:
+    Ad936xSession(std::string uri, Direction direction, bool keep_sdr_active)
+        : uri_(std::move(uri)), stream_lo_(direction == Direction::Capture ? "altvoltage0" : "altvoltage1"),
+          keep_sdr_active_(keep_sdr_active) {
+        if (in_use_.test_and_set()) throw std::runtime_error("An S7 PlutoSDR session is already open");
+    }
+    ~Ad936xSession() {
+        if (used_) {
+            try {
+                const auto context = open();
+                const auto* phy = iio_context_find_device(context.get(), "ad9361-phy");
+                if (!phy) throw std::runtime_error("AD936x PHY is unavailable");
+                if (started_ && keep_sdr_active_) {
+                    // SoapyPlutoSDR powers down the stream's LO when closing it.
+                    if (!set_lo_powerdown(phy, stream_lo_, false))
+                        throw std::runtime_error("could not restore the stream's local oscillator");
+                } else {
+                    idle(context.get(), phy);
+                }
+            } catch (const std::exception& error) {
+                SoapySDR::logf(SOAPY_SDR_ERROR, "Cannot set post-run AD936x state at %s: %s", uri_.c_str(), error.what());
+            }
+        }
+        in_use_.clear();
+    }
+    Ad936xSession(const Ad936xSession&) = delete;
+    Ad936xSession& operator=(const Ad936xSession&) = delete;
+
+    void wake() {
+        const auto context = open();
+        const auto* phy = iio_context_find_device(context.get(), "ad9361-phy");
+        if (!phy) throw std::runtime_error("AD936x PHY is unavailable");
+        char mode[64]{};
+        const auto count = iio_device_attr_read(phy, "ensm_mode", mode, sizeof(mode));
+        if (count < 0) throw std::system_error(static_cast<int>(-count), std::generic_category(), "Read AD936x ENSM mode");
+        const std::string_view readback(mode);
+        const auto state = readback.substr(0, readback.find_first_of("\r\n"));
+        if (state == "alert" || state == "sleep" || state == "wait") {
+            used_ = true;
+            const auto result = iio_device_attr_write(phy, "ensm_mode", "fdd");
+            if (result < 0) throw std::system_error(static_cast<int>(-result), std::generic_category(), "Wake AD936x for streaming");
+        }
+    }
+    void mark_used() noexcept { used_ = true; }
+    void mark_started() noexcept { started_ = true; }
+
+private:
+    using Context = std::unique_ptr<iio_context, decltype(&iio_context_destroy)>;
+    Context open() const {
+        Context context(iio_create_context_from_uri(uri_.c_str()), iio_context_destroy);
+        if (!context) throw std::system_error(errno, std::generic_category(), "Open AD936x at " + uri_);
+        const int result = iio_context_set_timeout(context.get(), 1000);
+        if (result < 0 && result != -ENOSYS)
+            throw std::system_error(-result, std::generic_category(), "Set AD936x IIO timeout");
+        return context;
+    }
+    static void idle(const iio_context* context, const iio_device* phy) {
+        bool ok = set_lo_powerdown(phy, "altvoltage1", true);
+        ok &= set_lo_powerdown(phy, "altvoltage0", true);
+        if (const auto* dds = iio_context_find_device(context, "cf-ad9361-dds-core-lpc")) {
+            for (unsigned i = 0; i < iio_device_get_channels_count(dds); ++i) {
+                const auto* channel = iio_device_get_channel(dds, i);
+                if (iio_channel_is_output(channel) &&
+                    std::string_view(iio_channel_get_id(channel)).starts_with("altvoltage") &&
+                    iio_channel_find_attr(channel, "raw"))
+                    ok &= iio_channel_attr_write_bool(channel, "raw", false) >= 0;
+            }
+        }
+        ok &= iio_device_attr_write(phy, "ensm_mode", "alert") >= 0;
+        if (!ok) throw std::runtime_error("one or more RF idle controls failed");
+    }
+    static bool set_lo_powerdown(const iio_device* phy, const char* name, bool powerdown) {
+        const auto* channel = iio_device_find_channel(phy, name, true);
+        return channel && iio_channel_attr_write_bool(channel, "powerdown", powerdown) >= 0;
+    }
+    inline static std::atomic_flag in_use_{};
+    std::string uri_;
+    const char* stream_lo_;
+    bool keep_sdr_active_{};
+    bool used_{};
+    bool started_{};
+};
+#endif
+
 class SoapyStream final : public Stream {
 public:
     SoapyStream(Descriptor d,SoapySDR::Device* device,SoapySDR::Stream* stream)
@@ -53,14 +155,15 @@ public:
         for (auto* p:pointers_) const_pointers_.push_back(p);
     }
     ~SoapyStream() override {
-        BackendCallGuard guard;
         stop();
-        if (stream_) { try { device_->closeStream(stream_); } catch (...) {} }
-        if (device_) { try { SoapySDR::Device::unmake(device_); } catch (...) {} }
     }
+#ifdef S7_HAVE_IIO
+    void take_session(std::unique_ptr<Ad936xSession> session) noexcept { ad936x_ = std::move(session); }
+#endif
 protected:
     void do_start() override {
-        check(device_->activateStream(stream_)); active_=true;
+        active_=true; // A failed activation may still leave native resources running.
+        check(device_->activateStream(stream_));
         native_limit_=device_->getStreamMTU(stream_);
         if (pending_frames_) {
             std::size_t sent=0;
@@ -72,9 +175,31 @@ protected:
             }
             pending_frames_=0;
         }
+#ifdef S7_HAVE_IIO
+        if (ad936x_) ad936x_->mark_started();
+#endif
     }
     void do_stop() noexcept override {
-        if (active_) { try { device_->deactivateStream(stream_); } catch (...) {} active_=false; }
+        if (active_) {
+            try { check(device_->deactivateStream(stream_)); }
+            catch (const std::exception& error) { SoapySDR::log(SOAPY_SDR_ERROR, error.what()); }
+            catch (...) { SoapySDR::log(SOAPY_SDR_ERROR, "SoapySDR stream deactivation failed"); }
+            active_=false;
+        }
+        if (stream_) {
+            try { device_->closeStream(stream_); }
+            catch (...) { SoapySDR::log(SOAPY_SDR_ERROR, "SoapySDR stream close failed"); }
+            stream_=nullptr;
+        }
+        if (device_) {
+            try { SoapySDR::Device::unmake(device_); }
+            catch (...) { SoapySDR::log(SOAPY_SDR_ERROR, "SoapySDR device release failed"); }
+            device_=nullptr;
+        }
+#ifdef S7_HAVE_IIO
+        // Release the driver's USB interface before reopening it to idle the PHY.
+        ad936x_.reset();
+#endif
     }
     Transfer do_read(std::span<std::byte> b,std::size_t n,Deadline d,std::stop_token st) override { return transfer(b.data(),nullptr,n,d,st); }
     Transfer do_write(std::span<const std::byte> b,std::size_t n,Deadline d,std::stop_token st) override {
@@ -145,9 +270,13 @@ private:
     std::vector<const void*> const_pointers_;
     std::size_t pending_frames_{};
     bool active_{};
+#ifdef S7_HAVE_IIO
+    std::unique_ptr<Ad936xSession> ad936x_;
+#endif
 };
 class Soapy final : public Provider {
 public:
+    explicit Soapy(bool keep_sdr_active) : keep_sdr_active_(keep_sdr_active) {}
     std::string_view id() const noexcept override { return "soapy"; }
     std::vector<DeviceInfo> devices() override {
         BackendCallGuard guard;
@@ -188,9 +317,35 @@ public:
             }
         }
         SoapySDR::Device* device=nullptr; SoapySDR::Stream* stream=nullptr;
+#ifdef S7_HAVE_IIO
+        std::unique_ptr<Ad936xSession> ad936x;
+#endif
         try {
-            device=SoapySDR::Device::make(r.device);
+            auto selector = SoapySDR::KwargsFromString(r.device);
+#ifdef S7_HAVE_IIO
+            const bool pluto = is_pluto(selector);
+            if (keep_sdr_active_ && !pluto)
+                throw std::invalid_argument("Keeping RF active requires PlutoSDR");
+            if (pluto) {
+                if (!selector.contains("uri")) {
+                    if (const auto host = selector.find("hostname"); host != selector.end() && !host->second.empty())
+                        selector["uri"] = "ip:" + host->second;
+                }
+                const auto uri = selector.find("uri");
+                if (uri == selector.end() || uri->second.empty() || uri->second == "ip:" || uri->second == "usb:")
+                    throw std::invalid_argument("PlutoSDR requires an explicit IIO URI or hostname");
+                ad936x = std::make_unique<Ad936xSession>(uri->second, r.direction, keep_sdr_active_);
+                ad936x->wake();
+            }
+#else
+            if (keep_sdr_active_)
+                throw std::invalid_argument("Keeping PlutoSDR active requires libiio support");
+#endif
+            device=SoapySDR::Device::make(selector);
             if (!device) throw std::runtime_error("SoapySDR device unavailable");
+#ifdef S7_HAVE_IIO
+            if (ad936x) ad936x->mark_used();
+#endif
             const int direction=r.direction==Direction::Capture?SOAPY_SDR_RX:SOAPY_SDR_TX;
             std::vector<std::size_t> channels;
             Descriptor d; d.actual=r; d.amplitude=r.type==SignalType::C32?"explicit CF32 application I/Q conversion":"native signed I/Q, no normalization";
@@ -254,6 +409,9 @@ public:
             stream=device->setupStream(direction,format,channels);
             if (!stream) throw std::runtime_error("SoapySDR setupStream returned null");
             auto result=std::make_unique<SoapyStream>(std::move(d),device,stream);
+#ifdef S7_HAVE_IIO
+            result->take_session(std::move(ad936x));
+#endif
             device=nullptr; stream=nullptr; return result;
         } catch (...) {
             if (stream) { try { device->closeStream(stream); } catch (...) {} }
@@ -261,7 +419,16 @@ public:
             throw;
         }
     }
+private:
+    bool keep_sdr_active_{};
 };
 }
-std::unique_ptr<Provider> soapy_provider() { return std::make_unique<Soapy>(); }
+#ifdef S7_HAVE_IIO
+bool can_keep_sdr_active(std::string_view device) {
+    return is_pluto(SoapySDR::KwargsFromString(std::string(device)));
+}
+#endif
+std::unique_ptr<Provider> soapy_provider(bool keep_sdr_active) {
+    return std::make_unique<Soapy>(keep_sdr_active);
+}
 } // namespace s7::sdr

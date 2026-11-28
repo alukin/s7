@@ -11,12 +11,12 @@
 namespace {
 using namespace s7::hardware;
 
-std::unique_ptr<Provider> resolve(std::string_view name) {
+std::unique_ptr<Provider> resolve(std::string_view name, [[maybe_unused]] bool keep_sdr_active) {
     const auto audio = s7::audio::backends();
     if (std::ranges::find(audio, name) != audio.end()) return s7::audio::provider(name);
 #if defined(S7_WITH_SDR)
     const auto sdr = s7::sdr::backends();
-    if (std::ranges::find(sdr, name) != sdr.end()) return s7::sdr::provider(name);
+    if (std::ranges::find(sdr, name) != sdr.end()) return s7::sdr::provider(name, keep_sdr_active);
 #endif
     throw std::invalid_argument("hardware backend unavailable: " + std::string(name));
 }
@@ -25,8 +25,8 @@ class PublicLiveRun final : public LiveRun {
 public:
     explicit PublicLiveRun(s7::ExecutableGraph graph) : run_(std::move(graph)) {}
     s7::NodeRuntime& runtime() noexcept override { return run_.runtime(); }
-    std::string prepare() override {
-        run_.prepare(resolve);
+    std::string prepare(bool keep_sdr_active) override {
+        run_.prepare([keep_sdr_active](std::string_view name) { return resolve(name, keep_sdr_active); });
         const auto& d = run_.descriptor();
         auto description = d.actual.backend + " " + d.actual.device + " at " + d.actual.rate.to_string();
         for (const auto& [key, value] : d.backend_details) {
@@ -49,7 +49,7 @@ private:
 };
 }
 
-extern "C" s7::hardware::LiveRun* s7_create_live_run_v1(s7::ExecutableGraph& graph, s7::Rate rate) {
+extern "C" s7::hardware::LiveRun* s7_create_live_run_v2(s7::ExecutableGraph& graph, s7::Rate rate) {
     if (!has_hardware_boundary(graph)) return nullptr;
     const auto config = graph_profile(graph);
     if (config.request.direction == Direction::Playback && config.boundary_type != "AudioSink")

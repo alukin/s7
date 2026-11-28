@@ -75,7 +75,7 @@ PACKAGES+=(
 
 # Public hardware providers; private AD936x dependencies are never fetched here.
 if (( WITH_HARDWARE )); then
-  PACKAGES+=(portaudio19-dev libpipewire-0.3-dev libspa-0.2-dev libsoapysdr-dev)
+  PACKAGES+=(portaudio19-dev libpipewire-0.3-dev libspa-0.2-dev libsoapysdr-dev libiio-dev)
 fi
 
 # s7studio: Qt6 Core, Gui, Widgets (+ OpenGL headers required by Qt6Gui); the

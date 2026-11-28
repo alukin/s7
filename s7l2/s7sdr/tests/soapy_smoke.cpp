@@ -22,6 +22,8 @@ using namespace s7;
 using namespace s7::hardware;
 namespace {
 struct Trace { int alive{},starts{},closes{},rx_error{},tx_error{}; double fullscale=2048; bool wrong_rate{}, fm{}, automatic{}, quantize{}, refuse_antenna{}; std::vector<std::int16_t> tx; } trace;
+int deactivations{};
+bool fail_activation{};
 class Fake final : public SoapySDR::Device {
 public:
     Fake(){++trace.alive;} ~Fake() override{--trace.alive;}
@@ -48,8 +50,11 @@ public:
         channels=selected.size();return reinterpret_cast<SoapySDR::Stream*>(this);
     }
     void closeStream(SoapySDR::Stream*) override {++trace.closes;}
-    int activateStream(SoapySDR::Stream*,int,long long,std::size_t) override {++trace.starts;return 0;}
-    int deactivateStream(SoapySDR::Stream*,int,long long) override {return 0;}
+    int activateStream(SoapySDR::Stream*,int,long long,std::size_t) override {
+        ++trace.starts;
+        return fail_activation ? SOAPY_SDR_STREAM_ERROR : 0;
+    }
+    int deactivateStream(SoapySDR::Stream*,int,long long) override {++deactivations;return 0;}
     int readStream(SoapySDR::Stream*,void* const* buffers,std::size_t count,int& flags,long long& time,long) override {
         if (count > getStreamMTU(nullptr)) throw std::runtime_error("Soapy read exceeds native MTU");
         if(trace.rx_error)return trace.rx_error;
@@ -173,7 +178,10 @@ void test_fm_receiver() {
             if (name == "pipewire") return std::make_unique<TestAudioProvider>(captured);
             return sdr::provider(name);
         });
+        const int closes = trace.closes;
         const auto result = run.execute(frames, std::chrono::milliseconds(1000));
+        if (trace.alive != 0 || trace.closes != closes + 1)
+            throw std::runtime_error("Completed run still owns the Soapy device");
         if (result.status != Status::Ok || result.graph_frames != frames || result.transferred_frames != frames ||
             result.playback_frames != 48000 || captured.samples.size() != result.playback_frames ||
             captured.starts != 1 || captured.prefill_at_start != 69 || !trace.automatic)
@@ -223,6 +231,18 @@ int main(){
         auto partial=stream->write(buffer.bytes(),7,Deadline::max());assert(partial.frames==3 && partial.status==Status::Underflow);trace.tx_error=0;
     }
     assert(trace.alive==0);
+    {
+        const int closes = trace.closes;
+        const int stops = deactivations;
+        auto stream = provider->prepare(request(Direction::Capture));
+        fail_activation = true;
+        rejects([&] { stream->start(); });
+        fail_activation = false;
+        stream->stop();
+        stream.reset();
+        if (trace.alive != 0 || trace.closes != closes + 1 || deactivations != stops + 1)
+            throw std::runtime_error("Failed activation must deactivate, close and release exactly once");
+    }
     trace.fullscale=32768;rejects([&]{provider->prepare(request(Direction::Capture));});assert(trace.alive==0);trace.fullscale=2048;
     trace.wrong_rate=true;
     {

@@ -75,6 +75,7 @@ struct RunConfiguration {
     long ticks;
     std::vector<RunProbe> probes;
     RecordingOverflow recordingOverflow = RecordingOverflow::Lossless;
+    bool keepSdrActive = false;
 };
 
 class ISchemaRunner

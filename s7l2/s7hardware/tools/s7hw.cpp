@@ -28,6 +28,9 @@ std::uint64_t positive(std::string_view s) {
 int main(int argc,char** argv) {
     try {
         std::string mode,file,backend; std::uint64_t frames=0; std::vector<std::filesystem::path> paths;
+#if defined(S7_WITH_SDR)
+        bool keep_sdr_active=false;
+#endif
         for (int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             auto value=[&]()->std::string { if (++i>=argc) throw std::invalid_argument("missing value for "+arg); return argv[i]; };
@@ -39,16 +42,25 @@ int main(int argc,char** argv) {
                     <<"/RF TX"
 #endif
                     <<". Capture can drive a lower-rate AudioSink through Resamplers.\n"
+#if defined(S7_WITH_SDR)
+                    <<"--keep-sdr-active leaves PlutoSDR RF active after --run.\n"
+#endif
                     <<"Completion aborts the stream; playback counts mean accepted frames, not DAC presentation.\n"; return 0;
             } else if (arg=="--check" || arg=="--run" || arg=="--devices") {
                 if (!mode.empty()) throw std::invalid_argument("choose one mode");
                 mode=arg;
                 if (arg=="--devices") backend=value(); else file=value();
             } else if (arg=="--frames") frames=positive(value());
+#if defined(S7_WITH_SDR)
+            else if (arg=="--keep-sdr-active") keep_sdr_active=true;
+#endif
             else if (arg=="--provider-library") paths.emplace_back(value());
             else throw std::invalid_argument("unknown argument: "+arg);
         }
         if (mode.empty() || (mode=="--run" && !frames) || (mode!="--run" && frames)) throw std::invalid_argument("see s7hw --help");
+#if defined(S7_WITH_SDR)
+        if (keep_sdr_active && mode!="--run") throw std::invalid_argument("--keep-sdr-active requires --run");
+#endif
         auto& registry=s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry); s7::audio::register_elements(registry);
         s7::register_io_elements(registry);
@@ -75,6 +87,11 @@ int main(int argc,char** argv) {
             if (frames % config.frames_per_step)
                 throw std::invalid_argument("--frames must be a whole number of capture blocks");
             steps=frames/config.frames_per_step;
+#if defined(S7_WITH_SDR)
+            if (keep_sdr_active && (config.request.backend != "soapy" ||
+                                   !s7::sdr::can_keep_sdr_active(config.request.device)))
+                throw std::invalid_argument("--keep-sdr-active requires PlutoSDR with libiio support");
+#endif
             if (mode=="--check") { std::cout<<"Graph and hardware execution profile valid; no hardware activated.\n"; return 0; }
         }
         std::vector<s7::hardware::ProviderModule> modules;
@@ -82,7 +99,7 @@ int main(int argc,char** argv) {
         auto resolve=[&](std::string_view name)->std::unique_ptr<s7::hardware::Provider> {
             for (const auto& b:s7::audio::backends()) if (b==name) return s7::audio::provider(name);
 #if defined(S7_WITH_SDR)
-            for (const auto& b:s7::sdr::backends()) if (b==name) return s7::sdr::provider(name);
+            for (const auto& b:s7::sdr::backends()) if (b==name) return s7::sdr::provider(name, keep_sdr_active);
 #endif
             for (const auto& module:modules) if (auto p=module.create(name)) return p;
             throw std::invalid_argument("hardware backend unavailable: "+std::string(name));

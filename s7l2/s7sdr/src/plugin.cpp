@@ -9,3 +9,6 @@ extern "C" const char* s7_plugin_manifest_json() {
     return R"({"plugin_name":"s7sdr","plugin_version":"0.1.0","author":"S7 Project","description":"Explicitly activated SDR boundaries and optional SoapySDR provider","element_count":3,"elements":["SdrSource","SdrSink","SdrBlockSource"]})";
 }
 extern "C" void s7_register_elements(void* registry) { s7::sdr::register_elements(*static_cast<s7::ElementRegistry*>(registry)); }
+extern "C" bool s7_sdr_can_keep_sdr_active(std::string_view device) {
+    return s7::sdr::can_keep_sdr_active(device);
+}

@@ -119,6 +119,35 @@ constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
 constexpr const char* kBundledDemoDiagramPath = ":/s7/demo_startup.s7diagram";
 
+using CanKeepSdrActive = bool (*)(std::string_view);
+
+bool hasPlutoReceiver(const boost::json::value& schema, CanKeepSdrActive canKeepSdrActive)
+{
+    const auto* root = schema.if_object();
+    const auto* elements = root ? root->if_contains("elements") : nullptr;
+    if (!elements || !elements->is_array()) return false;
+    for (const auto& value : elements->as_array()) {
+        const auto* element = value.if_object();
+        if (!element) continue;
+        if (const auto* nested = element->if_contains("schema"); nested && nested->is_object()) {
+            if (hasPlutoReceiver(*nested, canKeepSdrActive)) return true;
+            continue;
+        }
+        const auto type = json_utils::stringValue(*element, "type");
+        if (type == "SdrSource" || type == "SdrBlockSource") {
+            const auto* params = element->if_contains("params");
+            if (!params || !params->is_object()) continue;
+            const auto backend = json_utils::stringValue(params->as_object(), "backend");
+            if ((backend.empty() || backend == "soapy") &&
+                canKeepSdrActive(json_utils::stringValue(params->as_object(), "device"))) return true;
+        } else if (const auto* descriptor = s7::ElementRegistry::instance().find(type);
+                   descriptor && descriptor->metadata().schema_definition &&
+                   hasPlutoReceiver(*descriptor->metadata().schema_definition, canKeepSdrActive)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 auto selectedTextFrame(diagram::DiagramScene* scene) -> std::shared_ptr<diagram::TextFrameNode>
 {
@@ -2173,6 +2202,19 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
     form->addRow(QStringLiteral("Model step rate"), frequencySpin);
     form->addRow(QStringLiteral("Model step dt"), dtLabel);
+    QComboBox* sdrAfterRun = nullptr;
+    if (launchAfterAccept && pluginLoader_) {
+        const auto canKeepSdrActive = reinterpret_cast<CanKeepSdrActive>(
+            pluginLoader_->loaded_symbol("s7sdr", "s7_sdr_can_keep_sdr_active"));
+        if (canKeepSdrActive && hasPlutoReceiver(serializeScene().runtimeSchema, canKeepSdrActive)) {
+            sdrAfterRun = new QComboBox(&dialog);
+            sdrAfterRun->setObjectName(QStringLiteral("run.sdrAfterRun"));
+            sdrAfterRun->addItem(QStringLiteral("Set SDR to idle"), false);
+            sdrAfterRun->addItem(QStringLiteral("Keep SDR active with current settings"), true);
+            sdrAfterRun->setToolTip(QStringLiteral("Both choices release the sample stream at the end of the run."));
+            form->addRow(QStringLiteral("After this run"), sdrAfterRun);
+        }
+    }
     runtimeSecondsSpin->setAccessibleName(QStringLiteral("Model duration in seconds"));
     runtimeSecondsSpin->setToolTip(QStringLiteral("Simulated duration, not wall-clock time. -1 runs continuously until stopped."));
     frequencySpin->setAccessibleName(QStringLiteral("Model steps per second"));
@@ -2262,13 +2304,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     setWindowModified(documentModified());
 
     if (launchAfterAccept) {
-        launchRunWithCurrentConfiguration();
+        launchRunWithCurrentConfiguration(sdrAfterRun && sdrAfterRun->currentData().toBool());
     }
 
     return true;
 }
 
-void MainWindow::launchRunWithCurrentConfiguration()
+void MainWindow::launchRunWithCurrentConfiguration(bool keepSdrActive)
 {
     if (schemaTabs_ && !schemaTabs_->commitAll()) {
         appendLog(QStringLiteral("[studio] Apply or undo the pending schema-tab edits before continuing."));
@@ -2320,6 +2362,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
     if (previousFocus) previousFocus->setFocus(Qt::OtherFocusReason);
     observersPanel_->setRunState(RunState::Preparing, 0, dtSeconds);
     runner_->setRecordingOverflow(document_.recordingMayDrop() ? RecordingOverflow::Drop : RecordingOverflow::Lossless);
+    runner_->setKeepSdrActive(keepSdrActive);
     controller_->run(document_.schema(), dtSeconds, ui::RunExecutionConfig{document_.runtimeSeconds()}, probes);
     viewers_->presentLive(runner_->liveSources());
     refreshActions();

@@ -19,7 +19,7 @@ public:
         hardwareTrace.closedOnWorker.store(hardwareTrace.preparedOn == std::this_thread::get_id());
     }
     s7::NodeRuntime& runtime() noexcept override { return runtime_; }
-    std::string prepare() override {
+    std::string prepare(bool) override {
         hardwareTrace.preparedOn = std::this_thread::get_id();
         return "test hardware";
     }

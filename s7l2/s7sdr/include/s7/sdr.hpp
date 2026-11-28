@@ -4,7 +4,8 @@
 #include <s7/hardware.hpp>
 namespace s7::sdr {
 std::vector<std::string> backends();
-std::unique_ptr<hardware::Provider> provider(std::string_view backend);
+std::unique_ptr<hardware::Provider> provider(std::string_view backend, bool keep_sdr_active = false);
+bool can_keep_sdr_active(std::string_view device);
 void register_elements(ElementRegistry&);
 class Source final : public hardware::Source {
 public: explicit Source(hardware::Request r) : hardware::Source(std::move(r),"SdrSource") {}

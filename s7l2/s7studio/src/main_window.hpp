@@ -176,7 +176,7 @@ private:
     void saveWindowLayout();
     void restoreWindowLayout();
     auto configureRun(bool launchAfterAccept) -> bool;
-    void launchRunWithCurrentConfiguration();
+    void launchRunWithCurrentConfiguration(bool keepSdrActive);
     void applyDiscretizationFrequency(double frequencyHz);
     static auto updateSchemaDiscretizationParams(boost::json::value& schema,
                                                  double frequencyHz,

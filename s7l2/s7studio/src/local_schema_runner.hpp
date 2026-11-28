@@ -48,6 +48,7 @@ public:
     void reset() override;
     void setHardwareFactory(s7::hardware::CreateLiveRun factory) { hardwareFactory_ = factory; }
     void setRecordingOverflow(RecordingOverflow overflow) override { recordingOverflow_ = overflow; }
+    void setKeepSdrActive(bool keep) { keepSdrActive_ = keep; }
 
     // Commands and snapshot access belong to the QObject owner thread.
     [[nodiscard]] RunState state() const override { return state_.load(); }
@@ -105,6 +106,7 @@ private:
     std::shared_ptr<s7::Schema> schema_;
     std::unique_ptr<s7::NodeRuntime> runtime_;
     s7::hardware::CreateLiveRun hardwareFactory_{};
+    bool keepSdrActive_ = false;
     std::unique_ptr<s7::hardware::LiveRun> hardwareRun_;
     std::stop_source hardwareStop_;
     bool hardwarePaced_{};
