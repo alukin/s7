@@ -199,6 +199,25 @@ Windows supports an untested distributed feature.
 
 <a id="feedback-loops-across-nodes--020-task"></a>
 
+**Maintainer decision, 2026-11-28 — audio as the G2 workflow.** Host A
+(headless) generates a deterministic audio test signal (tones and a chirp);
+host B, with no devices, runs an equalizer (biquad bands) and records the
+result. Qualification compares the recording with an independently computed
+equalizer response (samples, per-band gain, ordering, gaps) and records
+throughput, lag, CPU, RSS and queue occupancy; the recorded input and output
+are played back afterwards for listening. Measure the sustained per-step rate
+of the chain before fixing the audio sample rate (48 kHz pacing of headless
+nodes is unqualified).
+
+A live round trip (microphone on host A → equalizer on host B → speakers on
+host A) is a 0.3.0 target. It is not possible in 0.2.0: headless nodes cannot
+own hardware boundaries (only Studio's local runner and `s7hw` can, and
+neither uses the network data plane); same-rate capture plus playback is
+rejected by the hardware run profile; the static schedule makes host A wait
+one network round trip per sample, with only one-sample causal memory to
+pipeline it; and nodes pace on the UTC grid, not a device clock (see
+[open problems](OPEN_PROBLEMS.md)).
+
 1. Run a meaningful deterministic source on one physical headless host and
    process or simulate that signal on another headless host. Use the current
    S7 control/data paths and `s7ctl check`. The example must not need
